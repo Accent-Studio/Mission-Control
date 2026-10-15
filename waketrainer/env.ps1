@@ -1,0 +1,19 @@
+# Keeps every cache and temp location inside this folder, so nothing lands in AppData.
+$root = $PSScriptRoot
+$env:WAKETRAINER_ROOT = $root
+$env:PIP_CACHE_DIR = "$root\cache\pip"
+$env:HF_HOME = "$root\cache\hf"
+$env:HF_HUB_CACHE = "$root\cache\hf\hub"
+$env:TORCH_HOME = "$root\cache\torch"
+$env:UV_CACHE_DIR = "$root\cache\uv"
+$env:TEMP = "$root\tmp"
+$env:TMP = "$root\tmp"
+$env:TMPDIR = "$root\tmp"
+$env:XDG_CACHE_HOME = "$root\cache"
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
+$env:PIP_DISABLE_PIP_VERSION_CHECK = "1"
+$env:HF_HUB_DISABLE_TELEMETRY = "1"
+$env:PYTHONNOUSERSITE = "1"
+$env:ESPEAK_DATA_PATH = "$root\tools\espeak-ng"
+$env:PATH = "$root\.venv\Scripts;$root\tools\espeak-ng;$env:PATH"

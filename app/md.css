@@ -1,0 +1,259 @@
+/* Markdown as rendered by MC.md (md.js). Put the class "md" on the box that holds the HTML.
+   A text field where markdown is written (the Talk message box) takes the class "md-in": it gets the same font variables, so
+   it follows the reading style's text font and size.
+   Every color, font, size, line height, letter spacing, text case, bar width and marker shape comes from a custom property
+   on .md, so a style picker can swap the look with html[data-md-theme="x"] .md { --md-text: ...; } (that selector is more
+   specific than .md, so it always wins). Only structure (display, position, overflow, white-space) is fixed below.
+   The defaults are the Redline Soft look: dark only, warm white text, red used sparingly for markers and quote bars.
+   A page can set --md-base-size on a parent to pick the text size without fighting a theme.
+   Reading styles: <html> carries data-md-theme (a theme id) and data-md-size (small or large; medium sets nothing), both set by md.js
+   from localStorage. A theme only changes text colors, fonts, headings, code and quote styling and the code block background,
+   never the panels. Every theme block below sets the same list of properties, so a preview card (class md-prev with its own
+   data-md-theme, on the Settings page) never inherits a leftover from the theme the page is using. */
+.md,.md-in{
+  --md-font:"Inter",system-ui,sans-serif;
+  --md-code-font:"JetBrains Mono",ui-monospace,monospace;
+  --md-head-font:"Montserrat",system-ui,sans-serif;
+  --md-sub-font:"Montserrat",system-ui,sans-serif;
+  --md-size:var(--md-base-size,15px);
+  --md-line:1.55;
+  --md-code-size:.86em;
+  --md-lang-size:10px;
+  --md-table-size:.93em;
+  --md-h1-size:1.45em;--md-h2-size:1.28em;--md-h3-size:1.1em;--md-h4-size:1em;--md-h5-size:.95em;--md-h6-size:.9em;
+  --md-head-line:1.25;
+  --md-head-margin:1.1em 0 .4em;
+  --md-head-weight:700;           /* h1 and h2, set in --md-head-font */
+  --md-head-case:none;
+  --md-head-spacing:normal;
+  --md-sub-weight:700;            /* h3 to h6, set in --md-sub-font */
+  --md-sub-case:none;
+  --md-sub-spacing:normal;
+  --md-lang-case:uppercase;
+  --md-lang-spacing:.1em;
+  --md-quote-width:3px;
+  --md-marker-size:.38em;         /* bullet shape: a square by default, 50% makes it round */
+  --md-marker-radius:0;
+  --md-marker-top:.6em;
+  --md-marker-weight:600;         /* numbers in ordered lists */
+  --md-box-radius:0;
+  --md-text:#e2e9f0;
+  --md-muted:#95a5b7;
+  --md-heading:#e2e9f0;
+  --md-h1-color:var(--md-heading);--md-h2-color:var(--md-heading);--md-h3-color:var(--md-heading);--md-h4-color:var(--md-heading);
+  --md-h5-color:var(--md-muted);--md-h6-color:var(--md-muted);
+  --md-head-rule:none;            /* line under h1 and h2, for example 1px solid #444 */
+  --md-head-pad:0;
+  --md-quote-style:normal;
+  --md-strong:#f3f7fb;
+  --md-link:#86b7ea;
+  --md-link-hover:#b4d4f5;
+  --md-del:#7d8ea1;
+  --md-code-text:#ecd6b4;
+  --md-code-bg:rgba(220,231,243,.09);
+  --md-pre-text:#d5dfea;
+  --md-pre-bg:rgba(6,11,18,.72);
+  --md-frame:rgba(220,231,243,.12);
+  --md-quote-bar:#d6473c;
+  --md-quote-text:#b6c3d1;
+  --md-rule:rgba(220,231,243,.16);
+  --md-marker:#d6473c;
+  --md-th-bg:rgba(220,231,243,.07);
+  --md-row-alt:rgba(220,231,243,.03);
+  --md-box:var(--md-muted);
+  --md-box-on:var(--md-text);
+  --md-gap:.65em;
+  font-family:var(--md-font);font-size:var(--md-size);line-height:var(--md-line);color:var(--md-text);
+  overflow-wrap:anywhere;min-width:0;
+}
+.md > :first-child{margin-top:0}
+.md > :last-child{margin-bottom:0}
+.md p,.md ul,.md ol,.md blockquote,.md .md-code,.md .md-tablewrap{margin:var(--md-gap) 0}
+.md .md-t{display:inline}
+/* paragraph text keeps its indentation and runs of spaces (pasted logs, ASCII tables); line breaks are <br>, so nothing doubles */
+.md .md-p,.md .md-t{white-space:pre-wrap;tab-size:4}
+.md strong{font-weight:700;color:var(--md-strong)}
+.md em{font-style:italic}
+.md del{color:var(--md-del);text-decoration:line-through}
+.md a{color:var(--md-link);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
+.md a:hover{color:var(--md-link-hover)}
+
+/* headings stay close to body size, since this is a chat */
+.md .md-h{color:var(--md-heading);line-height:var(--md-head-line);margin:var(--md-head-margin)}
+.md > .md-h:first-child{margin-top:0}
+.md .md-h1,.md .md-h2{font-family:var(--md-head-font);font-weight:var(--md-head-weight);letter-spacing:var(--md-head-spacing);text-transform:var(--md-head-case)}
+.md .md-h3,.md .md-h4,.md .md-h5,.md .md-h6{font-family:var(--md-sub-font);font-weight:var(--md-sub-weight);letter-spacing:var(--md-sub-spacing);text-transform:var(--md-sub-case)}
+.md .md-h1{color:var(--md-h1-color)}.md .md-h2{color:var(--md-h2-color)}.md .md-h3{color:var(--md-h3-color)}
+.md .md-h4{color:var(--md-h4-color)}.md .md-h5{color:var(--md-h5-color)}.md .md-h6{color:var(--md-h6-color)}
+.md .md-h1,.md .md-h2{border-bottom:var(--md-head-rule);padding-bottom:var(--md-head-pad)}
+.md .md-h1{font-size:var(--md-h1-size)}.md .md-h2{font-size:var(--md-h2-size)}.md .md-h3{font-size:var(--md-h3-size)}
+.md .md-h4{font-size:var(--md-h4-size)}.md .md-h5{font-size:var(--md-h5-size)}.md .md-h6{font-size:var(--md-h6-size)}
+
+/* lists: a red square or the number in red, text stays plain */
+.md ul,.md ol{padding-left:1.5em}
+.md ul{list-style:none}
+.md ul > li{position:relative}
+.md ul > li::before{content:"";position:absolute;left:-1.05em;top:var(--md-marker-top);width:var(--md-marker-size);height:var(--md-marker-size);border-radius:var(--md-marker-radius);background:var(--md-marker)}
+.md ol > li::marker{color:var(--md-marker);font-weight:var(--md-marker-weight);font-variant-numeric:tabular-nums}
+.md li{margin:.2em 0}
+.md li > ul,.md li > ol{margin:.2em 0}
+.md li > p{margin:.35em 0}
+.md li.md-task{list-style:none}
+.md ul > li.md-task::before{display:none}
+.md ul > li.md-task,.md ol > li.md-task{padding-left:0}
+.md .md-box{display:inline-block;position:relative;width:.95em;height:.95em;margin:0 .5em -.12em -1.5em;border:1.5px solid var(--md-box);border-radius:var(--md-box-radius)}
+.md .md-box.on{border-color:var(--md-box-on);background:var(--md-code-bg)}
+.md .md-box.on::after{content:"";position:absolute;left:.26em;top:.02em;width:.22em;height:.5em;border:solid var(--md-box-on);border-width:0 2px 2px 0;transform:rotate(40deg)}
+
+/* quotes and rules */
+.md blockquote{border-left:var(--md-quote-width) solid var(--md-quote-bar);padding:.1em 0 .1em 1em;color:var(--md-quote-text);font-style:var(--md-quote-style)}
+.md blockquote blockquote{border-left-color:var(--md-rule)}
+.md hr{border:0;border-top:1px solid var(--md-rule);margin:1.1em 0}
+
+/* code: inline, and fenced blocks with the language as a small label */
+.md code{font-family:var(--md-code-font);font-size:var(--md-code-size);color:var(--md-code-text);background:var(--md-code-bg);padding:.08em .35em;overflow-wrap:anywhere}
+.md .md-code{position:relative;border:1px solid var(--md-frame);background:var(--md-pre-bg)}
+.md .md-code pre{margin:0;padding:.7em .9em;overflow-x:auto;max-width:100%;tab-size:4}
+.md .md-code pre code{display:block;padding:0;background:none;color:var(--md-pre-text);white-space:pre;overflow-wrap:normal;font-size:var(--md-code-size);line-height:1.5}
+.md .md-lang{display:block;padding:.25em .9em;font-family:var(--md-code-font);font-size:var(--md-lang-size);letter-spacing:var(--md-lang-spacing);text-transform:var(--md-lang-case);color:var(--md-muted);border-bottom:1px solid var(--md-frame)}
+
+/* tables scroll sideways inside their own box, never the page */
+.md .md-tablewrap{overflow-x:auto;max-width:100%;border:1px solid var(--md-frame);-webkit-overflow-scrolling:touch}
+.md .md-table{border-collapse:collapse;font-size:var(--md-table-size);min-width:100%}
+.md .md-table th,.md .md-table td{padding:.4em .75em;border-top:1px solid var(--md-frame);text-align:left;vertical-align:top;overflow-wrap:normal}
+.md .md-table thead th{border-top:0;background:var(--md-th-bg);font-weight:600;color:var(--md-strong);border-bottom:1px solid var(--md-frame)}
+.md .md-table tbody tr:nth-child(even) td{background:var(--md-row-alt)}
+.md .md-table .md-c{text-align:center}
+.md .md-table .md-r{text-align:right}
+.md .md-table .md-l{text-align:left}
+.md .md-table td code{white-space:nowrap}
+
+/* ---------- Reading styles (chosen on the Settings page, see md.js) ----------
+   Dark only. They set text colors, fonts, headings, code and quote styling, and the code block background, and nothing about
+   the panel behind. The panels are #0a1019 with a faint white tint, so every text color was checked on about #0f151e.
+   Colorblind rules (mild red-green): links are always underlined (md rule above), so they never rely on color; where a theme
+   put a green next to another green, aqua or the body text at the same lightness, one of them was moved apart in lightness
+   (the comment on each theme says which). Fonts: Google Fonts load from md.js only for the chosen theme (all of them on the
+   Settings page, for the previews), or system fonts. */
+
+/* Redline: the house look, the same values as the defaults at the top (the block is here so a preview card can show it
+   while another theme is in use). */
+html[data-md-theme="redline"] .md,.md-prev[data-md-theme="redline"] .md,html[data-md-theme="redline"] .md-in{
+  --md-font:"Inter",system-ui,sans-serif;--md-code-font:"JetBrains Mono",ui-monospace,monospace;
+  --md-head-font:"Montserrat",system-ui,sans-serif;--md-sub-font:"Montserrat",system-ui,sans-serif;
+  --md-head-weight:700;--md-head-case:none;--md-head-spacing:normal;--md-sub-weight:700;--md-sub-case:none;--md-sub-spacing:normal;
+  --md-head-rule:none;--md-head-pad:0;
+  --md-text:#e2e9f0;--md-muted:#95a5b7;--md-heading:#e2e9f0;
+  --md-h1-color:#e2e9f0;--md-h2-color:#e2e9f0;--md-h3-color:#e2e9f0;--md-h4-color:#e2e9f0;--md-h5-color:#95a5b7;--md-h6-color:#95a5b7;
+  --md-strong:#f3f7fb;--md-link:#86b7ea;--md-link-hover:#b4d4f5;--md-del:#7d8ea1;
+  --md-code-text:#ecd6b4;--md-code-bg:rgba(220,231,243,.09);--md-pre-text:#d5dfea;--md-pre-bg:rgba(6,11,18,.72);--md-frame:rgba(220,231,243,.12);
+  --md-quote-bar:#d6473c;--md-quote-text:#b6c3d1;--md-quote-style:normal;--md-rule:rgba(220,231,243,.16);--md-marker:#d6473c;--md-marker-radius:0;
+}
+
+/* GitHub Dark: github-markdown-css values. System fonts, so nothing to load. The quote bar is a step lighter than GitHub's
+   #3d444d so it shows on the blue panel. */
+html[data-md-theme="github"] .md,.md-prev[data-md-theme="github"] .md,html[data-md-theme="github"] .md-in{
+  --md-font:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif;
+  --md-code-font:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --md-head-font:var(--md-font);--md-sub-font:var(--md-font);
+  --md-head-weight:600;--md-head-case:none;--md-head-spacing:normal;--md-sub-weight:600;--md-sub-case:none;--md-sub-spacing:normal;
+  --md-head-rule:1px solid rgba(97,106,118,.7);--md-head-pad:.3em;
+  --md-text:#f0f6fc;--md-muted:#9198a1;--md-heading:#f0f6fc;
+  --md-h1-color:#f0f6fc;--md-h2-color:#f0f6fc;--md-h3-color:#f0f6fc;--md-h4-color:#f0f6fc;--md-h5-color:#f0f6fc;--md-h6-color:#9198a1;
+  --md-strong:#f0f6fc;--md-link:#4493f8;--md-link-hover:#79b8ff;--md-del:#9198a1;
+  --md-code-text:#f0f6fc;--md-code-bg:rgba(101,108,118,.28);--md-pre-text:#f0f6fc;--md-pre-bg:#151b23;--md-frame:#3d444d;
+  --md-quote-bar:#59616b;--md-quote-text:#9198a1;--md-quote-style:normal;--md-rule:#3d444d;--md-marker:#9198a1;--md-marker-radius:50%;
+}
+
+/* Dracula: official palette, my mapping. The green inline code was #50fa7b, nearly the same lightness as the #f8f8f2 text
+   (1.3 to 1), so it is a deeper green here (1.8 to 1). The pink bold and the purple headings are not a red-green pair. */
+html[data-md-theme="dracula"] .md,.md-prev[data-md-theme="dracula"] .md,html[data-md-theme="dracula"] .md-in{
+  --md-font:"DM Sans",system-ui,sans-serif;--md-code-font:"DM Mono",ui-monospace,monospace;
+  --md-head-font:"DM Sans",system-ui,sans-serif;--md-sub-font:"DM Sans",system-ui,sans-serif;
+  --md-head-weight:700;--md-head-case:none;--md-head-spacing:normal;--md-sub-weight:700;--md-sub-case:none;--md-sub-spacing:normal;
+  --md-head-rule:none;--md-head-pad:0;
+  --md-text:#f8f8f2;--md-muted:#8493c4;--md-heading:#bd93f9;
+  --md-h1-color:#bd93f9;--md-h2-color:#bd93f9;--md-h3-color:#bd93f9;--md-h4-color:#bd93f9;--md-h5-color:#8493c4;--md-h6-color:#8493c4;
+  --md-strong:#ff79c6;--md-link:#8be9fd;--md-link-hover:#c4f4ff;--md-del:#8493c4;
+  --md-code-text:#2fd45f;--md-code-bg:#44475a;--md-pre-text:#f8f8f2;--md-pre-bg:#21222c;--md-frame:#4d5170;
+  --md-quote-bar:#6272a4;--md-quote-text:#b3bbdc;--md-quote-style:normal;--md-rule:#4d5170;--md-marker:#8493c4;--md-marker-radius:50%;
+}
+
+/* Nord: official palette, my mapping. The comment color #4c566a is too dark for text (2.5 to 1 on the panel), so muted text
+   is a lighter blue-gray. The green inline code is 1.5 to 1 from the body text and sits on a lighter chip. */
+html[data-md-theme="nord"] .md,.md-prev[data-md-theme="nord"] .md,html[data-md-theme="nord"] .md-in{
+  --md-font:"Inter",system-ui,sans-serif;--md-code-font:"JetBrains Mono",ui-monospace,monospace;
+  --md-head-font:"Inter",system-ui,sans-serif;--md-sub-font:"Inter",system-ui,sans-serif;
+  --md-head-weight:700;--md-head-case:none;--md-head-spacing:-.01em;--md-sub-weight:600;--md-sub-case:none;--md-sub-spacing:normal;
+  --md-head-rule:none;--md-head-pad:0;
+  --md-text:#d8dee9;--md-muted:#8d9ab0;--md-heading:#eceff4;
+  --md-h1-color:#eceff4;--md-h2-color:#eceff4;--md-h3-color:#eceff4;--md-h4-color:#eceff4;--md-h5-color:#8d9ab0;--md-h6-color:#8d9ab0;
+  --md-strong:#eceff4;--md-link:#88c0d0;--md-link-hover:#aadae7;--md-del:#8d9ab0;
+  --md-code-text:#a3be8c;--md-code-bg:#3b4252;--md-pre-text:#d8dee9;--md-pre-bg:#2e3440;--md-frame:#4c566a;
+  --md-quote-bar:#5e81ac;--md-quote-text:#aab4c6;--md-quote-style:normal;--md-rule:#4c566a;--md-marker:#81a1c1;--md-marker-radius:50%;
+}
+
+/* Gruvbox Dark: the vim plugin's markdown mapping with three changes for the colorblind rule. The aqua code (#8ec07c) had
+   the same lightness as the green h1 and h2 (#b8bb26), so inline code is a deeper green (#5a9a4c, 1.65 to 1). The yellow h3
+   and h4 were close to the green headings, so they are a lighter yellow (#ffd866, 1.5 to 1). Links are blue instead of
+   gray, and underlined. Code blocks use the neutral cream so only the inline chips are green. */
+html[data-md-theme="gruvbox"] .md,.md-prev[data-md-theme="gruvbox"] .md,html[data-md-theme="gruvbox"] .md-in{
+  --md-font:"Noto Sans",system-ui,sans-serif;--md-code-font:"JetBrains Mono",ui-monospace,monospace;
+  --md-head-font:"Noto Sans",system-ui,sans-serif;--md-sub-font:"Noto Sans",system-ui,sans-serif;
+  --md-head-weight:700;--md-head-case:none;--md-head-spacing:normal;--md-sub-weight:700;--md-sub-case:none;--md-sub-spacing:normal;
+  --md-head-rule:none;--md-head-pad:0;
+  --md-text:#ebdbb2;--md-muted:#a89984;--md-heading:#b8bb26;
+  --md-h1-color:#b8bb26;--md-h2-color:#b8bb26;--md-h3-color:#ffd866;--md-h4-color:#ffd866;--md-h5-color:#fabd2f;--md-h6-color:#fabd2f;
+  --md-strong:#fbf1c7;--md-link:#83a598;--md-link-hover:#a9c3b8;--md-del:#928374;
+  --md-code-text:#5a9a4c;--md-code-bg:rgba(235,219,178,.12);--md-pre-text:#d5c4a1;--md-pre-bg:#282828;--md-frame:#665c54;
+  --md-quote-bar:#7c6f64;--md-quote-text:#bdae93;--md-quote-style:normal;--md-rule:#665c54;--md-marker:#a89984;--md-marker-radius:0;
+}
+
+  /* Solarized Dark: palette and pandoc rules, brightened a little for reading (the font is small on a phone). Body text is
+   base1 (#93a1a1) instead of base0, links a lighter blue. Orange headings (#cb4b16) were only 4 to 1 on the panel and close
+   to the yellow code, so headings are #e0652f and the code is a lighter yellow (#dcb23a): 1.7 to 1 apart. Muted text is
+   lifted from #586e75 (3.4 to 1) to #74898f. Quotes use base1 text, so they do not look like blue links. */
+html[data-md-theme="solarized"] .md,.md-prev[data-md-theme="solarized"] .md,html[data-md-theme="solarized"] .md-in{
+  --md-font:"Source Sans 3",system-ui,sans-serif;--md-code-font:"Fira Mono",ui-monospace,monospace;
+  --md-head-font:"Source Sans 3",system-ui,sans-serif;--md-sub-font:"Source Sans 3",system-ui,sans-serif;
+  --md-head-weight:700;--md-head-case:none;--md-head-spacing:normal;--md-sub-weight:700;--md-sub-case:none;--md-sub-spacing:normal;
+  --md-head-rule:none;--md-head-pad:0;
+  --md-text:#a3b1b1;--md-muted:#74898f;--md-heading:#e0652f;
+  --md-h1-color:#e0652f;--md-h2-color:#e0652f;--md-h3-color:#e0652f;--md-h4-color:#e0652f;--md-h5-color:#74898f;--md-h6-color:#74898f;
+  --md-strong:#c3cdcd;--md-link:#44a0e6;--md-link-hover:#7bbcf0;--md-del:#74898f;
+  --md-code-text:#dcb23a;--md-code-bg:rgba(181,137,0,.16);--md-pre-text:#dcb23a;--md-pre-bg:#002b36;--md-frame:#586e75;
+  --md-quote-bar:#268bd2;--md-quote-text:#93a1a1;--md-quote-style:normal;--md-rule:#586e75;--md-marker:#d33682;--md-marker-radius:0;
+}
+
+/* Catppuccin Mocha: official palette, my mapping. The green inline code (#a6e3a1) had the same lightness as the body text
+   (1.03 to 1), so it is a deeper green (#62bd68, 1.6 to 1) and keeps its chip. Bold is rosewater to tell it from the text. */
+html[data-md-theme="catppuccin"] .md,.md-prev[data-md-theme="catppuccin"] .md,html[data-md-theme="catppuccin"] .md-in{
+  --md-font:"Inter",system-ui,sans-serif;--md-code-font:"JetBrains Mono",ui-monospace,monospace;
+  --md-head-font:"Inter",system-ui,sans-serif;--md-sub-font:"Inter",system-ui,sans-serif;
+  --md-head-weight:700;--md-head-case:none;--md-head-spacing:-.01em;--md-sub-weight:600;--md-sub-case:none;--md-sub-spacing:normal;
+  --md-head-rule:none;--md-head-pad:0;
+  --md-text:#cdd6f4;--md-muted:#a6adc8;--md-heading:#cba6f7;
+  --md-h1-color:#cba6f7;--md-h2-color:#cba6f7;--md-h3-color:#cba6f7;--md-h4-color:#cba6f7;--md-h5-color:#a6adc8;--md-h6-color:#a6adc8;
+  --md-strong:#f5e0dc;--md-link:#89b4fa;--md-link-hover:#b4d0fb;--md-del:#9399b2;
+  --md-code-text:#62bd68;--md-code-bg:#313244;--md-pre-text:#cdd6f4;--md-pre-bg:#181825;--md-frame:#45475a;
+  --md-quote-bar:#6c7086;--md-quote-text:#a6adc8;--md-quote-style:normal;--md-rule:#45475a;--md-marker:#9399b2;--md-marker-radius:50%;
+}
+
+/* Tokyo Night: the theme's own markdown token colors, one color per heading level. The comment color #51597d is only 2.7 to 1
+   on the panel, so muted text is #747ca1. The teal link is close to the lavender text in lightness, which is why every link
+   in every theme is underlined. */
+html[data-md-theme="tokyo"] .md,.md-prev[data-md-theme="tokyo"] .md,html[data-md-theme="tokyo"] .md-in{
+  --md-font:"Inter",system-ui,sans-serif;--md-code-font:"JetBrains Mono",ui-monospace,monospace;
+  --md-head-font:"Inter",system-ui,sans-serif;--md-sub-font:"Inter",system-ui,sans-serif;
+  --md-head-weight:700;--md-head-case:none;--md-head-spacing:-.01em;--md-sub-weight:700;--md-sub-case:none;--md-sub-spacing:normal;
+  --md-head-rule:none;--md-head-pad:0;
+  --md-text:#a9b1d6;--md-muted:#747ca1;--md-heading:#89ddff;
+  --md-h1-color:#89ddff;--md-h2-color:#61bdf2;--md-h3-color:#7aa2f7;--md-h4-color:#6d91de;--md-h5-color:#9aa5ce;--md-h6-color:#747ca1;
+  --md-strong:#c0caf5;--md-link:#73daca;--md-link-hover:#9ae8db;--md-del:#747ca1;
+  --md-code-text:#bb9af7;--md-code-bg:rgba(187,154,247,.14);--md-pre-text:#89ddff;--md-pre-bg:#16161e;--md-frame:#414868;
+  --md-quote-bar:#565f89;--md-quote-text:#9aa5ce;--md-quote-style:italic;--md-rule:#414868;--md-marker:#9abdf5;--md-marker-radius:50%;
+}
+
+/* Text size: Medium is the default and sets nothing. Small and Large scale whatever size the page asked for. */
+html[data-md-size="small"] .md,html[data-md-size="small"] .md-in{--md-size:calc(var(--md-base-size,15px) * .88)}
+html[data-md-size="large"] .md,html[data-md-size="large"] .md-in{--md-size:calc(var(--md-base-size,15px) * 1.2)}

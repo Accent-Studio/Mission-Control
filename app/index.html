@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Mission Control</title>
+<link rel="stylesheet" href="redline.css">
+<style>
+/* ---------- Home: the project solar system fills the screen, panels dock around the edges ---------- */
+:root{--lw:clamp(240px,17vw,280px);--rw:clamp(264px,23vw,340px);--gap:14px;--band:clamp(240px,40vh,380px)}
+.alsoold{margin-top:3px;font-size:11px;color:var(--w3)}
+
+/* the scene: one full-screen canvas behind everything */
+#solar{position:fixed;inset:0;width:100%;height:100%;z-index:0;cursor:grab;touch-action:none;display:block}
+#solar.hov{cursor:move} /* a planet: drag it to rearrange, click to open */
+#solar.drag,#solar.pdrag{cursor:grabbing}
+#solar.rot{cursor:all-scroll}
+body.dragging{user-select:none;-webkit-user-select:none}
+.scenefade{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse 75% 80% at 50% 52%,transparent 45%,rgba(4,8,14,.5) 100%)}
+
+/* the free area: an empty grid cell that marks where the scene is centered; its overlays sit on the scene */
+.free{position:relative;min-width:0;min-height:0;pointer-events:none}
+.scap{position:absolute;left:2px;top:4px;display:flex;align-items:center;gap:10px}
+.scap h3{font-family:var(--head);font-weight:700;font-size:17px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px 8px rgba(4,8,14,.9)}
+.scap .n{font-size:12px;font-weight:500;color:var(--w2)}
+.scap .info{pointer-events:auto;background:rgba(9,16,27,.6)}
+.scap .info .pop{left:0;right:auto}
+.zoomer{position:absolute;right:2px;bottom:2px;display:flex;gap:4px;pointer-events:auto}
+.zoomer button{width:30px;height:30px;background:rgba(9,16,27,.7);border:1px solid var(--line-2);color:var(--white);font:600 15px var(--sans);cursor:pointer;opacity:.8}
+.zoomer button:hover{background:var(--white);color:var(--bg);opacity:1}
+
+/* space mode panels keep the shared tint and outline, plus a blur so the scene behind stays soft.
+   Office mode has no scene behind them and has no overrides at all. */
+html:not([data-view="office"]) .app .fr{pointer-events:auto;-webkit-backdrop-filter:blur(7px) saturate(1.1);backdrop-filter:blur(7px) saturate(1.1)}
+
+.need{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;align-items:center;padding:11px 18px 11px 22px;border-top:1px solid var(--line-3)}
+.need b{font-weight:600;font-size:14px}
+.need small{grid-column:1;color:var(--w2);font-size:12.5px}
+.need .act{grid-row:span 2}
+.vram{display:flex;align-items:baseline;gap:8px;padding:0 18px 0 22px}
+.vram b{font-family:var(--head);font-weight:700;font-size:40px;line-height:1}
+.vram span{color:var(--w2);font-size:13px}
+.vram .chip{margin-left:auto}
+.stack{display:flex;gap:2px;height:10px;margin:12px 18px 8px 22px}
+.stack i{display:block;height:100%}
+.prow{display:grid;grid-template-columns:10px minmax(0,1fr) 60px auto;gap:10px;align-items:center;padding:7px 18px 7px 22px;font-size:13.5px}
+.prow .sw{width:9px;height:9px}
+.prow .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .gb{font-family:var(--mono);font-size:12px;color:var(--w2);text-align:right}
+.psub{padding:0 18px 5px 41px;margin-top:-3px;font-size:12px;color:var(--w3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.psub b{font-weight:600;color:var(--white);margin-right:6px}
+.srow{display:flex;align-items:center;gap:10px;padding:8px 18px 8px 22px;font-size:13.5px}
+.srow .p{font-family:var(--mono);font-size:12px;color:var(--w2);margin-left:auto}
+.srow > span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ramblk{padding:6px 18px 14px 22px;border-top:1px solid var(--line-3);margin-top:6px}
+.ramblk .rl{display:flex;justify-content:space-between;font-size:13px;margin:8px 0 5px}
+.ramblk .rl span:last-child{font-family:var(--mono);font-size:12px;color:var(--w2)}
+.bar{height:8px;background:rgba(220,231,243,.08)}
+.bar i{display:block;height:100%;background:#95a5b7}
+.soon{opacity:.4;cursor:not-allowed}.soon small{font-size:9.5px;margin-left:4px;letter-spacing:.04em;text-transform:uppercase}
+.empty{padding:12px 22px;color:var(--w2);font-size:13px}
+.srow a{color:inherit;text-decoration:none}
+.hcard .bodyc{padding:2px 16px 14px}
+.hcard .desc{color:var(--w2);font-size:13px;line-height:1.45;margin-bottom:12px}
+.hcard .kv{font-size:13px;gap:5px 14px}
+
+/* bottom row: skills, recent work */
+.botrow{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:var(--gap);min-width:0}
+.botrow .ttl{min-height:34px}
+.botrow > .fr{display:flex;flex-direction:column}
+.skrow{flex:1;align-content:center;display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;padding:0 16px 14px 22px}
+.skrow .empty{padding:2px 0;grid-column:1/-1}
+.rec{padding:0 0 10px}
+.rec a{display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:3px 18px 3px 22px;font-size:12.5px}
+.rec a:hover b{color:var(--red-2)}
+.rec b{font-weight:600;white-space:nowrap;max-width:9.5em;overflow:hidden;text-overflow:ellipsis}
+.rec span{color:var(--w2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.rec small{color:var(--w3);font-size:11.5px;white-space:nowrap}
+
+/* office mode: no scene, the projects are a panel of cards */
+.projpanel{display:none}
+html[data-view="office"] .projpanel{display:flex;flex-direction:column}
+html[data-view="office"] #solar,html[data-view="office"] .scenefade,html[data-view="office"] .free{display:none}
+.projpanel .ttl .n{font-size:12px;font-weight:500;color:var(--w2)}
+.projpanel .info{position:static}
+.projpanel .info .pop{left:18px;right:18px;top:40px;width:auto;max-width:460px} /* sized by the panel, so it never reaches past a phone screen */
+.projpanel .info:focus .pop{opacity:1}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));grid-auto-rows:minmax(172px,auto);gap:12px;align-content:start;padding:6px 18px 18px 22px}
+.pgrid[hidden]{display:none}
+.pc{--c:14px;display:flex;flex-direction:column;min-width:0}
+.pc.open{grid-column:span 2;grid-row:span 2} /* a 2 by 2 block, so its neighbors keep their size */
+.pc > svg.edge path:nth-child(2){display:none} /* the red tab belongs to the big panels, not to every card */
+.pc.is-need{background:rgba(92,26,22,.3);--frame:#a3261b}
+.pc.is-need:hover,.pc.is-need:focus-within{background:rgba(92,26,22,.42);--frame:#c4382b}
+.pc.is-need > svg.edge .e{stroke-width:2}
+.pc-face{flex:1 1 auto;display:flex;flex-direction:column;gap:7px;width:100%;min-height:150px;padding:14px 14px 12px 18px;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.pc-face:focus-visible{outline:2px solid var(--white);outline-offset:-7px}
+.pc-name{font-family:var(--head);font-weight:700;font-size:23px;line-height:1.05;letter-spacing:.04em;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pc.open .pc-name{display:block}
+.pc-need{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pc-need[hidden]{display:none}
+.pc-need b{font-weight:600;font-size:11.5px;letter-spacing:.04em;color:#f0b3ad}
+.pc-why{font-size:12.5px;line-height:1.35;overflow-wrap:anywhere;margin-bottom:8px;color:#f0b3ad}
+.pc-git{display:flex;align-items:center;gap:7px;margin-top:auto;font-size:12.5px;color:var(--w2)}
+.pc-git i{display:block;width:7px;height:7px;flex:none}
+.pc-git .ok{background:#8fd08a}
+.pc-git .warn{background:#e8963a}
+.pc-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--w2)}
+.pc-srv{font-family:var(--mono);font-size:12px;color:var(--white)}
+.pc-srv:empty{display:none}
+.pc-more{padding:12px 18px 16px;border-top:1px solid var(--line-3)}
+.pc-more[hidden]{display:none}
+.pc-more .desc{color:var(--w2);font-size:13px;line-height:1.45;margin-bottom:12px}
+.pc-more .kv{font-size:13px;gap:5px 14px;margin-bottom:14px}
+.pc-more .pacts{display:flex;flex-wrap:wrap;gap:6px}
+.pc-more .lw{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pc-more .kv dt{color:var(--w3)}
+.pc-more .pnote{margin-top:8px;font-size:12px;color:var(--w2)}
+.pc-more .pnote:empty{display:none}
+.pc-more .kv dd{min-width:0;overflow-wrap:anywhere}
+
+/* desktop: columns dock left and right, skills along the bottom, the scene shows through the middle */
+@media (min-width:1101px){
+  html,body{height:100%;overflow:hidden}
+  body{min-height:0}
+  .app,.app.with-voice{position:fixed;inset:0;z-index:1;min-height:0;padding:22px 16px 14px 8px;gap:var(--gap);
+    grid-template-columns:64px var(--lw) minmax(0,1fr) var(--rw);grid-template-rows:auto minmax(0,1fr) auto;pointer-events:none}
+  /* the rail stays where it is on every page; the 8px of padding put the title and panels 22px after it, like the other pages */
+  .app > .rail{grid-row:1/-1;grid-column:1;position:relative;top:0;height:auto;pointer-events:none;margin:0 8px 0 -8px}
+  .app > .rail a{pointer-events:auto}
+  .app > header.page{grid-row:1;grid-column:2/-1;pointer-events:auto}
+  .app > .leftcol{grid-row:2;grid-column:2}
+  .app > .free,.app > .projpanel{grid-row:2;grid-column:3}
+  .projpanel{min-height:0}
+  .pgrid{flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto}
+  html[data-view="office"] .app,html[data-view="office"] .leftcol,html[data-view="office"] .rightcol{pointer-events:auto}
+  .app > .rightcol{grid-row:2;grid-column:4}
+  .app > .botrow{grid-row:3;grid-column:2/-1}
+  .leftcol,.rightcol{display:flex;flex-direction:column;gap:var(--gap);min-height:0;overflow-x:hidden;overflow-y:auto;position:relative;top:0;align-self:stretch;pointer-events:none}
+  .leftcol.scrolls,.rightcol.scrolls{pointer-events:auto}
+  .leftcol > .fr,.rightcol > .fr{flex:none}
+  .leftcol > .grow,.rightcol > .grow{flex:0 1 auto;min-height:130px;display:flex;flex-direction:column}
+  .grow .inner{overflow-x:hidden;overflow-y:auto;min-height:0;flex:1 1 auto}
+  .grow .inner.fadeb{-webkit-mask-image:linear-gradient(#000 calc(100% - 30px),transparent);mask-image:linear-gradient(#000 calc(100% - 30px),transparent)}
+  .bgswitch{left:auto;bottom:auto;top:calc(var(--ft,100px) + 4px);right:calc(var(--frr,300px) + 4px)}
+}
+
+/* narrow windows: the scene is a fixed band at the top, the panels stack below it */
+@media (max-width:1100px){
+  html,body{height:auto}
+  #solar{inset:auto;left:0;top:var(--railh);width:100%;height:var(--band);z-index:5;background:linear-gradient(180deg,#0a1019,#0d1826);border-bottom:1px solid var(--line-2)}
+  .scenefade{display:none}
+  .free{position:fixed;left:0;right:0;top:var(--railh);height:var(--band);z-index:6}
+  .scap{left:14px;top:10px}
+  .zoomer{right:12px;bottom:10px}
+  .app,.app.with-voice{gap:var(--gap)}
+  html:not([data-view="office"]) .app,html:not([data-view="office"]) .app.with-voice{z-index:auto;padding-top:calc(var(--railh) + var(--band) + 14px)}
+  .hd h1{font-size:32px}
+  html:not([data-view="office"]) .bgswitch{position:fixed;top:calc(var(--railh) + var(--band) - 34px);bottom:auto;left:12px;right:auto;width:auto;margin:0;opacity:.55} /* margin, width and opacity undo the phone rule in redline.css, so space mode stays as it was */
+  html:not([data-view="office"]) .bgswitch:hover,html:not([data-view="office"]) .bgswitch:focus-within{opacity:1}
+  .leftcol,.rightcol{display:flex;flex-direction:column;gap:var(--gap);min-width:0}
+  /* office order: title bar, Com Link, Projects, then Needs you and the rest (the left column steps aside so its two panels can split) */
+  html[data-view="office"] .leftcol{display:contents}
+  html[data-view="office"] [data-voice-panel]{order:1}
+  html[data-view="office"] .projpanel{order:2}
+  html[data-view="office"] #needsPanel{order:3}
+  html[data-view="office"] .rightcol{order:4}
+  html[data-view="office"] .botrow{order:5}
+  .botrow{grid-template-columns:minmax(0,1fr)}
+  .grow .inner{max-height:420px;overflow-y:auto}
+  .skrow{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:560px){
+  :root{--band:clamp(220px,36vh,320px)}
+  .hd{flex-wrap:wrap;gap:10px}
+  .pgrid{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(158px,auto);gap:10px;padding:4px 12px 14px 14px}
+  .pc.open{grid-row:auto} /* full width, as tall as its content */
+  .pc-face{min-height:140px;padding:12px 10px 10px 14px}
+  .pc-name{font-size:20px}
+}
+
+</style>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="bgfx" aria-hidden="true"></div>
+<canvas id="solar" aria-label="Project solar system"></canvas>
+<div class="scenefade" aria-hidden="true"></div>
+<div class="app with-voice">
+  <nav class="rail" aria-label="Main"></nav>
+  <header class="page">
+    <div class="hd">
+      <div><h1>Mission <em>Control</em></h1><div class="sub" id="today"></div></div>
+      <div class="hstat"><div class="clock"><b data-clock>00:00</b></div></div>
+    </div>
+  </header>
+
+  <div class="leftcol" id="leftcol">
+    <aside data-voice-panel aria-label="Com Link"></aside>
+    <section class="fr grow" id="needsPanel" aria-label="Needs you">
+      <div class="ttl"><h3>Needs you</h3><span class="cnt" id="needsCnt"></span></div>
+      <div class="inner" id="needs"><div class="empty">Loading</div></div>
+    </section>
+  </div>
+
+  <div class="free" id="free" aria-label="Projects">
+    <div class="scap"><span class="info">?<span class="pop">Each planet is a project and circles the sun, Mission Control itself, on its ring, the inner rings faster (the innermost takes 45 seconds). Point at a planet or the sun for its card, with its run buttons and a link to its page; the card stays put so you can reach them. Point at any planet and every planet pauses, then they stay still for 3 seconds after you leave and ease back to speed. Red means it needs you. A ring means uncommitted changes, a moon means a server is running.<br><br>Arrange: drag a planet to move it, it snaps to the nearest orbit, and a new outer orbit appears when you drag past the last one. Escape cancels a drag.<br><br>Left drag on empty space to pan, right drag to turn and tilt, scroll to zoom, double click to reset, click a planet to open it.</span></span><h3>Projects</h3><span class="n" id="projCnt"></span></div>
+    <div class="zoomer"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">&minus;</button><button id="zreset" aria-label="Reset view" style="font-size:11px">R</button></div>
+  </div>
+
+  <section class="fr projpanel" id="offproj" aria-label="Projects">
+    <div class="ttl"><h3>Projects</h3><span class="n" id="offCnt"></span><span class="info" tabindex="0">?<span class="pop">One card per project, in the order of the dots in the title bar (set by the rings in space view). Click or tap a card for details, and again to close it. A dark red outline means it needs you, and a port number means its server is running.</span></span></div>
+    <div class="empty" id="pempty">Loading</div>
+    <div class="pgrid" id="pgrid" hidden></div>
+  </section>
+
+  <div class="rightcol" id="rightcol">
+    <section class="fr" aria-label="GPU memory">
+      <div class="ttl"><h3>GPU memory</h3><a class="cnt" href="system.html">Details</a></div>
+      <div class="vram"><b id="vramUsed">...</b><span id="vramOf">GB</span><span id="vchip"></span></div>
+      <div class="stack" id="stack"></div>
+      <div id="procs"><div class="empty">Loading</div></div>
+      <div class="ramblk" id="ramblk"></div>
+      <button class="more" data-fold="procMore"><span>All processes</span><svg viewBox="0 0 10 10"><path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+      <div class="fold" id="procMore"></div>
+    </section>
+
+    <section class="fr grow" aria-label="Servers">
+      <div class="ttl"><h3>Servers</h3><a class="cnt" id="srvCnt" href="system.html">Details</a></div>
+      <div class="inner">
+        <div id="srvTop"><div class="empty">Loading</div></div>
+        <button class="more" data-fold="srvMore"><span>Show all</span><svg viewBox="0 0 10 10"><path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+        <div class="fold" id="srvMore"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="botrow">
+    <section class="fr pc-only" aria-label="Skills">
+      <div class="ttl"><h3>Skills</h3></div>
+      <div class="skrow" id="skills"><div class="empty">Loading</div></div>
+    </section>
+    <section class="fr" aria-label="Recent work">
+      <div class="ttl"><h3>Recent work</h3></div>
+      <div class="rec" id="recent"><div class="empty">Loading</div></div>
+    </section>
+  </div>
+</div>
+
+
+<script src="api.js"></script>
+<script src="phrases.js"></script>
+<script src="redline.js"></script>
+<script>
+const OFFICE = MC.view.office; /* office mode: a grid of project cards, no 3D scene and no animation loop */
+if(!OFFICE) MC.bg.skipDust = true; /* Home draws its own 3D dust inside the solar system; office mode keeps the shared flat dust */
+MC.init('home');
+document.querySelectorAll('.more').forEach(b => b.onclick = () => { const f = document.getElementById(b.dataset.fold); f.classList.toggle('open'); b.classList.toggle('open'); b.querySelector('span').textContent = f.classList.contains('open') ? 'Show less' : b.dataset.label || b.querySelector('span').dataset.l; MC.drawFrames(); });
+document.querySelectorAll('.more span').forEach(s => s.dataset.l = s.textContent);
+
+const ago = iso => { const t = Date.parse(iso); if(!t) return 'unknown'; const h = (Date.now()-t)/36e5; if(h < 1) return Math.max(1, Math.round(h*60)) + ' min ago'; if(h < 48) return Math.round(h) + 'h ago'; if(h < 24*14) return Math.round(h/24) + 'd ago'; return Math.round(h/24/7) + 'w ago'; };
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+$('today').textContent = new Date().toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'});
+const offline = (id, msg) => { $(id).innerHTML = `<div class="empty">${msg}</div>`; };
+
+/* ---------- projects, needs you, solar system ---------- */
+let P = [], servers = [];
+
+/* ---------- layout: each project keeps the ring and angle the user gave it ---------- */
+const TAU = Math.PI*2, R0 = 130, STEP = 64, MAXRING = 40; /* ring n sits at R0 + n*STEP from the sun */
+const ringR = n => R0 + n*STEP;
+const PR = 26; /* planet radius in world units (14 + size*20) */
+/* Orbits: Kepler's third law, period ~ r^1.5. The innermost ring takes ORBIT_T0 seconds, the rest follow from their radius.
+   A saved angle is the planet's phase at Unix time 0, so its angle at time t is angle + omega(ring)*t, the same in every tab. */
+const ORBIT_T0 = 45, omegaOf = n => TAU/(ORBIT_T0*Math.pow(ringR(n)/R0, 1.5));
+const clock = () => (performance.timeOrigin + performance.now())/1000;
+/* Orbit clock: OT = wall time minus orbitOff. While any planet is hovered, and for 3 s after, OT stands still (orbitOff grows) and then its rate eases back to 1 over 1 s.
+   Drops read and save phases against OT, so they land exactly under the cursor in this tab. Other tabs run on wall time, so a phase saved while orbitOff > 0 is off by omega*orbitOff for them;
+   60 s after the last hover (or when the tab is hidden) orbitOff eases back to 0, after which every tab agrees again. */
+let orbitOff = 0, OT = clock(), holdUntil = 0, lastHover = 0, orbLast = 0;
+let drag = null, hover = null; /* the pointer state of the scene, read by the orbit clock and the layout events */
+function stepOrbit(now){
+  const dt = orbLast ? Math.max(0, (now - orbLast)/1000) : 0; orbLast = now;
+  if(hover || MC.pcard.held()){ holdUntil = now + 3000; lastHover = now; } /* pointing at a planet or at its card */
+  const k = Math.min(1, Math.max(0, (now - holdUntil)/1000)), rate = k*k*(3 - 2*k); /* 0 while held, smoothstep back to 1 */
+  orbitOff += (1 - rate)*dt;
+  if(orbitOff > 0 && (document.hidden || now - lastHover > 60000)){ orbitOff *= Math.exp(-dt/1.2); if(orbitOff < 1e-4 || document.hidden) orbitOff = 0; }
+  OT = clock() - orbitOff; return OT;
+}
+const T_LOAD = clock(), normA = a => ((a % TAU) + TAU) % TAU;
+const worldAngle = (l, t) => l.angle + omegaOf(l.ring)*t;
+const worldMap = t => { const m = new Map(); L.forEach((v, k) => m.set(k, {ring:v.ring, angle:worldAngle(v, t)})); return m; };
+let L = new Map(), layoutAt = null, layoutLoaded = false, layoutSettled = false, seeded = false;
+const angDiff = (a, b) => { let d = (a - b) % TAU; if(d > Math.PI) d -= TAU; else if(d < -Math.PI) d += TAU; return d; };
+/* the nearest angle to a on a ring where the planet clears every other planet on that ring (map: id -> {ring, angle}) */
+function freeAngle(map, id, ring, a){
+  const r = ringR(ring), gap = 2*Math.asin(Math.min(1, (PR + 6)/r)), others = [];
+  map.forEach((v, k) => { if(k !== id && k !== MC.SUN && v.ring === ring) others.push(v.angle); }); /* the sun's old orbit entry takes no room */
+  const ok = t => others.every(o => Math.abs(angDiff(t, o)) >= gap);
+  if(ok(a)) return a;
+  for(let k = 1; k <= 130; k++){ const d = k*.05; if(ok(a + d)) return a + d; if(ok(a - d)) return a - d; }
+  return a;
+}
+function applyLayout(d){ L = new Map((d.rings || []).map(e => [e.id, {ring:e.ring, angle:e.angle}])); layoutAt = d.updatedAt || null; layoutLoaded = true; }
+function loadLayout(){ return MC.api.get('/api/layout').then(d => { applyLayout(d); maybeSeed(); }).catch(() => {}).then(() => { layoutSettled = true; paintOffice(); }); }
+function saveLayout(ids){ const rings = ids.map(id => ({id, ring:L.get(id).ring, angle:L.get(id).angle}));
+  /* api.js has no PUT helper and is not Home's file, so this sends it directly */
+  return fetch('/api/layout', {method:'PUT', headers:{'X-MC':'1', 'Content-Type':'application/json'}, body:JSON.stringify({rings})})
+    .then(r => r.ok ? r.json() : Promise.reject(r.status)).then(d => { applyLayout(d); }).catch(() => loadLayout()); }
+/* First run with nothing saved: today's distances become rings once, so nothing jumps, and are saved. */
+function maybeSeed(){
+  if(OFFICE || seeded || !layoutLoaded || !projectsLoaded) return; /* office mode only reads the layout */
+  if(layoutAt !== null){ seeded = true; return; }
+  if(!P.length) return;
+  seeded = true;
+  const map = new Map();
+  P.slice().sort((a, b) => a.days - b.days).forEach(p => { const ring = Math.max(0, Math.min(MAXRING, Math.round((130 + Math.log(1 + p.days*2)/Math.log(43)*420 - R0)/STEP)));
+    map.set(p.id, {ring, angle:freeAngle(map, p.id, ring, p.seedA)}); });
+  L = map; saveLayout([...map.keys()]);
+}
+function renderProjects(list){
+  const old = new Map(P.map(p => [p.id, p]));
+  P = list.filter(p => p.exists !== false).map((p, i) => {
+    const o = old.get(p.id), t = p.lastCommit && Date.parse(p.lastCommit.date);
+    const sv = servers.find(s => s.project === p.id);
+    return {...p, why: p.needsReasons || [], days: t ? Math.min(40, Math.max(0, (Date.now()-t)/864e5)) : 40, size: .6,
+      changes: p.dirty || 0, server: sv ? ':' + sv.port : null,
+      seedA: (i*2.399 + .4) % TAU, cr: o ? o.cr : undefined, ca: o ? o.ca : undefined, spin: o ? o.spin : Math.random()*6, moon: o ? o.moon : Math.random()*6};
+  });
+  const need = P.filter(p => p.why.length);
+  $('needsCnt').textContent = need.length;
+  $('needs').innerHTML = need.length ? need.map(p => `<div class="need"><b>${esc(p.name)}</b><a class="act" href="project.html?id=${encodeURIComponent(p.id)}">Open</a><small>${esc(p.why.join(', '))}</small></div>`).join('') : '<div class="empty">Nothing needs you right now</div>';
+  $('projCnt').textContent = P.length ? P.length + ' projects' : '';
+  const rec = P.filter(p => p.lastCommit && Date.parse(p.lastCommit.date)).sort((a, b) => Date.parse(b.lastCommit.date) - Date.parse(a.lastCommit.date)).slice(0, 3);
+  $('recent').innerHTML = rec.length ? rec.map(p => `<a href="project.html?id=${encodeURIComponent(p.id)}" title="${esc(p.lastCommit.subject)}"><b>${esc(p.name)}</b><span>${esc(p.lastCommit.subject)}</span><small>${ago(p.lastCommit.date)}</small></a>`).join('') : '<div class="empty">No commits yet</div>';
+  paintServers(); paintOffice(); MC.drawFrames();
+}
+let projectsLoaded = false;
+let rawProjects = [];
+function loadProjects(){ return MC.api.get('/api/projects').then(d => { projectsLoaded = true; rawProjects = d.projects || []; renderProjects(rawProjects); if(layoutLoaded && P.some(p => !L.has(p.id))) loadLayout(); else maybeSeed(); }).catch(() => { if(!projectsLoaded){ offline('needs', 'Server offline'); offline('recent', 'Server offline'); $('needsCnt').textContent = ''; pMsg = 'Server offline'; paintOffice(); } }); }
+
+/* ---------- servers ---------- */
+let serversLoaded = false;
+function renderServers(list){ servers = list; serversLoaded = true; paintServers(); }
+function paintServers(){
+  if(!serversLoaded) return;
+  const list = servers;
+  const dev = list.filter(s => s.isDev);
+  $('srvCnt').textContent = dev.length + ' running';
+  const label = s => { const pj = P.find(p => p.id === s.project); if(pj) return pj.name;
+    const nm = s.name || 'unknown process', cl = s.commandLine || '';
+    const toks = (cl.match(/"[^"]*"|\S+/g) || []).slice(1).map(t => t.replace(/^"|"$/g, '')).filter(t => !/^-/.test(t));
+    const path = toks.find(t => /^[A-Za-z]:[\\/]/.test(t) || /^\.{0,2}[\\/]/.test(t)) || toks.find(t => /[\\/]/.test(t)) || toks[0] || '';
+    const parts = path.split(/[\\/]/).filter(Boolean);
+    const dir = /^[A-Za-z]:/.test(path) && parts.length > 2 ? parts[parts.length - 2] : '';
+    return dir ? nm + ' in ' + dir : path && /[\\/]/.test(path) ? nm + ' (' + path + ')' : nm; };
+  const row = s => `<div class="srow">${MC.chip('ok','On')}<span title="${esc((s.name || '') + (s.commandLine ? ': ' + s.commandLine : ''))}">${esc(label(s))}${s.isSelf ? ' (this dashboard)' : ''}</span><span class="p">:${esc(s.port)}</span></div>`;
+  $('srvTop').innerHTML = dev.length ? dev.slice(0,3).map(row).join('') : '<div class="empty">No dev servers running</div>';
+  $('srvMore').innerHTML = dev.slice(3).map(row).join('');
+  document.querySelector('[data-fold=srvMore]').style.display = dev.length > 3 ? '' : 'none';
+  MC.drawFrames();
+}
+function loadServers(){ return MC.api.get('/api/servers').then(renderServers).catch(() => { offline('srvTop', 'Server offline'); }); }
+
+/* ---------- gpu and ram ---------- */
+const SW = ['#e2e9f0','#d6473c','#95a5b7','#7a3a33','#4e5f73'];
+const num = v => Number.isFinite(Number(v)) ? Number(v) : 0;
+const U = {busy:new Set(), notes:new Map(), last:null};
+function renderSystem(s){
+  U.last = s;
+  const g = s.gpu || {}, tot = g.vramTotalGB || 0, used = g.vramUsedGB || 0, pct = tot ? Math.round(used/tot*100) : 0;
+  $('vramUsed').textContent = tot ? used.toFixed(1) : 'n/a';
+  $('vramOf').textContent = tot ? 'of ' + tot.toFixed(0) + 'GB' : 'no GPU found';
+  $('vchip').innerHTML = !tot ? '' : pct > 85 ? MC.chip('bad', 'High') : MC.chip('ok', 'OK');
+
+  const pr = (s.gpuProcs || []).slice().sort((a,b) => b.vramMB - a.vramMB);
+  const sum = pr.reduce((a,p) => a + p.vramMB, 0), scale = Math.max(tot*1024, sum) || 1;
+  $('stack').innerHTML = pr.slice(0,5).map((p,i) => `<i style="width:${p.vramMB/scale*100}%;background:${SW[i]}" title="${esc(p.name || 'pid ' + p.pid)}: ${(p.vramMB/1024).toFixed(1)}GB"></i>`).join('') + '<i style="flex:1;background:rgba(220,231,243,.08)"></i>';
+  const row = (p,i) => {
+    const all = p.models || [], can = all.filter(m => m.canUnload), key = 'p' + p.pid, busy = U.busy.has(key), n = U.notes.get(key);
+    const isC = !can.length && U.cpid != null && p.pid === U.cpid;
+    const btn = can.length || isC ? `<button class="act red" data-unl="${num(p.pid)}"${isC ? ' data-free="1"' : ''}${busy ? ' disabled' : ''}>${busy ? (isC ? 'Freeing...' : 'Unloading...') : (isC ? 'Free' : 'Unload')}</button>` : '';
+    const sub = all.length || n ? `<div class="psub">${n ? `<b>${esc(n.text)}</b>` : ''}${esc(all.map(m => m.label || m.id).join(', '))}</div>` : '';
+    return `<div class="prow"><span class="sw" style="background:${SW[i] || SW[4]}"></span><span class="nm">${esc(p.name || 'pid ' + p.pid)}</span><span class="gb">${((p.vramMB || 0)/1024).toFixed(1)}GB</span><span>${btn}</span></div>${sub}`;
+  };
+  $('procs').innerHTML = pr.length ? pr.slice(0,2).map(row).join('') : '<div class="empty">No GPU processes</div>';
+  $('procMore').innerHTML = pr.slice(2,10).map((p,i) => row(p,i+2)).join('');
+  document.querySelector('[data-fold=procMore]').style.display = pr.length > 2 ? '' : 'none';
+  const r = s.ram || {}, rp = r.totalGB ? r.usedGB/r.totalGB*100 : 0, c = s.cpu || {};
+  $('ramblk').innerHTML = r.totalGB ? `<div class="rl"><span>RAM</span><span>${r.usedGB.toFixed(1)} of ${r.totalGB.toFixed(0)}GB, ${Math.round(rp)}%</span></div><div class="bar"><i style="width:${rp}%"></i></div>` + (c.loadPct != null ? `<div class="rl"><span>CPU</span><span>${Math.round(c.loadPct)}%</span></div><div class="bar"><i style="width:${c.loadPct}%"></i></div>` : '') : '<div class="empty" style="padding:0">RAM numbers unavailable</div>';
+  MC.drawFrames();
+}
+/* Unload on a row: every model its process holds that can be unloaded safely (models reload on demand, so no confirm). */
+$('rightcol').addEventListener('click', async ev => {
+  const b = ev.target.closest('button[data-unl]'); if(!b || b.disabled) return;
+  const pid = +b.dataset.unl, key = 'p' + pid, row = ((U.last && U.last.gpuProcs) || []).find(p => p.pid === pid); if(!row || U.busy.has(key)) return;
+  U.busy.add(key); renderSystem(U.last);
+  let still = false, err = null;
+  if(b.dataset.free){
+    try { await MC.api.post('/api/engines/comfyui/free'); } catch(e){ err = e.message || 'Refused'; }
+  } else for(const m of (row.models || []).filter(m => m.canUnload)){
+    try { const r = await MC.api.post('/api/engines/' + encodeURIComponent(m.engine) + '/unload', {model: m.id}); if(r && r.stillLoaded) still = true; }
+    catch(e){ if(e.status === 404 && !/not running/.test(e.message || '')) continue; err = e.message || 'Refused'; break; }
+  }
+  U.busy.delete(key);
+  const text = err || (still ? 'Still loaded' : null);
+  if(text){ const n = {text}; U.notes.set(key, n); setTimeout(() => { if(U.notes.get(key) === n){ U.notes.delete(key); if(U.last) renderSystem(U.last); } }, 6000); }
+  if(U.last) renderSystem(U.last);
+  await loadSystem();
+});
+function loadSystem(){ return Promise.all([MC.api.get('/api/system'), MC.api.get('/api/engines').catch(() => null)]).then(([s, en]) => { const c = en && (en.engines || []).find(x => x.id === 'comfyui' && x.canFree); U.cpid = c && c.pid != null ? c.pid : null; renderSystem(s); }).catch(() => { offline('procs', 'Server offline'); $('vramUsed').textContent = 'n/a'; }); }
+
+/* ---------- skills ---------- */
+MC.api.get('/api/skills').then(list => {
+  const pick = list.filter(s => s.scope === 'global').slice(0,6);
+  $('skills').innerHTML = pick.length ? pick.map(s => `<button class="sk" data-n="${esc(s.name)}" title="${esc((s.description||'').slice(0,200))}">${MC.ic.skill}<span><b>${esc(s.name)}</b></span></button>`).join('') : '<div class="empty">No skills found</div>';
+  $('skills').querySelectorAll('.sk').forEach(b => b.onclick = () => { if(MC.comlink) MC.comlink.prefill('/' + b.dataset.n + ' ', {oneOff: true}); });
+}).catch(() => offline('skills', 'Server offline'));
+
+/* the planets do not wait for the slower server scan: they draw first, and the moons follow when it answers */
+loadProjects(); loadServers().then(() => { if(projectsLoaded) renderProjects(rawProjects); }); loadSystem(); loadLayout();
+MC.events.on('projects.changed', loadProjects);
+MC.events.on('layout.changed', d => { if(drag && drag.mode === 'planet') return; if(d && d.updatedAt && d.updatedAt === layoutAt) return; loadLayout(); });
+MC.events.on('system.tick', renderSystem);
+MC.events.on('system.changed', () => { loadSystem(); loadServers().then(() => { if(projectsLoaded) renderProjects(rawProjects); }); });
+
+/* ---------- solar system ---------- */
+const cv = document.getElementById('solar');
+/* The scene is centered on the free area (the empty grid cell between the docked panels), not on the whole screen.
+   FR is that area in viewport pixels, CR is where the canvas starts, both refreshed when the layout changes. */
+const freeEl = $(OFFICE ? 'offproj' : 'free'), colEls = [$('leftcol'), $('rightcol')]; /* office mode measures its Projects panel, so the background switch sits in its title bar */
+let FR = {l:0, t:0, w:innerWidth, h:innerHeight, r:innerWidth, b:innerHeight}, CR = {l:0, t:0};
+/* a list that scrolls fades out at the bottom edge while more rows remain, so no row is shown cut in half */
+/* Used only when the shared fades (MC.fades from redline.js) are missing. */
+const fadeInner = e => e.classList.toggle('fadeb', !MC.fades && e.scrollHeight > e.clientHeight + 2 && e.scrollTop + e.clientHeight < e.scrollHeight - 2);
+document.querySelectorAll('.grow .inner').forEach(e => e.addEventListener('scroll', () => fadeInner(e), {passive:true}));
+function measure(){
+  const r = freeEl.getBoundingClientRect(), c = cv.getBoundingClientRect();
+  FR = {l:r.left, t:r.top, w:r.width, h:r.height, r:r.right, b:r.bottom}; CR = {l:c.left, t:c.top};
+  const st = document.documentElement.style; st.setProperty('--fl', r.left + 'px'); st.setProperty('--ft', r.top + 'px'); st.setProperty('--frr', (innerWidth - r.right) + 'px');
+  document.querySelectorAll('.grow .inner').forEach(fadeInner);
+  colEls.forEach(e => e.classList.toggle('scrolls', e.scrollHeight > e.clientHeight + 1)); /* a scrolling column takes the pointer so its scrollbar works */
+}
+const layoutRO = new ResizeObserver(() => { measure(); MC.drawFrames(); });
+layoutRO.observe(freeEl); colEls.forEach(e => layoutRO.observe(e)); document.querySelectorAll('.fr').forEach(e => layoutRO.observe(e));
+addEventListener('resize', measure);
+measure();
+
+/* ---------- office mode: the projects as a grid of cards ---------- */
+/* Same order as the planets and the dots in the title bar (MC.projectStrip): ring first, then name. A click expands a card in place, one at a time. */
+const pGrid = $('pgrid'), pEmpty = $('pempty'), pCards = new Map();
+let openId = null, pMsg = 'Loading';
+function pOrder(){
+  const rk = p => p.id === MC.SUN ? -1 : L.has(p.id) && isFinite(+L.get(p.id).ring) ? +L.get(p.id).ring : 1e9; /* the sun first */
+  return P.slice().sort((a, b) => rk(a) - rk(b) || String(a.name || a.id).localeCompare(String(b.name || b.id)));
+}
+function makeCard(id){
+  const el = document.createElement('div'); el.className = 'fr pc'; el.dataset.id = id;
+  el.innerHTML = '<button type="button" class="pc-face" aria-expanded="false"><span class="pc-name"></span><span class="pc-need" hidden><b>Needs you</b></span><span class="pc-git"></span><span class="pc-row"><span class="pc-age"></span><span class="pc-srv"></span></span></button>'
+    + '<div class="pc-more" hidden><div class="pc-body"></div><div class="pacts"></div><div class="pnote" role="status"></div></div>';
+  const q = s => el.querySelector(s);
+  return {el, face:q('.pc-face'), name:q('.pc-name'), need:q('.pc-need'),git:q('.pc-git'), age:q('.pc-age'), srv:q('.pc-srv'), more:q('.pc-more'), body:q('.pc-body'), acts:q('.pacts'), note:q('.pnote'), k:{}};
+}
+/* write only what changed, so a live refresh never replaces the focused button or anything inside an open card */
+const pPut = (c, key, node, html) => { if(c.k[key] !== html){ c.k[key] = html; node.innerHTML = html; } };
+function paintCard(c, p, open){
+  const why = p.why || [], need = p.needsYou === true || why.length > 0, n = p.changes || 0;
+  c.el.classList.toggle('is-need', need); c.el.classList.toggle('open', open);
+  c.face.setAttribute('aria-expanded', open ? 'true' : 'false'); c.more.hidden = !open; c.need.hidden = !need;
+  pPut(c, 'name', c.name, esc(p.name || p.id));
+  pPut(c, 'git', c.git, n ? '<i class="warn"></i>' + n + (n === 1 ? ' file' : ' files') : '<i class="ok"></i>Clean');
+  pPut(c, 'age', c.age, p.lastCommit ? ago(p.lastCommit.date) : 'No commits');
+  pPut(c, 'srv', c.srv, p.server ? esc(p.server) : ''); c.srv.title = p.server ? 'Server running on port ' + p.server.slice(1) : '';
+  if(!open) return;
+  /* the rest of what the hover card shows (its Git and server rows are already on the card face); the full reasons for Needs you come first */
+  const bw = p.build === 'fresh' ? MC.chip('ok', 'fresh') : p.build === 'stale' ? MC.chip('warn', 'stale') : '<span class="chip">unknown</span>';
+  const also = (p.attention || []).map(a => a.label).join(', ');
+  const sync = (p.ahead > 0 ? p.ahead + ' ahead' : '') + (p.ahead > 0 && p.behind > 0 ? ', ' : '') + (p.behind > 0 ? p.behind + ' behind' : '');
+  /* the same order and words as the space view card (Git is already on the face) */
+  pPut(c, 'body', c.body, (p.about ? '<div class="desc">' + esc(p.about) + '</div>' : '') + '<dl class="kv">' + (why.length ? '<dt>Needs you</dt><dd>' + esc(why.join(', ')) + '</dd>' : '') + '<dt>Branch</dt><dd>' + esc(p.branch || 'none') + (sync ? ', ' + sync : '') + '</dd><dt>Build</dt><dd>' + bw
+    + (also ? '<div class="alsoold">Also older: ' + esc(also) + '</div>' : '') + '</dd>' + (p.lastCommit ? '<dt>Last work</dt><dd><span class="lw">' + esc(ago(p.lastCommit.date)) + ', ' + esc(p.lastCommit.subject) + '</span></dd>' : '') + '</dl>');
+  /* the same launch row as the space view card, plus Open (a click on the card opens its details here, not its page) */
+  pPut(c, 'acts', c.acts, MC.pcard.actsHtml(p, '<a class="act" href="project.html?id=' + encodeURIComponent(p.id) + '">Open</a>'));
+}
+function paintOffice(){
+  if(!OFFICE || !layoutSettled) return; /* the order needs the layout, so the cards wait for it (or for its failure) */
+  const list = pOrder();
+  $('offCnt').textContent = list.length ? list.length + (list.length === 1 ? ' project' : ' projects') : '';
+  pEmpty.hidden = list.length > 0; pGrid.hidden = !list.length;
+  if(!list.length) pEmpty.textContent = projectsLoaded ? 'No projects yet' : pMsg;
+  const ids = new Set(list.map(p => p.id));
+  pCards.forEach((c, id) => { if(!ids.has(id)){ c.el.remove(); pCards.delete(id); } });
+  if(openId && !ids.has(openId)) openId = null;
+  const act = pGrid.contains(document.activeElement) ? document.activeElement : null;
+  list.forEach((p, i) => {
+    let c = pCards.get(p.id); if(!c){ c = makeCard(p.id); pCards.set(p.id, c); }
+    paintCard(c, p, p.id === openId);
+    if(pGrid.children[i] !== c.el) pGrid.insertBefore(c.el, pGrid.children[i] || null);
+  });
+  if(act && act.isConnected && document.activeElement !== act) act.focus({preventScroll:true}); /* moving a card drops focus */
+}
+function setOpen(id){
+  openId = id; paintOffice(); MC.drawFrames();
+  const c = id && pCards.get(id); if(c) requestAnimationFrame(() => c.el.scrollIntoView({block:'nearest', behavior:MC.reduce ? 'auto' : 'smooth'}));
+}
+if(OFFICE){
+  pGrid.addEventListener('click', e => {
+    const b = e.target.closest('button[data-pc-job],button[data-pc-app]');
+    if(b){ const c = pCards.get(b.closest('.pc').dataset.id), p = P.find(x => x.id === b.closest('.pc').dataset.id); if(p && c) MC.pcard.run(p, b, t => { c.note.textContent = t || ''; }); return; }
+    const f = e.target.closest('.pc-face'); if(!f) return; const id = f.closest('.pc').dataset.id; setOpen(openId === id ? null : id);
+  });
+  addEventListener('keydown', e => {
+    if(e.key !== 'Escape' || !openId || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+    const c = pCards.get(openId), inside = c && c.el.contains(document.activeElement);
+    setOpen(null); if(inside) c.face.focus({preventScroll:true}); /* the Open button is gone once it collapses */
+  });
+  new ResizeObserver(() => MC.drawFrames()).observe(pGrid); /* cards change width with the window and with the scrollbar */
+  setInterval(() => { if(!document.hidden) paintOffice(); }, 60000); /* the ages */
+}
+
+/* ---------- solar system scene (space mode only; the block is not indented) ---------- */
+if(!OFFICE){
+const view = {yaw:.6, pitch:.7, zoom:1, px:0, py:0, tYaw:.6, tPitch:.7, tZoom:1, tpx:0, tpy:0};
+let lastMove = 0, mouse = null, openTimer = 0;
+addEventListener('resize', () => { view.tpx = 0; view.tpy = 0; }); /* a resized window re-centers the scene */
+const forceHover = (location.hash.match(/hover=(\w+)/) || [])[1];
+let hits = [], camS = null; /* the planets' screen spots from the last frame, and the camera they were drawn with */
+/* Screen point (canvas pixels) back to the orbit plane: the inverse of the camera for y = 0. Null when the point is above the horizon. */
+function unproject(sx, sy){
+  const c = camS, u = (sx - c.cx)/c.zoom, v = (c.cy - sy)/c.zoom, sp = Math.sin(c.pitch), cp = Math.cos(c.pitch), D = c.D;
+  const den = D*sp - v*cp; if(den < 1e-3*D) return null;
+  const z1 = v*D/den, x1 = u*(D + z1*cp)/D, cy = Math.cos(c.yaw), sy_ = Math.sin(c.yaw);
+  return [x1*cy + z1*sy_, -x1*sy_ + z1*cy];
+}
+const hitAt = (mx, my) => { for(let i = hits.length - 1; i >= 0; i--){ const h = hits[i]; if(Math.hypot(mx - h.c[0], my - h.c[1]) < Math.max(h.sr + 8, 16)) return h; } return null; };
+/* where a dragged planet would land: the ring nearest the cursor, never past one new ring beyond the outermost, and a free angle */
+function planDrop(p, wx, wz, t){
+  let top = -1; L.forEach((v, k) => { if(k !== p.id && k !== MC.SUN && v.ring > top) top = v.ring; });
+  const rho = Math.hypot(wx, wz), ring = Math.max(0, Math.min(MAXRING, top + 1, Math.round((rho - R0)/STEP))), a = Math.atan2(wz, wx);
+  return {ring, angle:freeAngle(worldMap(t), p.id, ring, a), t, top, rho, a}; /* angle is where it lands in the world at time t */
+}
+const W = a => `rgba(220,231,243,${a})`;
+const reset = () => { view.tYaw = .6; view.tPitch = .7; view.tZoom = 1; view.tpx = 0; view.tpy = 0; };
+/* Same scheme as the crew ship: left drag pans, right drag turns (spin and tilt), wheel zooms, double click resets. */
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('pointerdown', e => { if(e.button !== 0 && e.button !== 2) return; clearTimeout(openTimer);
+  const r = cv.getBoundingClientRect(), hit = e.button === 0 && layoutLoaded ? hitAt(e.clientX - r.left, e.clientY - r.top) : null;
+  drag = {x:e.clientX, y:e.clientY, b:e.button, yaw:view.tYaw, pitch:view.tPitch, px:view.tpx, py:view.tpy, moved:0, p:hit && !hit.sun ? hit.p : null, mode:null, /* the sun opens on a click but never moves */
+    off:hit ? [e.clientX - r.left - hit.c[0], e.clientY - r.top - hit.c[1]] : null};
+  if(hit) hover = hit.p; /* a touch has no hover, so the press itself picks the planet */
+  cv.setPointerCapture(e.pointerId); if(!hit) cv.classList.add(e.button === 2 ? 'rot' : 'drag'); document.body.classList.add('dragging'); });
+cv.addEventListener('pointermove', e => { const r = cv.getBoundingClientRect(); mouse = [e.clientX-r.left, e.clientY-r.top, e.clientX, e.clientY];
+  if(drag){ const dx = e.clientX-drag.x, dy = e.clientY-drag.y; drag.moved = Math.max(drag.moved, Math.abs(dx)+Math.abs(dy)); lastMove = performance.now(); if(drag.moved >= 5) MC.pcard.hide();
+    if(drag.p){ /* pressed on a planet: nothing moves until the 5 px threshold, then the planet follows the cursor */
+      if(drag.mode !== 'planet' && drag.moved >= 5){ drag.mode = 'planet'; cv.classList.add('pdrag'); }
+      if(drag.mode === 'planet'){ const w = unproject(mouse[0] - drag.off[0], mouse[1] - drag.off[1]); if(w){ drag.free = w; drag.plan = planDrop(drag.p, w[0], w[1], OT); } } }
+    else if(drag.b === 2){ view.tYaw = drag.yaw + dx*.006; view.tPitch = Math.max(.12, Math.min(1.45, drag.pitch + dy*.005)); }
+    else { const mx = r.width*.5 - 24, my = r.height*.5 - 24; view.tpx = Math.max(-mx, Math.min(mx, drag.px + dx)); view.tpy = Math.max(-my, Math.min(my, drag.py + dy)); } } });
+/* A click opens a planet after a short wait, so a double click (reset) can win. */
+const endDrag = e => { cv.classList.remove('drag', 'rot', 'pdrag'); document.body.classList.remove('dragging');
+  if(drag && e.type === 'pointerup' && drag.mode === 'planet'){ if(drag.plan){ const id = drag.p.id; L.set(id, {ring:drag.plan.ring, angle:normA(drag.plan.angle - omegaOf(drag.plan.ring)*drag.plan.t)}); saveLayout([id]); /* phase that puts it exactly where it was dropped */ } }
+  else if(drag && e.type === 'pointerup' && drag.b === 0 && drag.moved < 5 && (drag.p || hover)){ const id = (drag.p || hover).id; clearTimeout(openTimer); openTimer = setTimeout(() => { location.href = 'project.html?id=' + encodeURIComponent(id); }, 300); }
+  drag = null; };
+/* Escape puts a dragged planet back where it was */
+addEventListener('keydown', e => { if(e.key === 'Escape' && drag && drag.mode === 'planet'){ drag = null; cv.classList.remove('pdrag'); document.body.classList.remove('dragging'); } });
+cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+cv.addEventListener('pointerleave', () => mouse = null);
+cv.addEventListener('wheel', e => { e.preventDefault(); view.tZoom = Math.max(.6, Math.min(3.5, view.tZoom * (e.deltaY < 0 ? 1.12 : 1/1.12))); lastMove = performance.now(); }, {passive:false});
+cv.addEventListener('dblclick', () => { clearTimeout(openTimer); reset(); });
+document.getElementById('zin').onclick = () => view.tZoom = Math.min(3.5, view.tZoom*1.25);
+document.getElementById('zout').onclick = () => view.tZoom = Math.max(.6, view.tZoom/1.25);
+document.getElementById('zreset').onclick = reset;
+
+/* the card (MC.pcard) opens beside the planet and stays there, inside the free area so it never sits under a docked panel */
+function showCard(h){
+  const x = CR.l + h.c[0], y = CR.t + h.c[1], s = Math.max(h.sr, 10);
+  MC.pcard.show(h.p, {left:x - s, right:x + s, top:y - s, bottom:y + s, width:2*s, height:2*s}, {area:{l:FR.l, t:FR.t, r:FR.r, b:FR.b}});
+}
+/* ---------- 3D dust: floats in the same space as the planets, projected with the same camera ---------- */
+const DUST = Array.from({length:840}, () => ({x:(Math.random()*2-1)*1300, y:(Math.random()*2-1)*560, z:(Math.random()*2-1)*1300, r:.5 + Math.random()*.7, s:Math.random()*6.28, ts:.8 + Math.random()*1.6,
+  vx:(Math.random()-.5)*.16, vy:(Math.random()-.5)*.07 - .03, vz:(Math.random()-.5)*.16}));
+let dustLast = 0;
+function dustStep(now){
+  const dt = Math.min(50, now - dustLast) / 16.7; dustLast = now;
+  if(MC.reduce) return;
+  DUST.forEach(d => { d.x += d.vx*dt; d.y += d.vy*dt; d.z += d.vz*dt; if(d.x > 1300) d.x = -1300; else if(d.x < -1300) d.x = 1300; if(d.z > 1300) d.z = -1300; else if(d.z < -1300) d.z = 1300; if(d.y < -560) d.y = 560; else if(d.y > 560) d.y = -560; });
+}
+/* far = true draws the particles behind the focal plane (before the system), far = false the ones in front (after it) */
+/* depth-based pan and zoom: the camera pan (view.px/py) moves a particle by pan * g, g = .5 at the far end, 1 at the planets' depth, 1.8 at the nearest, so near dust slides faster than the planets and far dust slower */
+const dustPan = z2 => z2 < 0 ? 1 + .8*Math.min(1, -z2/1050) : 1 - .5*Math.min(1, z2/1300);
+function drawDust(x, Pj, now, far, w, h, ccx, ccy){
+  for(let i = 0; i < DUST.length; i++){ const d = DUST[i], q = Pj(d.x, d.y, d.z), z2 = q[2];
+    if((z2 > 0) !== far || z2 < -1050) continue;
+    const g = dustPan(z2), zs = 1 + (view.zoom - 1)*(g - 1)*.4; /* near particles also spread a bit more on zoom */
+    const sx = ccx + view.px*g + (q[0] - ccx - view.px)*zs, sy = ccy + view.py*g + (q[1] - ccy - view.py)*zs; if(sx < -20 || sy < -20 || sx > w + 20 || sy > h + 20) continue;
+    const n = Math.max(0, Math.min(1, .5 - z2/1700)), tw = .6 + .4*Math.sin(now*.001*d.ts + d.s);
+    const rad = Math.min(6, d.r * q[3] * (.8 + .7*n)) * (w <= 560 ? .5 : 1), a = (.18 + .3*n) * tw * Math.min(1, (1050 + z2)/250);
+    if(rad > 2.4){ const g = x.createRadialGradient(sx, sy, 0, sx, sy, rad); g.addColorStop(0, `rgba(200,220,245,${a*.7})`); g.addColorStop(1, 'rgba(200,220,245,0)'); x.fillStyle = g; x.beginPath(); x.arc(sx, sy, rad, 0, 7); x.fill(); }
+    else { x.fillStyle = `rgba(200,220,245,${a})`; x.beginPath(); x.arc(sx, sy, Math.max(.4, rad), 0, 7); x.fill(); }
+  }
+}
+let lastFrame = 0, labTick = 0; const labC = new Map();
+function frame(now){
+  now = now || performance.now(); const dt = Math.min(.05, Math.max(0, (now - lastFrame)/1000)); lastFrame = now;
+  const [x, w, h] = MC.fit(cv); x.clearRect(0, 0, w, h);
+  const tn = MC.reduce ? T_LOAD : stepOrbit(now); /* the view never turns by itself; only the planets move */
+  view.yaw += (view.tYaw - view.yaw)*.15; view.pitch += (view.tPitch - view.pitch)*.15; view.zoom += (view.tZoom - view.zoom)*.15; view.px += (view.tpx - view.px)*.25; view.py += (view.tpy - view.py)*.25;
+  const fl = FR.l - CR.l, ft = FR.t - CR.t, fr = fl + FR.w, fb = ft + FR.h; /* free area in canvas pixels */
+  const Pj = MC.cam(view.yaw, -view.pitch, view.zoom * Math.min(FR.w*1.35, FR.h*1.45) / 1250, fl + FR.w*.5 + view.px, ft + FR.h*.5 + view.py, 1400);
+  const dustOn = !!(MC.bg.has && MC.bg.has('dust')), dcx = fl + FR.w*.5, dcy = ft + FR.h*.5; if(dustOn){ dustStep(now || performance.now()); drawDust(x, Pj, now || performance.now(), true, w, h, dcx, dcy); }
+  camS = {yaw:view.yaw, pitch:view.pitch, zoom:view.zoom * Math.min(FR.w*1.35, FR.h*1.45) / 1250, cx:fl + FR.w*.5 + view.px, cy:ft + FR.h*.5 + view.py, D:1400};
+  x.lineWidth = 1;
+  /* planets orbit: angle = saved phase + omega*time. All planets share the orbit clock, which pauses while any planet is hovered. */
+  const pd = drag && drag.mode === 'planet' ? drag : null, shown = P.filter(p => p.id !== MC.SUN && L.has(p.id)), sunP = P.find(p => p.id === MC.SUN);
+  const held = MC.pcard.held() ? MC.pcard.current() : null; /* the planet whose card the pointer is on stays lit */
+  if(pd && pd.free) pd.plan = planDrop(pd.p, pd.free[0], pd.free[1], tn);
+  shown.forEach(p => { const l = L.get(p.id), tr = ringR(l.ring), tru = worldAngle(l, tn), sig = l.ring + ':' + l.angle;
+    if(pd && pd.p.id === p.id && pd.free){ p.cr = Math.hypot(pd.free[0], pd.free[1]); p.ca = Math.atan2(pd.free[1], pd.free[0]); p.dg = true; }
+    else if(p.cr === undefined || MC.reduce){ p.cr = tr; p.ca = tru; p.lag = 0; p.sig = sig; p.dg = false; }
+    else { if(p.dg || p.sig !== sig){ p.lag = angDiff(tru, p.ca); p.dg = false; p.sig = sig; }
+      else { p.lag = angDiff(p.lag, 0)*Math.exp(-dt*2.5); if(Math.abs(p.lag) < 1e-4) p.lag = 0; }
+      p.ca = tru - p.lag; p.cr += (tr - p.cr)*(1 - Math.exp(-dt*15)); if(Math.abs(tr - p.cr) < .1) p.cr = tr; } });
+  let maxUsed = 5; L.forEach((v, k) => { if(k !== MC.SUN && v.ring > maxUsed) maxUsed = v.ring; });
+  const occ = new Set(shown.map(p => L.get(p.id).ring)), hring = hover && hover.id !== MC.SUN && L.has(hover.id) ? L.get(hover.id).ring : -1;
+  const circle = (r, st, lw) => { let prev = null; for(let k=0;k<=120;k++){ const a=k/120*TAU, q=Pj(Math.cos(a)*r,0,Math.sin(a)*r); if(prev){ const front=(q[2]+prev[2])/2<0; x.strokeStyle = st(front); x.lineWidth = lw; x.beginPath(); x.moveTo(prev[0],prev[1]); x.lineTo(q[0],q[1]); x.stroke(); } prev = q; } };
+  const slots = pd && pd.plan ? pd.plan.top + 1 : -1; /* while arranging, every ring a planet may land on shows faintly and the target ring brighter */
+  for(let n = 0; n <= Math.max(maxUsed, slots); n++){
+    /* an orbit line is as bright behind the sun as in front of it */
+    if(pd && pd.plan && n <= slots){ const tgt = n === pd.plan.ring; circle(ringR(n), () => W(tgt ? .5 : .15), tgt ? 2 : 1); }
+    else if(occ.has(n)) circle(ringR(n), () => n === hring && !pd ? '#d6473c' : W(.13), n === hring && !pd ? 1.5 : 1);
+    else circle(ringR(n), () => W(.035), 1);
+  }
+  const bodies = shown.map(p => { p.spin += .3*dt; return {p, wx:Math.cos(p.ca)*p.cr, wz:Math.sin(p.ca)*p.cr}; });
+  bodies.push({sun:true, wx:0, wz:0}); bodies.forEach(b => b.z = Pj(b.wx,0,b.wz)[2]); bodies.sort((a,b) => b.z - a.z);
+  if(pd){ const i = bodies.findIndex(b => b.p === pd.p); if(i >= 0) bodies.push(bodies.splice(i, 1)[0]); } /* the planet in your hand is drawn on top */
+  hits = []; let nh = null; const labs = [];
+  bodies.forEach(b => {
+    if(b.sun){ const c = Pj(0,0,0), rr = 54*c[3];
+      const g = x.createRadialGradient(c[0],c[1],0,c[0],c[1],rr*2.4); g.addColorStop(0,'rgba(239,106,92,.45)'); g.addColorStop(.4,'rgba(214,71,60,.15)'); g.addColorStop(1,'rgba(214,71,60,0)'); x.fillStyle=g; x.beginPath(); x.arc(c[0],c[1],rr*2.4,0,7); x.fill();
+      const g2 = x.createRadialGradient(c[0],c[1],0,c[0],c[1],rr*.8); g2.addColorStop(0,'#ffd2b8'); g2.addColorStop(.3,'#e5503f'); g2.addColorStop(1,'#4a1512'); x.fillStyle=g2; x.beginPath(); x.arc(c[0],c[1],rr*.8,0,7); x.fill();
+      /* the sun is Mission Control: it opens like a planet, shows its card, and has the ring of uncommitted changes too */
+      const son = !!sunP && ((hover && hover.id === MC.SUN) || (held && held.id === MC.SUN));
+      MC.wireSphere(x, Pj, 0,0,0, 54, now*.00008, son ? 'rgba(255,170,150,.9)' : 'rgba(239,106,92,.6)', {lat:8, lon:12, seg:28, lw: son ? 1.4 : 1});
+      if(sunP){
+        if(sunP.changes){ x.setLineDash([4,4]); x.strokeStyle = W(.55); x.lineWidth = 1; x.beginPath(); for(let k=0;k<=96;k++){ const a=k/96*6.283, q=Pj(Math.cos(a)*78, Math.sin(a)*78*.28, Math.sin(a)*78*.95); k?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]); } x.stroke(); x.setLineDash([]); }
+        const sr = rr*.8; labs.unshift({p:sunP, c, sr, needs:sunP.needsYou, on:son}); hits.push({p:sunP, c, sr, sun:true});
+        if(mouse && !drag && Math.hypot(mouse[0]-c[0], mouse[1]-c[1]) < sr + 6) nh = sunP;
+      }
+      return; }
+    const p = b.p, pr = 14 + p.size*20, c = Pj(b.wx,0,b.wz), sr = pr*c[3], needs = p.needsYou, on = (hover && hover.id === p.id) || (held && held.id === p.id);
+    const col = on ? W(.95) : needs ? 'rgba(229,85,72,.88)' : W(.55);
+    x.fillStyle = 'rgba(12,19,29,.88)'; x.beginPath(); x.arc(c[0],c[1],sr,0,7); x.fill();
+    if(p.changes){ x.setLineDash([4,4]); x.strokeStyle = W(.55); x.beginPath(); for(let k=0;k<=64;k++){ const a=k/64*6.283, rr=pr*1.75, q=Pj(b.wx+Math.cos(a)*rr, Math.sin(a)*rr*.28, b.wz+Math.sin(a)*rr*.95); k?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]); } x.stroke(); x.setLineDash([]); }
+    MC.wireSphere(x, Pj, b.wx,0,b.wz, pr, p.spin, col, {lat:6, lon:8, seg:20, lw: on?1.4:1});
+    if(p.server){ p.moon += 1.2*dt; const mr = pr*1.5, q = Pj(b.wx+Math.cos(p.moon)*mr, Math.sin(p.moon*.7)*pr*.3, b.wz+Math.sin(p.moon)*mr); x.fillStyle = W(.9); x.beginPath(); x.arc(q[0],q[1],Math.max(2,3*q[3]),0,7); x.fill(); }
+    labs.push({p, c, sr, needs, on}); hits.push({p, c, sr});
+    if(forceHover === p.id){ const r = cv.getBoundingClientRect(); mouse = [c[0], c[1], r.left + c[0], r.top + c[1]]; }
+    if(mouse && !drag && Math.hypot(mouse[0]-c[0], mouse[1]-c[1]) < Math.max(sr+8, 16)) nh = p;
+  });
+  if(pd && pd.plan){ /* dashed preview of where the planet will land */
+    const wx = Math.cos(pd.plan.angle)*ringR(pd.plan.ring), wz = Math.sin(pd.plan.angle)*ringR(pd.plan.ring);
+    x.setLineDash([5,4]); x.strokeStyle = W(.9); x.lineWidth = 1.5; x.beginPath();
+    for(let k=0;k<=48;k++){ const a=k/48*TAU, q=Pj(wx+Math.cos(a)*PR, 0, wz+Math.sin(a)*PR); k?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]); } x.stroke(); x.setLineDash([]); }
+  if(dustOn) drawDust(x, Pj, now || performance.now(), false, w, h, dcx, dcy);
+  /* labels are placed after all bodies, greedily: each label tries a few spots and takes the first that clears every earlier label */
+  { x.font = '600 12.5px Montserrat'; const relay = labTick++ % 4 === 0 || labs.some(o => !labC.has(o.p.id)), used = [], hit = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0, inFree = r => r.x0 >= fl + 6 && r.x1 <= fr - 6 && r.y0 >= ft + 30 && r.y1 <= fb - 4;
+    labs.forEach(o => { const {p, c, sr, needs, on} = o, tw = x.measureText(p.name).width, h = 15, g = sr + 8;
+      const cand = [[c[0]+g, c[1]+4, 'left'], [c[0]-g, c[1]+4, 'right'], [c[0]+g, c[1]+sr+16, 'left'], [c[0]-g, c[1]+sr+16, 'right'], [c[0]+g, c[1]-sr-8, 'left'], [c[0]-g, c[1]-sr-8, 'right'], [c[0]-tw/2, c[1]+sr+20, 'left'], [c[0]-tw/2, c[1]-sr-20, 'left']];
+      const cc = labC.get(p.id); let lx, ly, al, ld = null;
+      if(!relay && cc){ lx = c[0] + cc.dx; ly = c[1] + cc.dy; al = cc.al; ld = cc.ld; } else {
+      const box = k => { const [lx, ly, al] = k, x0 = al === 'left' ? lx : lx - tw; return {x0:x0-2, x1:x0+tw+2, y0:ly-11, y1:ly+4}; };
+      let pick = cand.find(k => { const b = box(k); return inFree(b) && !used.some(u => hit(b, u)); });
+      if(pick){ [lx, ly, al] = pick; } else { /* nothing clean: keep it inside the free area, with a faint leader line */
+        [lx, ly, al] = cand[0]; if(lx + tw > fr - 8){ lx = c[0] - sr - 8; al = 'right'; if(lx - tw < fl + 8){ al = 'left'; lx = c[0] + sr + 8; } }
+        const ax = al === 'left' ? Math.max(fl + 8, Math.min(lx, fr - 8 - tw)) : Math.max(fl + 8 + tw, Math.min(lx, fr - 8)), ay = Math.max(ft + 34, Math.min(ly, fb - 10));
+        if(Math.abs(ax - lx) + Math.abs(ay - ly) > 14) ld = [(al === 'left' ? ax - 4 : ax + 4) - c[0], ay - 4 - c[1]];
+        lx = ax; ly = ay; }
+      used.push(box([lx, ly, al]));
+      labC.set(p.id, {dx:lx - c[0], dy:ly - c[1], al, ld}); }
+      if(ld){ x.strokeStyle = W(.22); x.lineWidth = 1; x.beginPath(); x.moveTo(c[0], c[1]); x.lineTo(c[0] + ld[0], c[1] + ld[1]); x.stroke(); }
+      x.fillStyle = on ? W(1) : W(needs ? .9 : .6); x.textAlign = al; x.lineWidth = 3; x.lineJoin = 'round'; x.strokeStyle = 'rgba(6,11,18,.85)'; x.strokeText(p.name, lx, ly); x.fillText(p.name, lx, ly); x.textAlign = 'left';
+    }); }
+  if(!drag){
+    if(nh){ hover = nh; cv.classList.add('hov'); const h = hits.find(k => k.p === nh); if(h) showCard(h); }
+    else if(hover){ hover = null; cv.classList.remove('hov'); MC.pcard.hideSoon(); } /* time to reach the card before it goes */
+  }
+  requestAnimationFrame(frame);
+}
+document.fonts.ready.then(() => requestAnimationFrame(frame));
+}
+</script>
+</body>
+</html>

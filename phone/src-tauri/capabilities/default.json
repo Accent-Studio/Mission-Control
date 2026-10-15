@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the shell page may do. No remote URLs are listed, so pages that come from the PC cannot call the app.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

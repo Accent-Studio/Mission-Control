@@ -1,0 +1,46 @@
+[package]
+name = "mc-bridge"
+version = "0.1.0"
+edition = "2021"
+description = "Carries Mission Control HTTP traffic between the phone app and the PC over iroh"
+publish = false
+
+[features]
+# The PC program (accept loop, node link, log file). The phone app turns it off.
+default = ["bridge", "client"]
+bridge = []
+# The phone side: device key, pairing and the local proxy (no Tauri code). The phone app builds with
+# `default-features = false, features = ["client"]`.
+client = []
+
+[dependencies]
+iroh = "1.3"
+hyper = { version = "1", features = ["http1", "server", "client"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+bytes = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "net", "time", "sync", "signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[bin]]
+name = "mc-bridge"
+path = "src/main.rs"
+required-features = ["bridge"]
+
+[[example]]
+name = "spike"
+# The example doubles as the spike test suite, so `cargo test` runs it.
+test = true
+
+[[example]]
+name = "phone-sim"
+# A command line stand-in for the phone app.
+test = false
+required-features = ["client"]
+
+[[test]]
+name = "e2e"
+path = "tests/e2e.rs"
+# The tests start a real bridge and a phone client, so a client-only build skips them.
+required-features = ["bridge", "client"]

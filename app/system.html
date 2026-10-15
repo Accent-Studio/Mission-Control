@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>System // Mission Control</title>
+<link rel="stylesheet" href="redline.css">
+<style>
+.gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px 12px 4px}
+.gauge{text-align:center}
+.gauge canvas{width:100%;height:110px;display:block}
+.gauge b{display:block;font-size:13px;letter-spacing:.12em;text-transform:uppercase;margin-top:-4px}
+.gauge small{font-family:var(--mono);font-size:10px;color:var(--w3)}
+.who{font-family:var(--mono);font-size:10px;padding:1px 6px;border:1px solid var(--line-2);color:var(--w2)}
+.who.self{background:var(--white);color:#0b0b0d;border-color:var(--white)}
+.dim{padding:18px 20px;color:var(--w3);font-size:14px}
+.msg{padding:10px 20px;font-size:14px;font-weight:600;display:flex;gap:10px;align-items:center}
+.msg.bad{background:rgba(214,71,60,.16)}
+.confirm{display:inline-flex;align-items:center;gap:8px;white-space:normal;justify-content:flex-end;flex-wrap:wrap}
+.confirm .q{font-size:12.5px;font-weight:600}
+.confirm .q{text-align:right}
+.tog{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--w2);cursor:pointer;margin-left:10px}
+.tog input{accent-color:#d6473c}
+.tbl td.nm{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.soon{font-family:var(--mono);font-size:10px;padding:1px 6px;border:1px solid var(--line-2);color:var(--w3);margin-left:8px;vertical-align:middle}
+.off{opacity:.45;pointer-events:none}
+.tbl td.act-c{text-align:right;white-space:normal}
+@media (min-width:561px){.tbl .hide-s{display:table-cell}}
+.act:disabled{opacity:.45;cursor:default}
+/* VRAM by process: models sit on their own lines under the process, each with its Unload button */
+.tbl tbody.g tr.mdl td{border-top:0;padding-top:1px;padding-bottom:7px;font-size:13px}
+.tbl tbody.g tr.mdl td:first-child{padding-left:36px;color:var(--w2)}
+.tbl tbody.g tr.mdl td.nm{max-width:260px}
+.tbl tbody.g tr.pr.hasm td{padding-bottom:5px}
+.tbl .nosafe{font-size:12px;color:var(--w3);white-space:nowrap}
+.rn{font-size:12px;font-weight:600;color:var(--white);margin-right:8px}
+.rn.bad{color:#f0b3ad}
+.tbl .errln{display:block;font-size:12px;font-weight:600;color:#f0b3ad;white-space:normal;margin-top:2px}
+.act.quiet{border-color:transparent;color:var(--w3);opacity:0}
+tbody.g:hover .act.quiet,tbody.g:focus-within .act.quiet,.act.quiet:focus-visible{opacity:1}
+@media (hover:none){.act.quiet{opacity:1}}
+.act.quiet:hover{background:transparent;color:var(--white)}
+.acts{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end}
+/* Make room */
+.room .need{display:flex;align-items:baseline;gap:10px;margin:2px 0 6px}
+.room .need span{font-size:13px;color:var(--w2)}
+.room .need b{font-family:var(--head);font-weight:700;font-size:40px;line-height:1}
+.room .need b small{font-size:20px;margin-left:2px;color:var(--w2)}
+.room input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:20px;margin:0 0 8px;background:transparent;cursor:pointer}
+.room input[type=range]::-webkit-slider-runnable-track{height:4px;background:linear-gradient(to right,var(--red) var(--p,0%),rgba(220,231,243,.2) var(--p,0%))}
+.room input[type=range]::-moz-range-track{height:4px;background:rgba(220,231,243,.2)}
+.room input[type=range]::-moz-range-progress{height:4px;background:var(--red)}
+.room input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:16px;margin-top:-6px;background:var(--white);border:0;border-radius:0}
+.room input[type=range]::-moz-range-thumb{width:12px;height:16px;background:var(--white);border:0;border-radius:0}
+.room input[type=range]:disabled{opacity:.45;cursor:default}
+.room input[type=range]:focus-visible{outline:1px solid var(--white);outline-offset:3px}
+.room .rl1{font-size:13.5px;font-weight:600;margin-bottom:8px}
+.room .pl{display:flex;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid var(--line-3);font-size:13.5px}
+.room .pl .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.room .pl .g{font-family:var(--mono);font-size:12px;color:var(--w2)}
+.room .rwarn{font-size:13px;color:var(--w2);margin-top:8px;line-height:1.45}
+.room .rwarn b{color:var(--white);font-weight:600}
+.room .rgo{margin-top:12px}
+.room [hidden]{display:none !important}
+/* VRAM history */
+.seg{margin-left:auto;display:flex;gap:2px;border:1px solid var(--line-2);padding:3px;background:rgba(12,19,29,.5)}
+.seg button{background:transparent;border:0;color:var(--w2);font:600 12px var(--sans);padding:3px 10px;cursor:pointer}
+.seg button:hover{color:var(--white)}
+.seg button.on{background:var(--white);color:var(--bg)}
+.chartbox{position:relative;height:260px;margin:0 14px 14px}
+.chartbox [hidden]{display:none !important}
+.chartbox canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y}
+.chartbox .none{position:absolute;inset:0;display:grid;place-items:center;color:var(--w3);font-size:14px;text-align:center;padding:0 20px}
+.vcard{position:absolute;top:8px;z-index:5;min-width:150px;max-width:230px;background:#172638;border:1px solid var(--line);padding:8px 11px;font-size:12.5px;line-height:1.5;pointer-events:none;transition:opacity .12s}
+.vcard b{display:block;font-weight:700;font-size:13px}
+.vcard .u{color:var(--white)}
+.vcard .pp{display:flex;justify-content:space-between;gap:12px;color:var(--w2)}
+.vcard .pp span:last-child{font-family:var(--mono);font-size:11.5px}
+@media (prefers-reduced-motion:reduce){.vcard{transition:none}}
+</style>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="bgfx" aria-hidden="true"></div>
+<div class="app">
+  <nav class="rail" aria-label="Main"></nav>
+    <header class="page">
+      <div class="ruler" aria-hidden="true"></div>
+      <div class="hd">
+        <div><h1>System <em>&amp; servers</em></h1><div class="sub" id="sub"><span>Reading this PC</span></div></div>
+        <svg class="barcode" aria-hidden="true"></svg>
+        <div class="clock"><b data-clock>00:00</b></div>
+      </div>
+    </header>
+
+  <main class="main">
+
+    <section class="stat fr span-3" id="stV"><span class="n">--</span><span class="t">VRAM GB</span><span class="s"></span></section>
+    <section class="stat fr span-3" id="stR"><span class="n">--</span><span class="t">RAM GB</span><span class="s"></span></section>
+    <section class="stat fr span-3" id="stC"><span class="n">--</span><span class="t">CPU %</span><span class="s"></span></section>
+    <section class="stat fr span-3" id="stT"><span class="n">--</span><span class="t">GPU &deg;C</span><span class="s"></span></section>
+
+    <section class="fr span-12" id="msgBox" aria-label="Result" hidden><div class="msg" id="msg" role="status"></div></section>
+
+    <section class="fr span-8" aria-label="VRAM history">
+      <div class="ttl"><h3>VRAM history</h3>
+        <div class="seg" id="hrange" role="group" aria-label="Range"><button type="button" data-r="1h" class="on" aria-pressed="true">1h</button><button type="button" data-r="6h" aria-pressed="false">6h</button><button type="button" data-r="24h" aria-pressed="false">24h</button></div></div>
+      <div class="chartbox" id="chbox"><canvas id="hc"></canvas><div class="none" id="hnone">Reading history</div><div class="vcard" id="vcard" hidden></div></div>
+    </section>
+
+    <section class="fr span-4 room" aria-label="Make room">
+      <div class="ttl"><h3>Make room</h3></div>
+      <div class="body">
+        <div class="need"><span>I need</span><b id="needV">--<small>GB</small></b></div>
+        <input type="range" id="needR" min="0" max="24" step="0.5" value="8" aria-label="GB of VRAM needed">
+        <div class="rl1" id="rLine">Reading VRAM</div>
+        <div id="rPlan"></div>
+        <div class="rgo"><button class="act red big" id="rGo" type="button" hidden></button></div>
+      </div>
+    </section>
+
+    <section class="fr span-6" aria-label="VRAM by process">
+      <div class="ttl"><h3>VRAM by process</h3><span class="id">WHAT IS USING YOUR GPU MEMORY</span><span class="cnt" id="pc"></span></div>
+      <table class="tbl" id="ptab"></table>
+    </section>
+
+    <section class="fr span-6" aria-label="RAM by process">
+      <div class="ttl"><h3>RAM by process</h3><span class="id">TOP USERS OF SYSTEM MEMORY</span><span class="cnt" id="rc"></span></div>
+      <table class="tbl"><thead><tr><th>PROCESS</th><th class="hide-s">PID</th><th>RAM</th><th class="hide-s">SHARE</th><th></th></tr></thead><tbody id="rtab"></tbody></table>
+    </section>
+
+    <section class="fr span-8" aria-label="Servers">
+      <div class="ttl"><h3>Dev servers</h3><span class="id" id="sSub">LISTENING PORTS</span><span class="cnt" id="sc"></span>
+        <label class="tog"><input type="checkbox" id="allp"> Show all ports</label></div>
+      <table class="tbl"><thead><tr><th>PORT</th><th>PROCESS</th><th>PROJECT</th><th class="hide-s">PID</th><th class="hide-s">STARTED</th><th></th></tr></thead><tbody id="stab"></tbody></table>
+    </section>
+
+    <section class="fr span-4" aria-label="GPU health">
+      <div class="ttl"><h3>GPU health</h3><span class="id">LIVE</span></div>
+      <div class="gauges">
+        <div class="gauge"><canvas id="gT"></canvas><b id="gTv">--</b><small>TEMP</small></div>
+        <div class="gauge"><canvas id="gL"></canvas><b id="gLv">--</b><small>LOAD</small></div>
+        <div class="gauge"><canvas id="gM"></canvas><b id="gMv">--</b><small>VRAM</small></div>
+      </div>
+      <div class="body" style="padding-top:4px"><dl class="kv"><dt>GPU</dt><dd id="kG">--</dd><dt>DRIVER</dt><dd id="kD">--</dd><dt>CUDA</dt><dd id="kC">--</dd></dl></div>
+    </section>
+  </main>
+</div>
+
+<script src="api.js"></script>
+<script src="data.js"></script>
+<script src="phrases.js"></script>
+<script src="redline.js"></script>
+<script>
+MC.init('sys');
+const $ = id => document.getElementById(id);
+const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let need0 = 8; try { const v = parseFloat(localStorage.getItem('mc.need')); if(Number.isFinite(v) && v >= 0) need0 = v; } catch(e){}
+const S = { sys:null, servers:null, engines:null, names:{}, pending:null, busy:false, err:null, ticks:0, openTimer:null, unl:new Set(), notes:new Map(), need:need0, plan:null, planBusy:false };
+
+function fmtGB(v){ return v == null ? 'n/a' : v.toFixed(1); }
+function fmtMB(mb){ return mb == null ? 'n/a' : mb >= 1024 ? (mb/1024).toFixed(1) + 'GB' : Math.round(mb) + 'MB'; }
+function bar(frac, hot){ const n = Math.max(0, Math.min(20, Math.round(frac*20))); return `<div class="mini ${hot?'hot':''}">${Array.from({length:20},(_,k)=>`<i class="${k<n?'on':''}"></i>`).join('')}</div>`; }
+function startedText(iso){
+  if(!iso) return 'n/a';
+  const d = new Date(iso); if(isNaN(d)) return 'n/a';
+  const mins = Math.max(0, Math.round((Date.now() - d.getTime())/60000));
+  const up = mins < 60 ? mins + ' min' : mins < 2880 ? Math.round(mins/60) + 'h' : Math.round(mins/1440) + 'd';
+  return d.toLocaleString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:false}) + ' (' + up + ')';
+}
+const OPEN_GUARD_MS = 800;
+const nm = n => (n && String(n).trim()) || 'unknown process';
+const num = v => Number.isFinite(Number(v)) ? Number(v) : 0;
+function selfPid(){ const s = (S.servers||[]).find(x => x.isSelf); return s ? s.pid : null; }
+
+/* ---------- stats ---------- */
+function setStat(id, n, label, sub, alert){
+  const el = $(id); el.querySelector('.n').textContent = n; el.querySelector('.t').textContent = label; el.querySelector('.s').textContent = sub || ''; el.classList.toggle('alert', !!alert);
+}
+function renderStats(){
+  const d = S.sys;
+  if(!d){ $('sub').innerHTML = `<span>${S.err ? 'Server offline' : 'Reading this PC'}</span>`; return; }
+  const g = d.gpu, r = d.ram, c = d.cpu;
+  $('sub').innerHTML = [g && g.name, r && r.totalGB != null ? Math.round(r.totalGB) + 'GB RAM' : null, c && c.name].filter(Boolean).map(t => `<span>${esc(t)}</span>`).join('') || '<span>No details</span>';
+  if(g && g.vramTotalGB){ const p = Math.round(g.vramUsedGB/g.vramTotalGB*100); setStat('stV', fmtGB(g.vramUsedGB), `VRAM GB // OF ${fmtGB(g.vramTotalGB)} // ${p}%`, '', p >= 90); }
+  else setStat('stV', 'n/a', 'VRAM GB // NO GPU READING', '');
+  if(r){ const p = Math.round(r.usedGB/r.totalGB*100); setStat('stR', fmtGB(r.usedGB), `RAM GB // OF ${fmtGB(r.totalGB)} // ${p}%`, '', p >= 90); } else setStat('stR', 'n/a', 'RAM GB');
+  if(c && c.loadPct != null) setStat('stC', Math.round(c.loadPct), `CPU % // ${c.cores} THREADS`, '', c.loadPct >= 90); else setStat('stC', 'n/a', 'CPU %');
+  if(g && g.tempC != null) setStat('stT', Math.round(g.tempC), `GPU °C // LOAD ${g.utilPct == null ? 'n/a' : Math.round(g.utilPct) + '%'}`, '', g.tempC >= 85); else setStat('stT', 'n/a', 'GPU °C');
+  $('kG').textContent = (g && g.name) || 'n/a'; $('kD').textContent = (g && g.driver) || 'n/a'; $('kC').textContent = (g && g.cuda) || 'n/a';
+  gauge('gT', g && g.tempC, 90, 'gTv', v => Math.round(v) + '°C');
+  gauge('gL', g && g.utilPct, 100, 'gLv', v => Math.round(v) + '%');
+  gauge('gM', g && g.vramTotalGB ? g.vramUsedGB/g.vramTotalGB*100 : null, 100, 'gMv', v => Math.round(v) + '%');
+}
+function gauge(cid, val, max, tid, fmt){
+  $(tid).textContent = val == null ? 'n/a' : fmt(val);
+  const c = $(cid), [x,w,h] = MC.fit(c); x.clearRect(0,0,w,h);
+  const v = val == null ? 0 : Math.min(1, val/max), cx = w/2, cy = h*.62, R = Math.min(w/2, h*.6) - 6, N = 24;
+  for(let i=0;i<N;i++){ const a0 = Math.PI*.8 + i/N*Math.PI*1.4, a1 = a0 + Math.PI*1.4/N - .04; x.beginPath(); x.arc(cx,cy,R,a0,a1); x.arc(cx,cy,R*.78,a1,a0,true); x.closePath(); x.fillStyle = i < v*N ? (i > N*.8 ? '#d6473c' : '#e2e9f0') : 'rgba(220,231,243,.08)'; x.fill(); }
+}
+
+/* ---------- stop buttons and inline confirm ---------- */
+// quiet: the process holds models that Unload frees safely, so Stop is the last resort and says so.
+function stopCell(key, pid, name, port, quiet){
+  pid = num(pid); port = port ? num(port) : 0;
+  if(S.pending && S.pending.key === key){
+    const label = `Stop ${esc(nm(name))}${port ? ' on port ' + port + ' (pid ' + pid + ')' : ' (pid ' + pid + ')'}?` + (quiet === 'free' ? ' Its loaded models will be lost, Free is the safe way.' : quiet ? ' Its models will be lost, Unload is the safe way.' : '');
+    const wait = !S.busy && Date.now() - S.pending.at < OPEN_GUARD_MS;
+    return `<span class="confirm"><span class="q">${label}</span><button class="act red" data-yes="1"${S.busy || wait ? ' disabled' : ''}>${S.busy ? 'Stopping' : 'Yes, stop'}</button><button class="act ghost" data-no="1"${S.busy ? ' disabled' : ''}>Cancel</button></span>`;
+  }
+  return `<button class="act pc-only${quiet ? ' ghost quiet' : ''}" data-stop="${esc(key)}" data-pid="${pid}" data-name="${esc(nm(name))}" data-port="${port || ''}">Stop</button>`;
+}
+
+/* ---------- unload and free: one state for the table and the plan ---------- */
+const keyM = (eng, id) => 'm:' + eng + '|' + id;
+const KEY_COMFY = 'c:comfyui';
+function setNote(key, text, bad){
+  const n = {text, bad: !!bad, until: Date.now() + 6000};
+  S.notes.set(key, n);
+  setTimeout(() => { if(S.notes.get(key) === n){ S.notes.delete(key); renderGpu(); renderRoom(); } }, 6050);
+}
+function liveNote(key){ const n = S.notes.get(key); return n && n.until > Date.now() ? n : null; }
+function noteHtml(key){ const n = liveNote(key); return n && !n.bad ? `<span class="rn">${esc(n.text)}</span>` : ''; }
+function errHtml(key){ const n = liveNote(key); return n && n.bad ? `<span class="errln">${esc(n.text)}</span>` : ''; }
+function unloadBtn(key, attrs, idle, busy){
+  const b = S.unl.has(key);
+  return `${noteHtml(key)}<button class="act red" ${attrs}${b || S.planBusy ? ' disabled' : ''}>${b ? busy : idle}</button>`;
+}
+// One unload or free. Returns true when the server accepted it.
+async function runItem(it){
+  S.unl.add(it.key); renderGpu(); renderRoom();
+  let ok = true;
+  try {
+    if(it.kind === 'free') await MC.api.post('/api/engines/comfyui/free');
+    else { const r = await MC.api.post('/api/engines/' + encodeURIComponent(it.engine) + '/unload', {model: it.id}); if(r && r.stillLoaded) setNote(it.key, 'Still loaded'); }
+  } catch(e){ ok = false; S.failWhy = e.message || 'Refused'; setNote(it.key, S.failWhy, true); }
+  S.unl.delete(it.key);
+  return ok;
+}
+function comfyPid(){ const e = ((S.engines && S.engines.engines) || []).find(x => x.id === 'comfyui' && x.canFree); return e && e.pid != null ? e.pid : null; }
+
+function renderGpu(){
+  const d = S.sys, tb = $('ptab');
+  const head = '<thead><tr><th>PROCESS</th><th class="hide-s">PID</th><th>VRAM</th><th class="hide-s">SHARE</th><th></th></tr></thead>';
+  if(!d){ tb.innerHTML = head + `<tbody><tr><td colspan="5" class="dim">${S.err ? 'Server offline' : 'Loading'}</td></tr></tbody>`; $('pc').textContent = ''; return; }
+  const list = (d.gpuProcs || []).slice().sort((a,b) => (b.vramMB == null ? -1 : b.vramMB) - (a.vramMB == null ? -1 : a.vramMB));
+  const tot = d.gpu && d.gpu.vramTotalGB ? d.gpu.vramTotalGB*1024 : 0, me = selfPid(), cp = comfyPid();
+  $('pc').textContent = String(list.length).padStart(2,'0') + ' PROC';
+  tb.innerHTML = head + (list.length ? list.map(p => {
+    const models = p.models || [], quiet = models.some(m => m.canUnload) ? true : cp != null && p.pid === cp ? 'free' : false;
+    const act = p.pid === me ? '<span class="who self">THIS SERVER</span>' : stopCell('g'+p.pid, p.pid, p.name, 0, quiet);
+    const free = cp != null && p.pid === cp ? unloadBtn(KEY_COMFY, 'data-free="1"', 'Free', 'Freeing...') : '';
+    const row = `<tr class="pr${models.length ? ' hasm' : ''}"><td class="nm">${p.name ? esc(p.name) : '<span class="muted">unknown</span>'}${cp != null && p.pid === cp ? errHtml(KEY_COMFY) : ''}</td><td class="m hide-s">${num(p.pid)}</td><td class="m" style="color:#fff">${fmtMB(p.vramMB)}</td><td class="hide-s" style="width:140px">${p.vramMB != null && tot ? bar(p.vramMB/tot, p.vramMB/tot > .25) : '<span class="mono muted" style="font-size:11px">n/a</span>'}</td><td class="act-c"><span class="acts">${free}${act}</span></td></tr>`;
+    const sub = models.map(m => {
+      const key = keyM(m.engine, m.id);
+      const right = m.canUnload ? unloadBtn(key, `data-unl="1" data-eng="${esc(m.engine)}" data-model="${esc(m.id)}"`, 'Unload', 'Unloading...') : '<span class="nosafe">no safe unload</span>';
+      return `<tr class="mdl"><td class="nm" title="${esc(m.id)}">${esc(m.label || m.id)}${errHtml(key)}</td><td class="hide-s"></td><td class="m">${m.vramMB != null ? fmtMB(m.vramMB) : ''}</td><td class="hide-s"></td><td class="act-c"><span class="acts">${right}</span></td></tr>`;
+    }).join('');
+    return `<tbody class="g">${row}${sub}</tbody>`;
+  }).join('') : `<tbody><tr><td colspan="5" class="dim">No processes are using the GPU</td></tr></tbody>`);
+}
+function renderRam(){
+  const d = S.sys, tb = $('rtab');
+  if(!d){ tb.innerHTML = `<tr><td colspan="5" class="dim">${S.err ? 'Server offline' : 'Loading'}</td></tr>`; $('rc').textContent = ''; return; }
+  const list = d.topRam || [], tot = d.ram ? d.ram.totalGB*1024 : 0, me = selfPid();
+  $('rc').textContent = 'TOP ' + String(list.length).padStart(2,'0');
+  tb.innerHTML = list.length ? list.map(p => `<tr><td class="nm">${p.name ? esc(p.name) : '<span class="muted">unknown</span>'}</td><td class="m hide-s">${num(p.pid)}</td><td class="m" style="color:#fff">${fmtMB(p.ramMB)}</td><td class="hide-s" style="width:140px">${p.ramMB != null && tot ? bar(p.ramMB/tot, p.ramMB/tot > .1) : '<span class="mono muted" style="font-size:11px">n/a</span>'}</td><td class="act-c">${p.pid === me ? '<span class="who self">THIS SERVER</span>' : stopCell('r'+p.pid, p.pid, p.name)}</td></tr>`).join('')
+    : `<tr><td colspan="5" class="dim">No process data</td></tr>`;
+}
+function renderServers(){
+  const tb = $('stab'), all = $('allp').checked;
+  if(!S.servers){ tb.innerHTML = `<tr><td colspan="6" class="dim">${S.err ? 'Server offline' : 'Loading'}</td></tr>`; $('sc').textContent = ''; return; }
+  const list = S.servers.filter(s => all || s.isDev || s.isSelf).sort((a,b) => (b.isDev - a.isDev) || (a.port - b.port));
+  $('sc').textContent = String(list.length).padStart(2,'0');
+  $('sSub').textContent = all ? 'EVERY LISTENING PORT ON THIS PC' : 'DEV SERVERS, TICK THE BOX FOR EVERY PORT';
+  tb.innerHTML = list.length ? list.map(s => {
+    const key = 's' + s.pid + ':' + s.port;
+    const proj = s.project ? `<a href="project.html?id=${encodeURIComponent(s.project)}" style="color:inherit">${esc(S.names[s.project] || s.project)}</a>` : '<span class="muted">n/a</span>';
+    return `<tr title="${esc(s.commandLine || '')}"><td class="m" style="color:#fff">${num(s.port)}</td><td class="nm">${s.name ? esc(s.name) : '<span class="muted">unknown</span>'} ${s.isSelf ? '<span class="who self">THIS SERVER</span>' : s.isDev ? '<span class="who">DEV</span>' : ''}</td><td class="nm">${proj}</td><td class="m hide-s">${num(s.pid)}</td><td class="m hide-s">${esc(startedText(s.startedAt))}</td><td class="act-c">${s.isSelf ? '' : stopCell(key, s.pid, s.name, s.port)} <button class="act off" disabled title="Not wired yet">Open <span class="soon" style="margin:0">Soon</span></button></td></tr>`;
+  }).join('') : `<tr><td colspan="6" class="dim">No dev servers running</td></tr>`;
+}
+
+/* ---------- Make room: the smallest list of unloads that frees enough ---------- */
+const gbOf = mb => (mb / 1024).toFixed(1) + 'GB';
+function vramNums(){
+  const g = S.sys && S.sys.gpu;
+  return g && g.vramTotalGB ? {total: g.vramTotalGB, used: g.vramUsedGB, free: Math.max(0, g.vramTotalGB - g.vramUsedGB)} : null;
+}
+// Every unloadable model (largest first), then ComfyUI's free with its process VRAM.
+function candidates(){
+  const out = [];
+  for(const e of ((S.engines && S.engines.engines) || [])){
+    for(const m of e.models) if(m.canUnload) out.push({kind:'unload', key:keyM(e.id, m.id), engine:e.id, id:m.id, label:m.label || m.id, mb:m.vramMB});
+  }
+  out.sort((a,b) => (b.mb == null ? -1 : b.mb) - (a.mb == null ? -1 : a.mb));
+  const cp = comfyPid(), row = cp == null ? null : ((S.sys && S.sys.gpuProcs) || []).find(p => p.pid === cp);
+  if(row) out.push({kind:'free', key:KEY_COMFY, engine:'comfyui', label:'ComfyUI', mb:row.vramMB, pid:cp});
+  return out;
+}
+function makePlan(deficitMB){
+  const all = candidates(), known = all.filter(c => c.mb != null), unknown = all.filter(c => c.mb == null);
+  const sel = [];
+  let sum = 0;
+  for(const c of known){ if(sum >= deficitMB) break; sel.push(c); sum += c.mb; }
+  const enough = sum >= deficitMB;
+  if(!enough) for(const c of unknown) sel.push(c);
+  if(enough){ // drop what is not needed, smallest first
+    for(const c of sel.slice().sort((a,b) => a.mb - b.mb)){ if(sum - c.mb >= deficitMB){ sel.splice(sel.indexOf(c), 1); sum -= c.mb; } }
+  }
+  return {items: sel, sumMB: sum, enough, hasUnknown: !enough && unknown.length > 0, none: all.length === 0};
+}
+function renderRoom(){
+  const v = vramNums(), R = $('needR'), go = $('rGo'), plan = $('rPlan');
+  if(!v){
+    R.disabled = true; $('needV').innerHTML = '--<small>GB</small>'; $('rLine').textContent = S.err ? 'Server offline' : 'No GPU reading'; plan.innerHTML = ''; go.hidden = true; return;
+  }
+  R.disabled = false;
+  const max = Math.max(0.5, Math.floor(v.total*2)/2);
+  if(+R.max !== max) R.max = max;
+  if(S.need > max) S.need = max;
+  if(+R.value !== S.need) R.value = S.need;
+  R.style.setProperty('--p', (S.need / max * 100) + '%');
+  $('needV').innerHTML = S.need + '<small>GB</small>';
+  if(S.need <= v.free + 0.005){
+    $('rLine').textContent = `Enough already, ${v.free.toFixed(1)}GB free now`; plan.innerHTML = '';
+    if(!S.planBusy) go.hidden = true;
+    return;
+  }
+  const deficit = S.need - v.free;
+  $('rLine').textContent = `${v.free.toFixed(1)}GB free now, ${deficit.toFixed(1)}GB short`;
+  const p = makePlan(deficit*1024);
+  let html = p.items.map(it => `<div class="pl"><span class="t">${it.kind === 'free' ? 'Free ' : 'Unload '}<b>${esc(it.label)}</b>${errHtml(it.key)}</span>${noteHtml(it.key)}<span class="g">${it.mb == null ? 'size n/a' : gbOf(it.mb)}</span></div>`).join('');
+  if(!p.enough){
+    const left = Math.max(0, deficit - p.sumMB/1024), me = selfPid(), skip = new Set(p.items.map(i => i.pid));
+    const others = ((S.sys && S.sys.gpuProcs) || []).filter(x => x.vramMB != null && x.pid !== me && !skip.has(x.pid) && !(x.models || []).length).sort((a,b) => b.vramMB - a.vramMB).slice(0, 3);
+    html += `<div class="rwarn">${p.none ? 'No model is loaded, so there is nothing to unload.' : `Unloading every model is not enough, ${left.toFixed(1)}GB still short.`}${others.length ? ' Biggest others: ' + others.map(o => `<b>${esc(o.name || 'pid ' + o.pid)}</b> ${gbOf(o.vramMB)}`).join(', ') : ''}</div>`;
+  }
+  plan.innerHTML = html;
+  S.plan = p;
+  if(S.planBusy){ go.hidden = false; go.disabled = true; go.textContent = 'Unloading...'; }
+  else if(p.items.length){ go.hidden = false; go.disabled = false; go.textContent = p.sumMB > 0 ? 'Free ' + gbOf(p.sumMB) : 'Unload ' + p.items.length; }
+  else go.hidden = true;
+}
+function clearPlanMsg(){ if(S.planMsg){ S.planMsg = false; $('msgBox').hidden = true; } }
+async function runPlan(){
+  if(S.planBusy || !S.plan || !S.plan.items.length) return;
+  const items = S.plan.items.slice();
+  S.planBusy = true; clearPlanMsg();
+  try {
+    renderGpu(); renderRoom();
+    for(const it of items){
+      if(!(await runItem(it))){ showMsg(false, `Stopped at ${it.label || it.id || 'item'}: ${S.failWhy}`); S.planMsg = true; break; }
+    }
+  } finally { S.planBusy = false; } /* the buttons always unlock, whatever failed */
+  renderGpu();
+  await loadAll();
+}
+
+function dropStalePending(){
+  // A confirm whose row has disappeared (process gone, list changed) must not wait invisibly.
+  if(S.pending && !S.busy && !document.querySelector('[data-yes]')){ S.pending = null; return true; }
+  return false;
+}
+function renderAll(){ renderStats(); renderGpu(); renderRam(); renderServers(); renderRoom(); dropStalePending(); MC.drawFrames(); }
+function openConfirm(p){
+  S.pending = Object.assign({at: Date.now()}, p); renderAll();
+  clearTimeout(S.openTimer); S.openTimer = setTimeout(() => { if(S.pending && !S.busy) renderAll(); }, OPEN_GUARD_MS + 50);
+}
+
+function showMsg(ok, text){
+  $('msgBox').hidden = false; const m = $('msg'); m.className = 'msg ' + (ok ? '' : 'bad');
+  m.innerHTML = (ok ? MC.chip('ok', 'Done') : MC.chip('bad', 'Refused')) + '<span>' + esc(text) + '</span>';
+  MC.drawFrames();
+}
+
+/* ---------- VRAM history chart ---------- */
+const H = {range:'1h', data:null, err:false, hover:null, geo:null};
+const SPAN = {'1h':3600000, '6h':21600000, '24h':86400000};
+const hh = t => { const d = new Date(t); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); };
+async function loadHist(){
+  const r = H.range;
+  try { const d = await MC.api.get('/api/system/vram-history?range=' + r); if(r !== H.range) return; H.data = d; H.err = false; }
+  catch(e){ if(r !== H.range) return; H.err = true; }
+  drawHist();
+}
+function niceStep(raw){ for(const s of [1,2,4,5,8,10,16,20,25,50,100]) if(s >= raw) return s; return 100; }
+function drawHist(){
+  const cv = $('hc'), none = $('hnone'), pts = (H.data && H.data.points) || [];
+  const empty = pts.length < 2;
+  none.hidden = !empty; /* the canvas itself is never hidden: a canvas drawn right after being unhidden can stay blank */
+  const [x, W, Hh] = MC.fit(cv); x.clearRect(0, 0, W, Hh);
+  if(empty){ none.textContent = H.err && !H.data ? 'Server offline' : H.data ? 'Recording, the chart fills in over the next minutes' : 'Reading history'; $('vcard').hidden = true; H.geo = null; return; }
+  const pl = 48, pr = 12, pt = 26, pb = 26, pw = W - pl - pr, ph = Hh - pt - pb;
+  const t1 = Date.now(), t0 = Math.max(t1 - SPAN[H.range], pts[0][0]);
+  const maxUsed = pts.reduce((m, p) => Math.max(m, p[1]), 0);
+  const total = H.data.totalGB || Math.ceil(maxUsed), ymax = Math.max(total, maxUsed) || 1;
+  const X = t => pl + (t - t0) / Math.max(1, t1 - t0) * pw, Y = v => pt + ph - v / ymax * ph;
+  x.font = '11px "JetBrains Mono", monospace'; x.textBaseline = 'middle';
+  // y axis
+  const step = niceStep(ymax / 4);
+  x.textAlign = 'right';
+  for(let v = 0; v < ymax - step*.4; v += step){
+    x.strokeStyle = 'rgba(220,231,243,.08)'; x.lineWidth = 1; x.beginPath(); x.moveTo(pl, Math.round(Y(v)) + .5); x.lineTo(W - pr, Math.round(Y(v)) + .5); x.stroke();
+    x.fillStyle = '#627488'; x.fillText(v + 'GB', pl - 8, Y(v));
+  }
+  // x axis
+  const mins = [1,2,5,10,15,30,60,120,180,360,720].find(m => pw / ((t1 - t0) / 60000 / m) >= 78) || 720, stepMs = mins * 60000, off = new Date(t0).getTimezoneOffset() * 60000;
+  x.textAlign = 'center'; x.textBaseline = 'top'; x.fillStyle = '#627488';
+  for(let t = Math.ceil((t0 - off) / stepMs) * stepMs + off; t <= t1; t += stepMs){
+    const px = X(t); if(px < pl + 14 || px > W - pr - 14) continue;
+    x.strokeStyle = 'rgba(220,231,243,.08)'; x.beginPath(); x.moveTo(Math.round(px) + .5, pt); x.lineTo(Math.round(px) + .5, pt + ph + 4); x.stroke();
+    x.fillText(hh(t), px, pt + ph + 8);
+  }
+  // total, dashed
+  x.setLineDash([5, 4]); x.strokeStyle = '#95a5b7'; x.lineWidth = 1; x.beginPath(); x.moveTo(pl, Math.round(Y(total)) + .5); x.lineTo(W - pr, Math.round(Y(total)) + .5); x.stroke(); x.setLineDash([]);
+  x.textAlign = 'right'; x.textBaseline = 'bottom'; x.fillStyle = '#95a5b7'; x.font = '600 11px Montserrat, sans-serif'; x.fillText(total.toFixed(0) + 'GB total', W - pr, Y(total) - 4);
+  // area and line, broken where the server was not sampling
+  const gap = Math.max(45000, SPAN[H.range] / 360 * 3), segs = [];
+  let cur = [];
+  for(const p of pts){ if(cur.length && p[0] - cur[cur.length-1][0] > gap){ segs.push(cur); cur = []; } cur.push(p); }
+  segs.push(cur);
+  x.lineJoin = 'round';
+  for(const sg of segs){
+    if(sg.length < 2){ const p = sg[0]; x.fillStyle = '#e2e9f0'; x.fillRect(X(p[0]) - 1, Y(p[1]) - 1, 3, 3); continue; }
+    x.beginPath(); sg.forEach((p, i) => i ? x.lineTo(X(p[0]), Y(p[1])) : x.moveTo(X(p[0]), Y(p[1])));
+    x.lineTo(X(sg[sg.length-1][0]), Y(0)); x.lineTo(X(sg[0][0]), Y(0)); x.closePath(); x.fillStyle = 'rgba(226,233,240,.13)'; x.fill();
+    x.beginPath(); sg.forEach((p, i) => i ? x.lineTo(X(p[0]), Y(p[1])) : x.moveTo(X(p[0]), Y(p[1]))); x.strokeStyle = '#e2e9f0'; x.lineWidth = 1.6; x.stroke();
+  }
+  H.geo = {pl, pr, pw, W, t0, t1};
+  // crosshair and card
+  const card = $('vcard');
+  if(H.hover != null && pts[H.hover]){
+    const p = pts[H.hover], px = X(p[0]), py = Y(p[1]);
+    x.strokeStyle = 'rgba(226,233,240,.55)'; x.lineWidth = 1; x.beginPath(); x.moveTo(Math.round(px) + .5, pt); x.lineTo(Math.round(px) + .5, pt + ph); x.stroke();
+    x.fillStyle = '#e2e9f0'; x.strokeStyle = '#0a1019'; x.lineWidth = 2; x.beginPath(); x.arc(px, py, 4, 0, 7); x.stroke(); x.fill();
+    const d = new Date(p[0]), when = (H.range === '24h' ? d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' ' : '') + hh(p[0]) + ':' + String(d.getSeconds()).padStart(2,'0');
+    card.innerHTML = `<b>${when}</b><div class="u">${p[1].toFixed(1)}GB of ${total.toFixed(0)}GB</div>` + (p[2] || []).slice(0, 3).map(q => `<div class="pp"><span>${esc(q[0] || 'unknown')}</span><span>${fmtMB(q[1])}</span></div>`).join('');
+    card.hidden = false;
+    const cw = card.offsetWidth; card.style.left = Math.max(0, Math.round(px + 14 + cw > W ? px - 14 - cw : px + 14)) + 'px';
+  } else card.hidden = true;
+}
+$('hc').addEventListener('pointermove', ev => {
+  const pts = (H.data && H.data.points) || [], g = H.geo; if(!g || !pts.length) return;
+  const box = $('hc').getBoundingClientRect(), t = g.t0 + (ev.clientX - box.left - g.pl) / g.pw * (g.t1 - g.t0);
+  let lo = 0, hi = pts.length - 1;
+  while(lo < hi){ const mid = (lo + hi) >> 1; if(pts[mid][0] < t) lo = mid + 1; else hi = mid; }
+  if(lo > 0 && Math.abs(pts[lo-1][0] - t) < Math.abs(pts[lo][0] - t)) lo--;
+  if(lo !== H.hover){ H.hover = lo; drawHist(); }
+});
+$('hc').addEventListener('pointerleave', () => { H.hover = null; drawHist(); });
+$('hrange').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if(!b || b.dataset.r === H.range) return;
+  H.range = b.dataset.r; H.data = null; H.hover = null;
+  $('hrange').querySelectorAll('button').forEach(k => { const on = k.dataset.r === H.range; k.classList.toggle('on', on); k.setAttribute('aria-pressed', on); });
+  drawHist(); loadHist();
+});
+$('hc').addEventListener('contextrestored', () => drawHist()); /* a lost canvas comes back blank */
+if(window.ResizeObserver) new ResizeObserver(() => drawHist()).observe($('chbox'));
+setInterval(() => { if(!document.hidden) loadHist(); }, 30000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden) loadHist(); });
+
+/* ---------- data ---------- */
+async function loadSys(){ try { S.sys = await MC.api.get('/api/system'); S.err = null; } catch(e){ S.err = e; } }
+async function loadServers(){ try { S.servers = await MC.api.get('/api/servers' + ($('allp').checked ? '?all=1' : '')); } catch(e){ S.err = e; } }
+async function loadEngines(){ try { S.engines = await MC.api.get('/api/engines'); } catch(e){} }
+async function loadNames(){ try { const r = await MC.api.get('/api/projects'); (r.projects || []).forEach(p => { S.names[p.id] = p.name; }); } catch(e){} }
+async function loadAll(){ await Promise.all([loadSys(), loadServers(), loadEngines()]); renderAll(); }
+
+$('allp').onchange = async () => { S.servers = null; renderServers(); await loadServers(); renderServers(); };
+$('needR').addEventListener('input', () => { S.need = +$('needR').value; clearPlanMsg(); try { localStorage.setItem('mc.need', S.need); } catch(e){} renderRoom(); });
+
+document.addEventListener('click', async ev => {
+  const b = ev.target.closest('button'); if(!b) return;
+  if(b.disabled) return;
+  if(b.dataset.stop){ if(S.busy) return; openConfirm({kind:'kill', key:b.dataset.stop, pid:+b.dataset.pid, name:b.dataset.name, port:b.dataset.port}); return; }
+  if(b.dataset.unl){ const k = keyM(b.dataset.eng, b.dataset.model); if(S.unl.has(k) || S.planBusy) return; await runItem({kind:'unload', key:k, engine:b.dataset.eng, id:b.dataset.model}); await loadAll(); return; }
+  if(b.dataset.free){ if(S.unl.has(KEY_COMFY) || S.planBusy) return; await runItem({kind:'free', key:KEY_COMFY}); await loadAll(); return; }
+  if(b.id === 'rGo'){ runPlan(); return; }
+  if(b.dataset.no){ if(S.busy) return; S.pending = null; renderAll(); return; }
+  if(b.dataset.yes && S.pending && !S.busy && ev.detail <= 1 && Date.now() - S.pending.at >= OPEN_GUARD_MS){
+    const p = S.pending; S.busy = true; renderAll();
+    try {
+      await MC.api.post('/api/processes/' + p.pid + '/kill', {confirm:true});
+      showMsg(true, `Stopped ${p.name}${p.port ? ' on port ' + p.port : ''} (pid ${p.pid}).`);
+    } catch(e){ showMsg(false, e.message || 'The server refused.'); }
+    S.pending = null; S.busy = false;
+    await loadAll();
+  }
+});
+
+let slow = false;
+MC.events.on('system.tick', async d => {
+  if(d && d.cpu){ S.sys = d; S.err = null; renderStats(); renderGpu(); renderRam(); renderRoom(); dropStalePending(); }
+  // Engines and the port list are not in the tick payload: refresh them here, never overlapping.
+  S.ticks++;
+  if(slow || S.busy) return; slow = true;
+  try { await loadEngines(); if(S.ticks % 3 === 0 && !S.pending) await loadServers(); if(!S.busy){ renderServers(); renderRoom(); renderGpu(); dropStalePending(); } } finally { slow = false; }
+});
+MC.events.on('system.changed', () => { loadAll(); });
+addEventListener('resize', () => { renderStats(); });
+loadNames().then(() => renderServers());
+loadAll();
+loadHist();
+</script>
+</body>
+</html>

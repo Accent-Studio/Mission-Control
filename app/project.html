@@ -1,0 +1,1770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="redline.css">
+<link rel="stylesheet" href="md.css">
+<style>
+/* ---------- Project page: the crew ship fills the screen, panels dock around the edges ---------- */
+:root{--lw:clamp(280px,20vw,350px);--rwn:clamp(330px,32vw,460px);--rwd:clamp(400px,36vw,700px);--gap:12px;--band:clamp(240px,40vh,380px)}
+@property --rww{syntax:'<length>';inherits:true;initial-value:360px}
+.alsoold{font-size:11px;color:var(--w3)}
+#status .st .v>small{display:block}
+
+/* the scene: one fixed layer behind everything (the ship's canvas, plus the room labels and speech bubbles) */
+.stage{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.stage .overlay{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+body.dragging{user-select:none;-webkit-user-select:none}
+.scenefade{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse 75% 80% at 50% 52%,transparent 45%,rgba(4,8,14,.5) 100%)}
+.stage .overlay.tiny .room-l{display:none}
+.room-l{position:absolute;left:0;top:0;font-family:var(--head);font-weight:600;font-size:calc(12px*var(--ls,1));letter-spacing:.14em;text-transform:uppercase;color:var(--w2);white-space:nowrap;text-shadow:0 1px 6px rgba(4,8,14,.95)}
+.bub{position:absolute;left:0;top:0;max-width:200px;background:var(--white);color:var(--bg);font:600 12px var(--sans);padding:6px 10px;border-radius:10px;line-height:1.3;box-shadow:0 4px 14px rgba(0,0,0,.35);animation:pop .25s ease-out}
+.bub::after{content:'';position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-bottom:0;border-top-color:var(--white)}
+@keyframes pop{from{opacity:0;margin-top:6px}to{opacity:1;margin-top:0}}
+#crewCard{width:280px}
+.hcard .bodyc{padding:2px 16px 14px}
+.hcard .desc{color:var(--w2);font-size:13px;line-height:1.45;margin-bottom:12px}
+.hcard .kv{font-size:13px;gap:5px 14px}
+
+/* the free area: an empty grid cell that marks where the ship is centered; its overlays sit on the scene */
+.free{position:relative;min-width:0;min-height:0;pointer-events:none}
+.scap{position:absolute;left:2px;top:4px;display:flex;align-items:center;gap:10px}
+.scap h3{font-family:var(--head);font-weight:700;font-size:17px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px 8px rgba(4,8,14,.9)}
+.scap .n{font-size:12px;font-weight:500;color:var(--w2);text-shadow:0 1px 6px rgba(4,8,14,.9)}
+.scap .info{pointer-events:auto;background:rgba(9,16,27,.6)}
+.scap .info .pop{left:0;right:auto;width:290px}
+.zoomer{position:absolute;right:2px;bottom:2px;display:flex;gap:4px;pointer-events:auto}
+.zoomer button{width:30px;height:30px;background:rgba(9,16,27,.7);border:1px solid var(--line-2);color:var(--white);font:600 15px var(--sans);cursor:pointer;opacity:.8}
+.zoomer button:hover{background:var(--white);color:var(--bg);opacity:1}
+
+/* panels keep the shared tint and outline, plus a blur so the 3D ship behind stays soft. That is space mode only;
+   office mode has no overrides at all. */
+html:not([data-view="office"]) .app .fr{pointer-events:auto;-webkit-backdrop-filter:blur(7px) saturate(1.1);backdrop-filter:blur(7px) saturate(1.1)}
+.empty{padding:12px 22px;color:var(--w2);font-size:13px}
+
+/* header: name and about on the left, state chips over the main actions on the right */
+.hd{align-items:center}
+.idb{min-width:0;flex:1 1 auto}
+.hd h1{overflow-wrap:anywhere}
+.idb .desc{font-size:13px;color:var(--w2);margin-top:8px;max-width:none;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none;max-width:100%}
+.hr .hstat{margin:0}
+.menu{position:fixed;z-index:80;min-width:220px;background:#172638;border:1px solid var(--line);padding:6px 0;display:none}
+.menu.open{display:block}
+.menu .h{font-size:11px;font-weight:600;color:var(--w3);padding:8px 14px 4px}
+.menu button{display:block;width:100%;text-align:left;background:transparent;border:0;color:var(--white);font:500 13.5px var(--sans);padding:8px 14px;cursor:pointer}
+.menu button:hover{background:rgba(220,231,243,.08)}
+
+/* status: the one place for state and actions. One line per thing: name, why (only when it needs you), its fix.
+   Up-to-date rows are dim with a check mark; rows that need you are bright with a filled triangle, so shape and
+   lightness carry the meaning, not hue alone. */
+#status .ttl{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#status .meta{margin:0;padding:0 16px 8px 22px;gap:4px 14px;font-size:12px;color:var(--w3)}
+#status .meta .path{flex:0 1 auto}
+.todo{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;min-height:38px;padding:5px 14px 5px 22px;border-top:1px solid var(--line-3)}
+.todo .tn{display:flex;align-items:baseline;gap:7px;font-size:13px;font-weight:600;color:var(--w3);min-width:0;flex-wrap:wrap}
+.todo .tn .ti{align-self:center}
+/* the reason sits right after the name and wraps under it only when the column is too narrow; never cut off */
+.todo .tl{font-size:12.5px;font-weight:400;color:var(--w3)}
+.todo.on .tn{color:var(--white)}
+.todo.on .tl{color:var(--w2)}
+.todo .ti{width:12px;height:12px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6}
+.todo.on .ti{color:var(--red-2)}
+.todo .tb{display:flex;justify-content:flex-end}
+.todo .act{font-size:12px;padding:4px 10px;white-space:nowrap}
+/* up-to-date rows keep their button, but quietly: it shows on hover or keyboard focus */
+.act.quiet{border-color:transparent;color:var(--w3);background:transparent}
+.todo .act.quiet{opacity:0;transition:opacity .12s}
+.todo:hover .act.quiet,.todo .act.quiet:focus-visible{opacity:1}
+.todo .act.quiet:hover{color:var(--white);border-color:var(--line-2)}
+.lk{background:none;border:0;padding:0;color:var(--w2);font:inherit;text-decoration:underline;cursor:pointer}
+.lk:hover{color:var(--white)}
+.tnone{padding:10px 22px}
+#holder-build{padding:0 14px 0 22px}
+#holder-build .jask{margin:6px 0 10px}
+#holder-build .jnote{margin:6px 0 8px}
+.jask textarea.cm{display:block;width:100%;margin-top:8px;resize:vertical;min-height:52px;font:13.5px/1.5 var(--sans)}
+#more{padding:6px 14px 12px 22px;border-top:1px solid var(--line-3)}
+#more .mrow{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}
+#more .mrow + .mrow{margin-top:4px}
+#more .mrow.end{justify-content:flex-end}
+#more .mh{font-size:12px;font-weight:600;color:var(--w3);margin-right:4px}
+#more .act{font-size:12px;padding:3px 9px}
+#more .act.quiet{color:var(--w2);border-color:var(--line-2)}
+#more .mn{font-size:12px;color:var(--w2)}
+
+/* details: the tab strip on top, the selected tab below it */
+#details{display:flex;flex-direction:column}
+#tabs{flex:none;display:flex;flex-wrap:wrap;gap:0;padding:0 10px 0 14px;overflow:visible}
+#tabs button{padding:11px 10px 10px;font-size:12.5px}
+@media (max-width:1500px){#tabs{padding:0 6px 0 8px}#tabs button{padding:11px 7px 10px}} /* the five tabs stay on one row */
+.panes{flex:1 1 auto;min-height:0;overflow:auto;padding:16px 18px 18px 20px}
+.pane{gap:18px;align-content:start}
+.pane:not(.on){display:none !important}
+.lst .r{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 0;border-top:1px solid var(--line-3);font-size:13.5px}
+.lst .r:first-child{border-top:0}
+.lst .r .t{color:var(--w3);font-size:12px;white-space:nowrap}
+.lst .r .x{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lst .r .x small{display:block;color:var(--w3);font-size:12px}
+.badge{font:500 11px var(--mono);width:22px;height:22px;display:grid;place-items:center;border:1px solid var(--line);color:var(--w2)}
+.badge.M{background:var(--white);color:var(--bg);border-color:var(--white)}
+.badge.D{background:var(--red);border-color:var(--red);color:#fff}
+.hash{font-family:var(--mono);font-size:12px;color:var(--red-2)}
+.sh{font-size:12px;font-weight:600;color:var(--w3);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+/* the right panel slides wider for tabs with a lot to read */
+.app{--rww:var(--rwn);transition:--rww .38s cubic-bezier(.2,.7,.2,1)}
+.app.wide{--rww:var(--rwd)}
+@media (prefers-reduced-motion:reduce){.app{transition:none}}
+
+/* desktop: columns dock left and right, the log opens under the ship, the scene shows through the middle */
+@media (min-width:1101px){
+  html,body{height:100%;overflow:hidden}
+  body{min-height:0}
+  .app,.app.with-voice{position:fixed;inset:0;z-index:1;min-height:0;padding:22px 16px 14px 10px;gap:var(--gap);
+    grid-template-columns:64px var(--lw) minmax(0,1fr) var(--rww);grid-template-rows:auto minmax(0,1fr);pointer-events:none}
+  .app.logopen,.app.with-voice.logopen{grid-template-rows:auto minmax(0,1fr) auto}
+  /* the rail stays where it is on every page; the 10px of padding put the title and panels 22px after it, like the other pages */
+  .app > .rail{grid-row:1/-1;grid-column:1;position:relative;top:0;height:auto;pointer-events:none;margin:0 10px 0 -10px}
+  .app > .rail a{pointer-events:auto}
+  .app > header.page{grid-row:1;grid-column:2/-1;pointer-events:auto}
+  .app > .leftcol{grid-row:2;grid-column:2}
+  .app > .free{grid-row:2;grid-column:3}
+  .app > .rightcol{grid-row:2;grid-column:4}
+  .app > .jdraw{grid-row:3;grid-column:3}
+  .app > #docview{grid-row:2;grid-column:3;align-self:stretch}
+  html[data-view="office"] .app.reading > #running{display:none}
+  .app.logopen > .leftcol,.app.logopen > .rightcol{grid-row:2/4}
+  .leftcol,.rightcol{display:flex;flex-direction:column;gap:var(--gap);min-height:0;overflow-x:hidden;overflow-y:auto;position:relative;top:0;align-self:stretch;pointer-events:none}
+  .leftcol.scrolls,.rightcol.scrolls{pointer-events:auto}
+  .leftcol.fadeb,.rightcol.fadeb{-webkit-mask-image:linear-gradient(#000 calc(100% - 30px),transparent);mask-image:linear-gradient(#000 calc(100% - 30px),transparent)}
+  .leftcol > .fr,.rightcol > .fr{flex:none}
+  .rightcol > #details{flex:0 1 auto;min-height:120px}
+  .bgswitch{left:auto;bottom:auto;top:calc(var(--ft,100px) + 4px);right:calc(var(--frr,300px) + 4px)}
+}
+
+/* narrow windows: the ship is a fixed band at the top, the panels stack below it */
+@media (min-width:1101px) and (max-width:1300px){.app.wide .scap .n{display:none}}
+@media (max-width:1100px){
+  html,body{height:auto}
+  .stage{inset:auto;left:0;top:var(--railh);width:100%;height:var(--band);z-index:5;background:linear-gradient(180deg,#0a1019,#0d1826);border-bottom:1px solid var(--line-2)}
+  .scenefade{display:none}
+  .free{position:fixed;left:0;right:0;top:var(--railh);height:var(--band);z-index:6}
+  .scap{left:14px;top:10px}
+  .zoomer{right:12px;bottom:10px}
+  .app,.app.with-voice{z-index:auto;padding-top:calc(var(--railh) + var(--band) + 14px);gap:var(--gap)}
+  .app > .rail{order:0} .app > header.page{order:1} .app > .leftcol{order:2} .app > .jdraw{order:3} .app > .rightcol{order:4}
+  html:not([data-view="office"]) .bgswitch{position:fixed;top:calc(var(--railh) + var(--band) - 34px);bottom:auto;left:12px;right:auto;width:auto;margin:0;opacity:.55} /* margin, width and opacity undo the phone rule in redline.css, so space mode stays as it was */
+  html:not([data-view="office"]) .bgswitch:hover,html:not([data-view="office"]) .bgswitch:focus-within{opacity:1}
+  .leftcol,.rightcol{display:flex;flex-direction:column;gap:var(--gap);min-width:0}
+  .panes{overflow:visible}
+  .hr{align-items:flex-start}
+}
+@media (max-width:1100px){
+  /* no middle on a narrow screen: the reader covers the page under the top bar until it is closed */
+  #docview{position:fixed;left:0;right:0;top:var(--railh);bottom:0;z-index:70;background:rgba(9,16,27,.97);overscroll-behavior:contain}
+  html.reading,html.reading body{overflow:hidden} /* the page behind does not scroll under the reader */
+  .dvbody{padding:6px 16px 22px}
+}
+@media (max-width:560px){
+  :root{--band:clamp(220px,36vh,320px)}
+  .hd{flex-wrap:wrap;gap:10px}
+  .hd h1{font-size:28px}
+  .idb{flex-basis:100%}
+}
+
+/* ---------- office mode: no ship, a plain Running panel in its place ---------- */
+html[data-view="office"] .stage,html[data-view="office"] .scenefade,html[data-view="office"] .bgfx,html[data-view="office"] .free,html[data-view="office"] #crewCard{display:none}
+html:not([data-view="office"]) #running{display:none}
+/* the columns no longer sit over a scene, so they take the pointer themselves */
+html[data-view="office"] .app,html[data-view="office"] .app.with-voice,html[data-view="office"] .leftcol,html[data-view="office"] .rightcol{pointer-events:auto}
+html[data-view="office"] .bgswitch{left:auto;top:auto;right:14px;bottom:10px}
+#running{display:flex;flex-direction:column;min-height:0}
+.rlist{min-height:0;overflow:auto}
+.rnone{padding:6px 22px 18px;color:var(--w3);font-size:13.5px}
+.rnone.bad{color:var(--red-2)}
+/* in progress is blue: a filled dot and the word Working, so the meaning never rests on hue */
+.c-work{color:#8fc5f5;border:1px solid #3f82c8;background:rgba(48,112,190,.22)}
+.c-work svg{animation:rpulse 1.6s ease-in-out infinite}
+@keyframes rpulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.c-work svg{animation:none}}
+.run{border-top:1px solid var(--line-3)}
+.rh{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"t m" "d d";gap:4px 12px;align-items:center;padding:11px 14px 10px 22px}
+.rh[data-sid]{cursor:pointer}
+.rh[data-sid]:hover{background:rgba(220,231,243,.06)}
+.rt{grid-area:t;display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;color:var(--white);font-size:14px;font-weight:600}
+span.rt{text-decoration:none}
+.rm{grid-area:m;display:flex;gap:10px;align-items:baseline;justify-content:flex-end;white-space:nowrap;font-size:12.5px;color:var(--w2)}
+.rm .dur{color:var(--white);font-weight:500}
+.rd{grid-area:d;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--w2)}
+.rg{margin:0 14px 12px 22px;padding-left:14px;border-left:1px solid var(--line-2)}
+.rg .gh{font-size:11.5px;font-weight:600;color:var(--w3);margin-bottom:2px}
+.ra{display:flex;flex-wrap:wrap;gap:2px 14px;align-items:center;padding:6px 0;border-top:1px solid var(--line-3);font-size:13px}
+.ra.first{border-top:0}
+.ad{flex:1 1 14em;min-width:0;overflow-wrap:anywhere}
+.am{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:center;font-size:12px;color:var(--w2)}
+.am .dur{color:var(--white);font-weight:500}
+@media (min-width:1101px){
+  html[data-view="office"] .app > #running{grid-row:2;grid-column:3;align-self:start;max-height:100%}
+}
+@media (max-width:1100px){
+  html[data-view="office"] .app,html[data-view="office"] .app.with-voice{padding-top:calc(var(--railh) + 14px)}
+  /* Running sits under Status and above the job log (same order number, it comes first in the page) */
+  html[data-view="office"] .app > #running{order:3}
+}
+@media (max-width:560px){
+  .rh{grid-template-columns:minmax(0,1fr);grid-template-areas:"t" "m" "d";padding:12px 14px 12px 22px}
+  .rt{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .rd{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .rg{margin-left:22px}
+}
+</style>
+<style>
+[hidden]{display:none !important}
+.mut{color:var(--w3);font-size:13.5px;padding:8px 0;line-height:1.5}
+.archtog{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line-3);color:var(--w3);font:600 12px var(--sans);padding:10px 0 6px;cursor:pointer}
+.archtog:hover{color:var(--white)}
+.archtog:focus-visible{outline:1px solid var(--line-2);outline-offset:2px}
+.err{color:var(--red-2);font-size:13.5px;padding:8px 0}
+.meta{font-size:12.5px;color:var(--w3);margin-top:8px;display:flex;gap:16px;flex-wrap:wrap}
+.meta span{white-space:nowrap}
+.menu{max-height:360px;overflow-y:auto}
+.menu button small{display:block;color:var(--w3);font-size:11.5px;font-weight:400;margin-top:1px}
+/* Commits tab: files not committed yet, and the files of a commit when you open it */
+.fl .r{grid-template-columns:62px minmax(0,1fr) auto;padding:6px 0;font-size:13px}
+#commits > .r{grid-template-columns:76px minmax(0,1fr) auto}
+#commits .hash{white-space:nowrap}
+.fl .r .t .ago{margin-left:10px}
+.fs{font:600 10px var(--sans);letter-spacing:.05em;text-transform:uppercase;color:var(--w2);border:1px solid var(--line-2);padding:2px 0;text-align:center}
+.fs.new{color:var(--white);border-color:var(--line)}
+.fs.deleted{color:var(--w3)}
+.fl .x .d{color:var(--w3)}
+.fl .r.gone .x{color:var(--w3);text-decoration:line-through}
+.fl .n2{font:12px var(--mono);color:var(--w2);white-space:nowrap}
+.fl .n2 i{font-style:normal;color:var(--w3)}
+.cfiles{margin:0 0 6px 18px;padding-left:12px;border-left:1px solid var(--line-2)}
+.cfiles .r:first-child{border-top:0}
+.lst .r.pick .hash::before{content:'+';display:inline-block;width:12px;color:var(--w3)}
+.lst .r.pick.open .hash::before{content:'\2212'}
+.lst .r.pick{cursor:pointer}
+.lst .r.pick:hover{background:rgba(220,231,243,.06)}
+.lst .r.pick.sel{background:rgba(220,231,243,.1)}
+.badge.W{width:auto;min-width:22px;padding:0 6px;font-size:10.5px}
+/* Docs and Screenshots: small folder trees, one root per place (the project folder, its notes folders, its conversations) */
+.tree{display:flex;flex-direction:column;min-width:0;margin:-6px 0 0}
+.tdir{display:flex;align-items:center;gap:7px;width:100%;min-width:0;text-align:left;background:none;border:0;color:var(--w2);font:600 12.5px var(--sans);padding:6px 6px 6px calc(var(--d) * 14px);cursor:pointer}
+.tdir:hover{color:var(--white);background:rgba(220,231,243,.04)}
+.tdir:focus-visible{outline:1px solid var(--line);outline-offset:-1px}
+.tdir .tchev{width:9px;height:9px;flex:none;transition:transform .15s}
+.tdir[aria-expanded="true"] .tchev{transform:rotate(90deg)}
+.tdir .tn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdir small{flex:none;font:500 11px var(--sans);color:var(--w3)}
+.tdir .tago{margin-left:auto;flex:none;font:500 11.5px var(--sans);color:var(--w3)}
+.tdir.troot{color:var(--white);font-size:13px;padding-top:10px;padding-bottom:7px;border-top:1px solid var(--line-3)}
+.tree > .tdir.troot:first-child{border-top:0}
+.tfile{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:5px 6px 5px calc(var(--d) * 14px + 16px);font-size:13px;cursor:pointer}
+.tfile:hover{background:rgba(220,231,243,.05)}
+.tfile.sel{background:rgba(220,231,243,.1)}
+.tfile .x{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tfile .t{font-size:11.5px;color:var(--w3);white-space:nowrap}
+.tfile .ext{font:600 9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line-2);padding:0 4px;margin-right:8px;color:var(--w2)}
+.tempty{padding:4px 0 6px calc(var(--d) * 14px + 16px)}
+.tshots{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;padding:4px 6px 10px calc(var(--d) * 14px + 16px)}
+.tsh{display:block;aspect-ratio:16/10;padding:0;border:1px solid var(--line-2);background:#0a1119;cursor:zoom-in;overflow:hidden}
+.tsh img{display:block;width:100%;height:100%;object-fit:cover}
+.tsh:hover,.tsh:focus-visible{border-color:var(--frame-hi);outline:none}
+.tsh.looked{border-style:dashed} /* a picture Claude only looked at (its tooltip says so) */
+.tmore{display:block;background:none;border:0;color:var(--w2);font:600 12px var(--sans);text-decoration:underline;cursor:pointer;padding:0 0 10px calc(var(--d) * 14px + 16px);text-align:left}
+.tmore:hover{color:var(--white)}
+/* ---------- the reader: the middle of the page, over the ship (or in place of Running in office view) ---------- */
+#docview{display:flex;flex-direction:column;min-height:0;min-width:0;pointer-events:auto;background:rgba(9,16,27,.88);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+#docview[hidden]{display:none}
+/* while reading, the ship's own controls (background switches, zoom) would sit on top of the reader */
+html.reading:not([data-view="office"]) .bgswitch,html.reading .zoomer,html.reading .scap{display:none}
+#docview.fr:hover{background:rgba(9,16,27,.88)}
+#docview .ttl{gap:12px;min-width:0}
+#docview .ttl h3{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dvkind{flex:none;font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--w3)}
+.dvacts{margin-left:auto;display:flex;gap:8px;flex:none}
+#dvClose{flex:none}
+.dvsub{flex:none;padding:0 22px 8px;font:11px/1.5 var(--mono);color:var(--w3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap} /* flex:none: a long document must not squeeze this line */
+#docview > .ttl{flex:none}
+.dvsub:empty{display:none}
+.dvbody{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:6px 28px 26px;outline:none}
+.dvin{--md-base-size:15px;max-width:880px;margin:0 auto;min-width:0}
+.dvbody .raw{font:13px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word;margin:0;padding:10px 12px;background:rgba(220,231,243,.05)}
+.dvimg{display:flex;justify-content:center}
+.dvimg img{max-width:100%;max-height:calc(100vh - 220px);object-fit:contain;border:1px solid var(--line-2);background:rgba(0,0,0,.35)}
+/* a file's changes: every line keeps its + or - sign, so the meaning never rests on the tint; added is a lighter green
+   than the darker red of removed */
+.diff{font:12.5px/1.5 var(--mono);margin:0;white-space:pre-wrap;word-break:break-word;color:var(--w2)}
+.diff span{display:block;padding:0 10px}
+.diff .da{background:rgba(52,140,62,.2);color:#d9f0d9}
+.diff .dd{background:rgba(120,20,16,.32);color:#f0c9c4}
+.diff .dh{color:#8fb4dc;background:rgba(48,112,190,.12);margin-top:8px}
+.diff .dm{color:var(--w3)}
+.msg{--md-base-size:14.5px;margin:0 0 16px}
+.msg b{display:block;font:600 10.5px var(--mono);letter-spacing:.08em;color:var(--w3);margin-bottom:3px}
+.msg.user b{color:var(--white)}
+/* your messages: on the right in the panel skin (faint fill, thin outline, two cut corners), like the Talk page; Claude's on the left with the red bar */
+.msg.user{display:flex;flex-direction:column;align-items:flex-end}
+.msg.user > .md{position:relative;max-width:88%;background:rgba(226,233,240,.045);box-shadow:inset 0 0 0 1px rgba(226,233,240,.2);--md-text:#e3dccf;--md-heading:#e3dccf;padding:10px 15px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
+.msg.user > .md::before,.msg.user > .md::after{content:"";position:absolute;width:14.15px;height:1px;background:rgba(226,233,240,.2);transform-origin:0 0;pointer-events:none}
+.msg.user > .md::before{left:0;top:10px;transform:translate(.35px,.35px) rotate(-45deg)}
+.msg.user > .md::after{left:calc(100% - 10px);top:100%;transform:translate(-.35px,-.35px) rotate(-45deg)}
+.msg.ai > .md{border-left:3px solid var(--red);padding:2px 0 2px 13px}
+.sesmore{text-align:center;font:11px var(--mono);margin:0 0 14px}
+.sesmore .lk{font:600 11.5px var(--sans)}
+.r.sel,.pick.sel{background:rgba(220,231,243,.07)}
+.msg > .md{word-break:break-word}
+/* a note from the system (a helper finished, a helper's report): one small dim line with a disclosure, never a "You" message. Same look as the Talk page. */
+.nline{margin:-4px 0 12px 0;font:11px var(--mono);color:var(--w3)}
+.nline summary{cursor:pointer;overflow-wrap:anywhere;width:max-content;max-width:100%}
+.nline summary:hover{color:var(--w2)}
+.nline .nat{margin-left:10px;letter-spacing:.03em}
+.nline pre{margin:6px 0 4px;padding:8px 10px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto;background:rgba(220,231,243,.06);color:var(--w2);font:11px/1.5 var(--mono)}
+.nf{padding:40px 24px;text-align:center}
+.nf h2{font:600 22px var(--head);margin:0 0 8px}
+.nf p{color:var(--w2);margin:0 0 16px}
+.sk-note{font-size:11.5px;color:var(--w3);padding:4px 14px 6px}
+.soon{font:600 9.5px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:inherit;border:1px solid currentColor;padding:1px 5px;opacity:.8;margin-left:2px}
+[aria-disabled="true"]{opacity:.42;cursor:default !important}
+.act[aria-disabled="true"]:hover{background:transparent;color:var(--white)}
+.act.red[aria-disabled="true"]:hover{background:var(--red);color:#fff}
+.tabs button[aria-disabled="true"]:hover{color:var(--w2)}
+.nsbox{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.nsbox .row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.nsbox .hint{font-size:12px;color:var(--w3)}
+.nsbox .talkbox button[aria-disabled="true"]{background:var(--red)}
+</style>
+<style>
+/* jobs bar, confirm, log drawer */
+.jobsbody{padding:2px 14px 14px 22px}
+.jb svg.jm{width:11px;height:11px;flex:none;opacity:.7;stroke:currentColor;fill:none;stroke-width:1.5}
+.jb .jrun{font:700 9.5px var(--sans);letter-spacing:.06em;text-transform:uppercase;background:var(--white);color:var(--bg);padding:1px 5px}
+.jb:hover .jrun{background:var(--bg);color:var(--white)}
+.jb.sel{box-shadow:inset 0 -2px 0 var(--red)}
+.jb[disabled]{opacity:.5;cursor:default}
+.jnone{font-size:13.5px;color:var(--w3);line-height:1.5}
+.jnote{margin-top:12px;font-size:13.5px;color:var(--w2);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.jnote.bad{color:var(--red-2)}
+.jask{margin-top:14px;border:1px solid var(--line);border-left:3px solid var(--red);padding:12px 14px;background:rgba(10,17,25,.55)}
+.jask.blocked{border-style:dashed;border-left-style:solid;border-left-color:var(--w3)}
+.jask h4{font:600 14.5px var(--sans);margin-bottom:4px}
+.jask p{color:var(--w2);font-size:13.5px;line-height:1.5}
+.jask p.what{color:var(--white);font-weight:600}
+.jask .det{font:12.5px var(--mono);color:var(--w2);margin-top:6px;word-break:break-all}
+.jask .typed{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.jask .typed label{font-size:13px;color:var(--w2)}
+.jask .typed label b{color:var(--white);font-weight:600;white-space:pre-wrap}
+.jask .row2{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.in{background:rgba(0,0,0,.18);border:1px solid var(--line);color:var(--white);font:400 13.5px var(--sans);padding:7px 10px;outline:none;min-width:0;color-scheme:dark}
+.in:focus{border-color:var(--frame-hi)}
+.in.bad{border-color:var(--red-2)}
+select.in{padding:6px 8px}
+.act[disabled]{opacity:.42;cursor:default}
+.act[disabled]:hover{background:transparent;color:var(--white)}
+.act.red[disabled]:hover{background:var(--red);color:#fff}
+.jdraw{display:flex;flex-direction:column}
+.jdh{display:flex;align-items:center;gap:12px;padding:5px 14px 5px 22px;min-height:40px;border-bottom:1px solid var(--line-3);flex-wrap:wrap}
+.jdh b{font-size:14px;font-weight:600}
+.jdh .el{font:12.5px var(--mono);color:var(--w2)}
+.jdh .sp{flex:1}
+.jdh .stopq{display:inline-flex;gap:8px;align-items:center;font-size:12.5px;color:var(--w2)}
+.jlog{height:clamp(110px,17vh,220px);flex:none;overflow:auto;padding:10px 14px;margin:0;font:12.5px/1.55 var(--mono);background:rgba(6,10,16,.7)}
+.jlog div{white-space:pre-wrap;word-break:break-word;min-height:1.55em}
+.jlog div.cut{color:var(--w3)}
+.jlog[data-empty]::before{content:attr(data-empty);color:var(--w3)}
+.app .jdraw > .jjump{position:absolute;right:20px;bottom:12px}
+#holder-build .jask,#holder-build .jnote{margin-bottom:14px}
+@media (min-width:1101px){
+  #status .meta{padding-bottom:14px;gap:6px 14px}
+  #status .st{padding:12px 16px 13px 22px;gap:3px 10px}
+  #status .st .v{font-size:14.5px}
+  #status .st .v small{margin-top:3px;line-height:1.4}
+}
+/* settings */
+.setbox{display:flex;flex-direction:column;gap:22px;max-width:none}
+.sethead{display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:-16px;margin-top:-16px;z-index:5;background:rgba(14,22,34,.96);padding:16px 0 8px;border-bottom:1px solid var(--line-3)}
+@media (max-width:1100px){.sethead{position:static;margin-top:0;padding-top:8px}}
+.sethead .sp{flex:1}
+.sethead .msg2{font-size:13px;color:var(--w2)}
+.setsec .sh{margin-bottom:8px}
+.setsec .help{font-size:13px;color:var(--w3);line-height:1.5;margin-bottom:10px}
+.pfields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:10px}
+.pfields label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--w3);min-width:0}
+@media (max-width:560px){.pfields{grid-template-columns:minmax(0,1fr)}}
+.tgl{display:inline-flex;align-items:center;gap:8px;font:500 12.5px var(--sans);color:var(--w2);cursor:pointer;background:none;border:0;padding:2px 0;user-select:none}
+.tgl i{width:32px;height:16px;border:1px solid var(--line);position:relative;display:block;flex:none}
+.tgl i::after{content:"";position:absolute;top:2px;left:2px;width:10px;height:10px;background:var(--w3);transition:left .15s}
+.tgl.on{color:var(--white)}
+.tgl.on i{background:var(--red);border-color:var(--red)}
+.tgl.on i::after{left:18px;background:#fff}
+.tgl[disabled]{opacity:.55;cursor:default}
+.tgl b{font-weight:600}
+.jrow{border:1px solid var(--line-2);padding:10px 12px;display:flex;flex-direction:column;gap:8px;margin-bottom:8px;background:rgba(10,17,25,.35)}
+.jrow.chg{border-left:3px solid var(--white)}
+.jrow.hid{opacity:.8}
+.jrow .l1,.jrow .l2{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.jrow .l1 .in{flex:1;min-width:160px;max-width:300px}
+.jrow .sp{flex:1}
+.jrow .file{font:12.5px var(--mono);color:var(--w2);word-break:break-all}
+.jrow .tag{font:600 10.5px var(--sans);letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);padding:0 5px;color:var(--w2)}
+.jrow .ferr{color:var(--red-2);font-size:12.5px}
+.jrow .mv{padding:4px 9px}
+.scr{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line-3);font-size:13.5px}
+.scr:first-of-type{border-top:0}
+.scr .file{font:12.5px var(--mono);word-break:break-all}
+.chk{display:flex;align-items:center;gap:14px;padding:9px 0;border-top:1px solid var(--line-3);flex-wrap:wrap}
+.chk:first-of-type{border-top:0}
+.chk b{font-size:14px;font-weight:600;min-width:90px}
+.chk small{color:var(--w3);font-size:12px;flex:1;min-width:120px}
+.banner{border:1px solid var(--red-2);border-left-width:3px;padding:9px 12px;font-size:13.5px;color:var(--white);background:rgba(214,71,60,.12)}
+.tabs .n.un{color:var(--red-2);font-weight:600}
+/* header: a long folder path shrinks with an ellipsis, the buttons never move or clip */
+.hd > div:first-child{min-width:0;flex:1 1 auto}
+.hd h1{overflow-wrap:anywhere}
+.meta .path{display:block;min-width:0;flex:0 1 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.leave{border:1px solid var(--red-2);border-left-width:3px;padding:10px 12px;font-size:13.5px;background:rgba(214,71,60,.12);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.leave span{flex:1;min-width:200px}
+</style>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="bgfx" aria-hidden="true"></div>
+<div class="stage" id="stage" aria-hidden="true"><div class="overlay"></div></div>
+<div class="scenefade" aria-hidden="true"></div>
+<div class="app with-voice" id="app">
+  <nav class="rail" aria-label="Main"></nav>
+  <header class="page">
+    <div class="hd">
+      <div class="idb">
+        <h1 id="pname">Project</h1>
+        <div class="desc" id="pdesc"></div>
+      </div>
+      <div class="hr">
+        <div class="hstat"><div class="clock"><b data-clock>00:00</b></div></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="leftcol" id="leftcol">
+    <aside data-voice-panel aria-label="Com Link"></aside>
+    <section class="fr" aria-label="Status" id="status" hidden>
+      <div class="ttl"><h3>Status</h3><span id="todoSum"></span></div>
+      <div class="meta" id="pmeta"></div>
+      <div id="todo"></div>
+      <div id="holder-build"><div class="jnote" id="jnote" role="status" aria-live="polite" hidden></div><div id="jask" hidden></div></div>
+      <div id="more"></div>
+    </section>
+  </div>
+
+  <div class="free" id="free" aria-label="Crew ship">
+    <div class="scap"><span class="info">?<span class="pop">Each little Claude is an agent working on this project. The Captain on the bridge is the one you talk to. The others take tasks from it: research, code, art, 3D, builds and tests.<br><br>Hover one to see its task, tokens and time. Left drag to pan, right drag to turn the ship, scroll to zoom, double click to reset.</span></span><h3>Crew</h3><span class="n" data-crew-count></span></div>
+    <div class="zoomer"><button data-z="in" aria-label="Zoom in">+</button><button data-z="out" aria-label="Zoom out">&minus;</button><button data-z="r" aria-label="Reset view" style="font-size:11px">R</button></div>
+  </div>
+
+  <!-- office mode only (hidden in space mode by CSS): what is running now, in place of the ship -->
+  <section class="fr" id="running" aria-label="Running">
+    <div class="ttl"><h3>Running</h3><span class="cnt" id="runCount"></span></div>
+    <div class="rlist" id="runList" aria-live="polite"></div>
+  </section>
+
+  <!-- the reader: a doc, a conversation, a file's changes or a screenshot opened from a list on the right, in the middle of the page -->
+  <section class="fr docview" id="docview" aria-label="Reader" hidden>
+    <div class="ttl"><h3 id="dvTitle"></h3><span class="dvkind" id="dvKind"></span><span class="dvacts" id="dvActs"></span><button type="button" class="act ghost" id="dvClose" aria-label="Close the reader">Close</button></div>
+    <div class="dvsub" id="dvSub"></div>
+    <div class="dvbody" id="dvBody" tabindex="0"></div>
+  </section>
+
+  <div class="rightcol" id="rightcol">
+    <section class="fr" id="loading" aria-label="Loading"><div class="empty">Loading project</div></section>
+
+    <section class="fr nf" id="notfound" hidden>
+      <h2>Project not found</h2>
+      <p id="nfmsg">No project with this id is registered in Mission Control.</p>
+      <a class="act big" href="index.html">Back to Home</a>
+    </section>
+
+    <section class="fr" aria-label="Details" id="details" hidden>
+      <nav class="tabs" id="tabs"></nav>
+      <div class="panes">
+        <div class="pane" data-pane="git">
+          <div class="lst fl" id="chgBox" hidden><div class="sh"><span id="chgTitle">Not committed</span></div><div id="changes"></div></div>
+          <div class="lst fl"><div class="sh"><span>Recent commits</span></div><div id="commits"></div></div>
+        </div>
+        <div class="pane" data-pane="docs"><div class="tree" id="docs" role="tree" aria-label="Docs"></div></div>
+        <div class="pane pc-only" data-pane="settings"><div class="setbox" id="setbox"></div></div>
+        <div class="pane" data-pane="shots"><div class="tree" id="shots" role="tree" aria-label="Screenshots"></div></div>
+        <div class="pane" data-pane="sessions">
+          <div class="lst"><div class="sh"><span>Recent sessions</span></div><div id="convs"></div></div>
+          <div>
+            <div class="nsbox"><div class="sh"><span>New session</span></div>
+              <div class="talkbox"><textarea rows="4" id="nsText" placeholder="What should Claude work on in this project?"></textarea><button aria-label="Dictate (not wired yet)" aria-disabled="true" title="Not wired yet" id="nsMic"></button></div>
+              <div class="row"><span class="hint" id="nsHint">Starts a new session in this project with your default model.</span><button class="act" id="nsSend">Send</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="fr jdraw" id="jdraw" aria-label="Job log" hidden>
+    <div class="jdh"><b id="jdt"></b><span id="jdst"></span><span class="el" id="jdel"></span><span class="sp"></span><span id="jdstopbox"></span><button class="act ghost" id="jdclose">Close</button></div>
+    <pre class="jlog" id="jlog" tabindex="0" aria-label="Job output"></pre>
+    <button class="act jjump" id="jjump" hidden>Jump to latest</button>
+  </section>
+</div>
+
+<div class="hcard" id="crewCard"></div>
+<script src="api.js"></script>
+<script src="md.js"></script>
+<script src="data.js"></script>
+<script src="phrases.js"></script>
+<script src="redline.js"></script>
+<script src="gallery.js"></script>
+<script>
+const qs = new URLSearchParams(location.search);
+let id = qs.get('id') || qs.get('p') || '';
+const LAST_KEY = 'mc-last-project';
+const $ = i => document.getElementById(i);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ago = iso => {
+  const t = Date.parse(iso); if(isNaN(t)) return '';
+  const m = Math.max(0, (Date.now() - t) / 60000);
+  if(m < 1) return 'just now';
+  if(m < 60) return Math.round(m) + ' min ago';
+  if(m < 1440) return Math.round(m / 60) + 'h ago';
+  if(m < 43200) return Math.round(m / 1440) + 'd ago';
+  return Math.round(m / 43200) + 'mo ago';
+};
+const fileUrl = (p, root) => '/api/projects/' + encodeURIComponent(id) + '/file?path=' + encodeURIComponent(p) + (root && root !== 'p' ? '&root=' + encodeURIComponent(root) : '');
+const WORD = {fresh:['ok','Fresh'], stale:['warn','Stale'], missing:['bad','Missing'], none:['idle','None']};
+const wordOf = s => Object.prototype.hasOwnProperty.call(WORD, s) ? WORD[s] : null;
+const num = n => Number.isFinite(Number(n)) ? Number(n) : 0;
+const chipFor = s => { const w = wordOf(s); return w ? MC.chip(w[0], w[1]) : MC.chip('idle', esc(s || 'Unknown')); };
+const plain = t => String(t == null ? '' : t).replace(/\*\*|__|`/g, '').replace(/^\s*#+\s*/, '').trim();
+const soonBtn = (label, cls) => `<button class="act ${cls || ''}" aria-disabled="true" title="Not wired yet">${label} <span class="soon">Soon</span></button>`;
+/* features with no backend yet stay visible but inert */
+document.addEventListener('click', e => { if(e.target.closest('[aria-disabled="true"]')){ e.preventDefault(); e.stopPropagation(); } }, true);
+
+const OFFICE = MC.view.office; /* office mode has no ship: a Running panel instead (see the end of this script) */
+if(!OFFICE) MC.bg.skipDust = true; /* the ship draws its own 3D dust */
+MC.init('proj');
+/* three.js and the ship are only fetched in space mode; async=false keeps them in order */
+if(!OFFICE){
+  const add = src => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.async = false; s.onload = ok; s.onerror = () => no(new Error('could not load ' + src)); document.head.appendChild(s); });
+  Promise.all([add('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'), add('ship.js')]).then(() => MC.ship($('free'), $('stage'))).catch(e => console.error(e));
+}
+
+let P = null, tabsBuilt = false, curTab = (location.hash.match(/tab=(\w+)/) || [])[1] || 'git', sessions = [];
+
+const WIDE_TABS = ['settings']; /* slides the right panel wider; the other tabs are lists, read in the middle */
+/* On a phone (a paired device) html has data-remote, set by api.js once /api/whoami has answered, possibly after first paint. */
+const isPhone = () => document.documentElement.hasAttribute('data-remote') || MC.remote === true;
+const OUTWARD_JOB_KINDS = ['push-github', 'publish-website', 'release', 'deploy', 'sync'];
+/* the jobs the server refuses for a phone: anything that sends something off this PC */
+const outwardJob = j => !!(j && (j.outward || j.builtin === 'git-push' || OUTWARD_JOB_KINDS.includes(j.kind)));
+const isStacked = () => matchMedia('(max-width:1100px)').matches;
+
+/* leaving Settings with unsaved changes asks first (inline, not window.confirm) */
+function gotoTab(t){
+  if(curTab === 'settings' && t !== 'settings' && settingsDirty()){ S.leave = t; renderSettings(); const b = $('setbox').querySelector('.leave'); if(b) b.scrollIntoView({block: 'nearest'}); return; }
+  show(t);
+}
+function show(t){
+  if(t === 'settings' && isPhone()) t = 'git'; /* Settings is a PC page: its save is refused for a phone */
+  curTab = t;
+  $('tabs').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  document.querySelectorAll('.pane').forEach(pn => pn.classList.toggle('on', pn.dataset.pane === t));
+  $('app').classList.toggle('wide', WIDE_TABS.includes(t));
+  if(t === 'settings' && S && S.scripts === null) loadScripts();
+  MC.drawFrames();
+}
+
+function notFound(msg){
+  document.title = 'Project not found // Mission Control';
+  $('pname').textContent = 'Project not found';
+  $('pdesc').textContent = ''; $('pdesc').title = '';
+  $('notfound').hidden = false;
+  if(msg) $('nfmsg').textContent = msg;
+  $('status').hidden = true; $('details').hidden = true; $('loading').hidden = true;
+  $('running').hidden = true; stopRunning();
+  $('app').classList.remove('wide');
+  MC.drawFrames();
+}
+
+/* ---------- the reader in the middle: one item at a time, opened from a list on the right ----------
+   Each open takes a key (what is shown) so the list can mark its row, and a sequence number so a slow answer for an
+   item that is no longer wanted never replaces the newer one. Escape or Close puts the ship (or Running) back. */
+let rd = { key: null, seq: 0, from: null };
+function markRows(){
+  document.querySelectorAll('[data-rk]').forEach(r => {
+    r.classList.toggle('sel', r.dataset.rk === rd.key);
+    if(!r.hasAttribute('tabindex')){ r.tabIndex = 0; r.setAttribute('role', 'button'); } /* every row that opens something takes Enter */
+  });
+}
+/* Enter or Space on a row opens it (file rows have their own handler) */
+$('details').addEventListener('keydown', e => {
+  const r = e.target.closest && e.target.closest('[data-rk]');
+  if(!r || r.dataset.fp || (e.key !== 'Enter' && e.key !== ' ')) return;
+  e.preventDefault(); r.click();
+});
+function openReader(key, kind, title, sub, acts){
+  rd.key = key; const my = ++rd.seq;
+  const a = document.activeElement; if(a && a.closest && a.closest('[data-rk]')) rd.from = a.dataset.rk || a.closest('[data-rk]').dataset.rk;
+  $('dvKind').textContent = kind; $('dvTitle').textContent = title; $('dvTitle').title = title;
+  $('dvSub').textContent = sub || ''; $('dvSub').title = sub || '';
+  $('dvActs').innerHTML = acts || '';
+  $('dvBody').innerHTML = '<div class="dvin"><div class="mut">Loading...</div></div>';
+  $('docview').hidden = false; $('app').classList.add('reading'); document.documentElement.classList.add('reading');
+  markRows(); MC.drawFrames();
+  return my;
+}
+function fillReader(my, html, end){
+  if(my !== rd.seq) return false;
+  const b = $('dvBody'); b.innerHTML = '<div class="dvin">' + html + '</div>';
+  b.scrollTop = end ? b.scrollHeight : 0;
+  return true;
+}
+function closeReader(){
+  if($('docview').hidden) return;
+  rd.key = null; rd.seq++;
+  $('docview').hidden = true; $('app').classList.remove('reading'); document.documentElement.classList.remove('reading'); $('dvBody').innerHTML = '';
+  markRows(); MC.drawFrames();
+  /* focus goes back to the row that opened it, when it was opened from the keyboard or a click on a row */
+  const back = rd.from && Array.from(document.querySelectorAll('[data-rk]')).find(r => r.dataset.rk === rd.from && r.offsetParent);
+  rd.from = null;
+  if(back) back.focus();
+}
+$('dvClose').onclick = closeReader;
+addEventListener('keydown', e => { if(e.key === 'Escape' && !$('docview').hidden && !e.defaultPrevented){ closeReader(); } });
+
+async function openDoc(path, root){
+  root = root || 'p';
+  const rl = LIB.docs && LIB.docs.roots ? (LIB.docs.roots.find(r => r.id === root) || {}).label : '';
+  const my = openReader('doc:' + root + ':' + path, 'Doc', path.split('/').pop(), (root !== 'p' && rl ? rl + '/' : '') + path);
+  try {
+    const res = await fetch(fileUrl(path, root), {headers: {'X-MC': '1'}});
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    let txt = await res.text(); let cut = '';
+    if(txt.length > 200000){ txt = txt.slice(0, 200000); cut = '<div class="mut">Shown up to the first 200,000 characters.</div>'; }
+    fillReader(my, (/\.(md|markdown)$/i.test(path) ? '<div class="md">' + MC.md(txt) + '</div>' : '<pre class="raw">' + esc(txt) + '</pre>') + cut);
+  } catch(e){ fillReader(my, '<div class="err">Could not open this file: ' + esc(e.message) + '</div>'); }
+}
+
+
+/* a file's changes: in a commit (hash) or not committed yet */
+async function openDiff(path, hash){
+  const my = openReader('diff:' + (hash || '') + ':' + path, hash ? 'Commit ' + String(hash).slice(0, 7) : 'Not committed', path.split('/').pop(), path);
+  try {
+    const d = await MC.api.get('/api/projects/' + encodeURIComponent(id) + '/git/diff?path=' + encodeURIComponent(path) + (hash ? '&commit=' + encodeURIComponent(hash) : ''));
+    const lines = String(d.diff || '').split('\n');
+    if(lines.length && lines[lines.length - 1] === '') lines.pop();
+    const cls = l => /^(diff --git|index |--- |\+\+\+ |new file|deleted file|similarity|rename |old mode|new mode)/.test(l) ? 'dm' : l[0] === '@' ? 'dh' : l[0] === '+' ? 'da' : l[0] === '-' ? 'dd' : '';
+    const body = lines.length ? '<pre class="diff">' + lines.map(l => '<span class="' + cls(l) + '">' + (esc(l) || ' ') + '</span>').join('') + '</pre>' : '<div class="mut">No changes to show (the file may be binary, or the change was only a move).</div>';
+    fillReader(my, body + (d.cut ? '<div class="mut">Shown up to the first 400KB.</div>' : ''));
+  } catch(e){ fillReader(my, '<div class="err">Could not show the changes: ' + esc(e.message) + '</div>'); }
+}
+
+/* A conversation in the reader: your messages on the right in the panel skin (as on the Talk page), Claude's on the left with
+   the red bar. It opens at the newest message; scrolling to the top (or Earlier messages) loads the page before, all the way
+   to the start, and the view stays on the message you were reading. */
+const RS = { sid: null, msgs: [], cursor: null, more: false, loading: false, my: 0 };
+const PAGE = 150; /* tool lines fold away, so take more than the Talk page */
+function sessionHtml(ms){
+  /* a finished helper or a helper's report is a dim note with its full text behind a disclosure (plain text), never a "You" message */
+  const note = m => {
+    const head = `<span>${esc(String(m.label || 'System message').slice(0, 200))}</span>${m.at ? `<span class="nat">${esc(ago(m.at))}</span>` : ''}`;
+    const body = String(m.text || '').trim();
+    return body ? `<details class="nline"><summary>${head}</summary><pre>${esc(body.slice(0, 20000))}</pre></details>` : `<div class="nline">${head}</div>`;
+  };
+  /* tool calls ("[tool: Bash]") gather into one dim line between messages, as on the Talk page */
+  const out = []; let tools = [];
+  const flush = () => { if(tools.length){ out.push(`<div class="nline">${esc(tools.join(', '))}</div>`); tools = []; } };
+  ms.forEach(m => {
+    const t = String(m.text || '').trim(), tool = m.role !== 'user' && /^\[tool: ([^\]]*)\]$/.exec(t);
+    if(tool){ tools.push(tool[1]); return; }
+    flush();
+    out.push(m.role === 'notice' ? note(m) : `<div class="msg ${m.role === 'user' ? 'user' : 'ai'}"><b>${m.role === 'user' ? 'YOU' : 'CLAUDE'}${m.at ? ' ' + esc(ago(m.at)) : ''}</b><div class="md">${MC.md(t.length > 20000 ? t.slice(0, 20000) + '...' : t)}</div></div>`);
+  });
+  flush();
+  return out.join('');
+}
+function paintSession(keepFromBottom){
+  const b = $('dvBody'), top = RS.more ? `<div class="sesmore"><button type="button" class="lk" id="sesMore">${RS.loading ? 'Loading earlier messages...' : 'Earlier messages'}</button></div>` : (RS.msgs.length ? '<div class="sesmore mut">Start of the conversation</div>' : '');
+  const body = sessionHtml(RS.msgs);
+  if(!fillReader(RS.my, top + (body || '<div class="mut">This session has no text messages.</div>'), keepFromBottom == null)) return;
+  if(keepFromBottom != null) b.scrollTop = b.scrollHeight - keepFromBottom; /* the same message stays in view */
+  const m = $('sesMore'); if(m) m.onclick = olderSession;
+}
+async function olderSession(){
+  if(!RS.more || RS.loading || !RS.cursor) return;
+  const sid = RS.sid, my = RS.my; RS.loading = true; paintSession($('dvBody').scrollHeight - $('dvBody').scrollTop);
+  try {
+    const s = await MC.api.get('/api/sessions/' + encodeURIComponent(sid) + '?limit=' + PAGE + '&before=' + encodeURIComponent(RS.cursor));
+    if(my !== rd.seq || RS.sid !== sid) return;
+    RS.msgs = (s.messages || []).filter(m => m.text || m.role === 'notice').concat(RS.msgs);
+    RS.cursor = s.cursor || null; RS.more = !!s.hasMore && !!s.cursor;
+  } catch(e){ if(my !== rd.seq || RS.sid !== sid) return; RS.more = false; } /* an answer for a conversation no longer open changes nothing */
+  RS.loading = false;
+  if(my === rd.seq) paintSession($('dvBody').scrollHeight - $('dvBody').scrollTop);
+}
+$('dvBody').addEventListener('scroll', () => { if(RS.sid && rd.key === 'ses:' + RS.sid && $('dvBody').scrollTop < 200) olderSession(); }, {passive: true});
+async function openSession(sid){
+  const my = openReader('ses:' + sid, 'Conversation', 'Conversation', '', '<a class="act ghost" href="chat.html?session=' + encodeURIComponent(sid) + '">Open in Talk</a>');
+  Object.assign(RS, { sid, msgs: [], cursor: null, more: false, loading: false, my });
+  try {
+    const s = await MC.api.get('/api/sessions/' + encodeURIComponent(sid) + '?limit=' + PAGE);
+    if(my !== rd.seq) return;
+    $('dvTitle').textContent = plain(s.title) || 'Conversation'; $('dvTitle').title = $('dvTitle').textContent;
+    RS.msgs = MC.liveTurn.messages(s).filter(m => m.text || m.role === 'notice'); /* mid-turn: the saved part plus the turn's own messages (s.live) */
+    RS.cursor = s.cursor || null; RS.more = !!s.hasMore && !!s.cursor;
+    paintSession();
+  } catch(e){ fillReader(my, '<div class="err">Could not load this session: ' + esc(e.message) + '</div>'); }
+}
+
+function render(){
+  const p = P, repo = p.isRepo, dirty = num(p.dirty), ahead = num(p.ahead), behind = num(p.behind), hasRemote = p.ahead != null && p.behind != null, plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+  $('notfound').hidden = true; $('loading').hidden = true; $('status').hidden = false; $('details').hidden = false;
+  document.title = p.name + ' // Mission Control';
+  $('pname').innerHTML = esc(p.name).replace(/^(\S+)(.*)$/, '$1<em>$2</em>');
+  $('pdesc').textContent = p.about || ''; $('pdesc').title = p.about || '';
+  $('pmeta').innerHTML = `<span class="path" title="${esc(p.folder)}">${esc(p.folder)}</span>` + (repo ? `<span title="${esc(p.branch)}">${esc(p.branch || 'detached')}</span>` : '') + (p.hidden ? MC.chip('idle', 'Archived') : '');
+
+  /* tabs: the Status panel is the one place for state and actions, so there is no Build tab */
+  const nDocs = libCount('docs'), nShots = libCount('images');
+  const tabs = [['git', 'Commits', ''], ['docs', 'Docs', nDocs || ''], ['shots', 'Screenshots', nShots || ''], ['sessions', 'Sessions', ''], ['settings', 'Settings', '', false, settingsDirty()]];
+  /* the Settings tab is PC only; if a phone landed on it, fall back to Commits once MC.whoami has answered */
+  Promise.resolve(MC.whoami).then(() => { if(isPhone() && curTab === 'settings') show('git'); });
+  $('tabs').innerHTML = tabs.map(t => t[3] ? `<button data-t="${t[0]}" aria-disabled="true" title="Not wired yet">${t[1]}<span class="soon" style="margin-left:6px">Soon</span></button>` : `<button data-t="${t[0]}"${t[0] === 'settings' ? ' class="pc-only"' : ''}>${t[1]}${t[4] ? '<span class="n un">Unsaved</span>' : (t[2] !== '' ? `<span class="n">${t[2]}</span>` : '')}</button>`).join('');
+  $('tabs').querySelectorAll('button').forEach(b => { if(b.getAttribute('aria-disabled') !== 'true') b.onclick = () => gotoTab(b.dataset.t); });
+  if(!tabs.some(t => t[0] === curTab && !t[3])) curTab = 'git';
+  show(curTab);
+
+  appChk = (p.checks || []).find(c => c.launch && c.launch.available) || null; /* the installed app, launched from the Status panel */
+  renderStatus();
+  renderSettings();
+
+  /* git */
+  renderCommits();
+  loadChanges();
+
+  /* docs and screenshots: folder trees, loaded once per page (Refresh loads them again) */
+  if(!LIB.docs && !LIB.loading.docs) loadLib('docs'); /* a loaded tree is left as it is (open folders, focus, pictures) */
+  if(!LIB.images && !LIB.loading.images) loadLib('images');
+  markRows();
+}
+
+/* ---------- Docs and Screenshots: folder trees ----------
+   Each tab is a tree with one root per place: the project folder, each of its notes folders, and (for
+   pictures) its Claude conversations. Folders open and close on a click and the choice is kept for the browser tab. A doc opens
+   in the reader; a picture opens the picture viewer with every picture of its folder in the strip. */
+const LIB = { docs: null, images: null, loading: {}, conv: null, convImgs: new Map(), open: new Set(), shown: new Map(), seeded: {} };
+const LIB_KEY = () => 'mc-lib-open:' + id;
+try { const o = JSON.parse(sessionStorage.getItem(LIB_KEY()) || 'null'); if(Array.isArray(o)) o.forEach(k => LIB.open.add(k)); else LIB.fresh = true; } catch(e){ LIB.fresh = true; }
+const saveOpen = () => { try { sessionStorage.setItem(LIB_KEY(), JSON.stringify([...LIB.open].slice(-400))); } catch(e){} };
+const libCount = kind => (LIB[kind] && Array.isArray(LIB[kind].files) ? LIB[kind].files.length : 0) + (kind === 'images' ? convTotal() : 0);
+const SHOW_STEP = 120; /* pictures shown per folder before "Show more" */
+async function loadLib(kind, fresh){
+  LIB.loading[kind] = true; renderLib(kind); /* "Loading..." */
+  try { LIB[kind] = await MC.api.get('/api/projects/' + encodeURIComponent(id) + '/library?kind=' + kind + (fresh ? '&fresh=1' : '')); }
+  catch(e){ LIB[kind] = {error: e.message}; }
+  LIB.loading[kind] = false;
+  if(kind === 'images' && !LIB.conv) loadConv(); /* the conversations and their picture counts come with the tree, opened or not */
+  if(LIB.fresh && !LIB.seeded[kind] && LIB[kind].roots){ LIB.seeded[kind] = true; LIB[kind].roots.forEach(r => LIB.open.add(kind + ':' + r.id + ':')); saveOpen(); } /* the first visit opens every root, once */
+  renderLib(kind); paintLibCounts();
+}
+function paintLibCounts(){
+  [['docs', 'docs'], ['shots', 'images']].forEach(([t, kind]) => {
+    const b = $('tabs').querySelector(`[data-t="${t}"]`); if(!b) return;
+    const old = b.querySelector('.n'); if(old) old.remove();
+    const n = libCount(kind); if(n) b.insertAdjacentHTML('beforeend', `<span class="n">${n}</span>`);
+  });
+}
+/* files [{root, path, mtime, size}] -> one tree per root: {name, path, dirs: Map, files: [], count} */
+function buildTree(files, rootId){
+  const top = {name: '', path: '', dirs: new Map(), files: [], count: 0};
+  files.filter(f => f.root === rootId).forEach(f => {
+    const parts = f.path.split('/'), name = parts.pop(); let n = top; top.count++;
+    parts.forEach((seg, i) => { if(!n.dirs.has(seg)) n.dirs.set(seg, {name: seg, path: parts.slice(0, i + 1).join('/'), dirs: new Map(), files: [], count: 0}); n = n.dirs.get(seg); n.count++; });
+    n.files.push({...f, name});
+  });
+  return top;
+}
+const CHEV = '<svg class="tchev" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 2 L7 5 L3.5 8" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
+const dirRow = (k, name, n, depth, extra) => `<button type="button" class="tdir${depth ? '' : ' troot'}" style="--d:${depth}" data-tk="${esc(k)}" role="treeitem" aria-expanded="${LIB.open.has(k)}">${CHEV}<span class="tn">${esc(name)}</span>${n !== '' ? `<small>${esc(n)}</small>` : ''}${extra || ''}</button>`;
+function treeHtml(kind, rootId, node, depth){
+  let h = '';
+  [...node.dirs.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true})).forEach(d => {
+    const k = kind + ':' + rootId + ':' + d.path;
+    h += dirRow(k, d.name, d.count, depth);
+    if(LIB.open.has(k)) h += treeHtml(kind, rootId, d, depth + 1);
+  });
+  if(!node.files.length) return h;
+  if(kind === 'docs'){
+    node.files.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true})).forEach(f => {
+      h += `<div class="tfile pick" style="--d:${depth}" role="treeitem" data-root="${esc(rootId)}" data-path="${esc(f.path)}" data-rk="${esc('doc:' + rootId + ':' + f.path)}"><span class="x" title="${esc(f.path)}">${esc(f.name.replace(/\.(md|markdown)$/i, ''))}</span><span class="t">${/\.txt$/i.test(f.name) ? '<span class="ext">txt</span>' : ''}${esc(ago(f.mtime))}</span></div>`;
+    });
+  } else {
+    const list = node.files.slice().sort((a, b) => Date.parse(b.mtime) - Date.parse(a.mtime));
+    const sk = kind + ':' + rootId + ':' + node.path, max = LIB.shown.get(sk) || SHOW_STEP;
+    h += `<div class="tshots" style="--d:${depth}">` + list.slice(0, max).map((f, i) => `<button type="button" class="tsh" data-root="${esc(rootId)}" data-dir="${esc(node.path)}" data-i="${i}" title="${esc(f.name + ', ' + ago(f.mtime))}"><img loading="lazy" src="${esc(fileUrl(f.path, rootId))}" alt="${esc(f.name)}"></button>`).join('') + '</div>'
+      + (list.length > max ? `<button type="button" class="tmore" style="--d:${depth}" data-more="${esc(sk)}">Show ${Math.min(SHOW_STEP, list.length - max)} more of ${list.length}</button>` : '');
+  }
+  return h;
+}
+function renderLib(kind){
+  const box = $(kind === 'docs' ? 'docs' : 'shots'), d = LIB[kind];
+  if(!d){ box.innerHTML = '<div class="mut">Loading...</div>'; return; }
+  if(d.error){ box.innerHTML = '<div class="err">Could not list them: ' + esc(d.error) + '</div>'; return; }
+  let h = '';
+  d.roots.forEach(r => {
+    const k = kind + ':' + r.id + ':', t = buildTree(d.files, r.id);
+    if(!t.count && r.id !== 'p') return; /* an empty notes folder is left out */
+    h += dirRow(k, r.label, t.count || '', 0);
+    if(LIB.open.has(k)) h += t.count ? treeHtml(kind, r.id, t, 1) : `<div class="mut tempty" style="--d:1">${kind === 'docs' ? 'No text files here.' : 'No pictures here.'}</div>`;
+  });
+  if(kind === 'images') h += convHtml();
+  if(d.cut) h += '<div class="mut">Some folders were too big to list completely.</div>';
+  box.innerHTML = h;
+  markRows(); MC.drawFrames();
+}
+/* the project's conversations: one folder each, its pictures fetched when it opens (yours, Claude's, and what Claude looked at) */
+function convHtml(){
+  const k = 'images:c:';
+  let h = dirRow(k, 'Claude conversations', convTotal() || '', 0);
+  if(!LIB.open.has(k)) return h;
+  if(!LIB.conv){ loadConv(); return h + '<div class="mut tempty" style="--d:1">Loading...</div>'; }
+  if(LIB.conv.error) return h + `<div class="err tempty" style="--d:1">${esc(LIB.conv.error)}</div>`;
+  if(!LIB.conv.length) return h + '<div class="mut tempty" style="--d:1">No conversations for this project yet.</div>';
+  LIB.conv.forEach(s => {
+    const sk = 'images:c:' + s.id, imgs = LIB.convImgs.get(s.id);
+    h += dirRow(sk, plain(s.title) || 'Untitled session', convCount(s.id), 1, `<span class="tago">${esc(ago(s.lastAt))}</span>`);
+    if(!LIB.open.has(sk)) return;
+    if(imgs === undefined){ loadConvImgs(s.id); h += '<div class="mut tempty" style="--d:2">Loading...</div>'; }
+    else if(imgs && imgs.error) h += `<div class="err tempty" style="--d:2">${esc(imgs.error)}</div>`;
+    else if(!imgs.length) h += '<div class="mut tempty" style="--d:2">No pictures in this conversation.</div>';
+    else {
+      const max = LIB.shown.get(sk) || SHOW_STEP;
+      h += '<div class="tshots" style="--d:2">' + imgs.slice(0, max).map((m, i) => `<button type="button" class="tsh${m.from === 'tool' ? ' looked' : ''}" data-conv="${esc(s.id)}" data-i="${i}" title="${esc((m.from === 'you' ? 'You' : m.from === 'tool' ? 'Claude looked at it' : 'Claude') + (m.at ? ', ' + ago(m.at) : ''))}"><img loading="lazy" src="${esc(m.src)}" alt=""></button>`).join('') + '</div>'
+        + (imgs.length > max ? `<button type="button" class="tmore" style="--d:2" data-more="${esc(sk)}">Show ${Math.min(SHOW_STEP, imgs.length - max)} more of ${imgs.length}</button>` : '');
+    }
+  });
+  return h;
+}
+async function loadConv(){
+  if(LIB.convLoading) return; LIB.convLoading = true;
+  try { const s = await MC.api.get('/api/sessions?project=' + encodeURIComponent(id) + '&limit=40'); LIB.conv = Array.isArray(s) ? s : []; }
+  catch(e){ LIB.conv = {error: 'Could not list the conversations: ' + e.message}; }
+  LIB.convLoading = false; renderLib('images');
+  /* the picture count of each conversation, without opening it: the server counts each transcript once, then only what is new */
+  if(Array.isArray(LIB.conv) && LIB.conv.length) loadConvCounts(LIB.conv.map(s => s.id), true);
+}
+/* a conversation the server does not know yet (it is still listing transcripts after a start) is asked again once, 5s later */
+async function loadConvCounts(ids, retry){
+  const conv = LIB.conv;
+  try { const d = await MC.api.get('/api/sessions/image-counts?ids=' + ids.join(',')); LIB.convCounts = Object.assign(LIB.convCounts || {}, (d && d.counts) || {}); }
+  catch(e){ LIB.convCounts = LIB.convCounts || {}; }
+  if(LIB.conv !== conv) return;
+  renderLib('images'); paintLibCounts();
+  const missing = ids.filter(x => typeof LIB.convCounts[x] !== 'number');
+  if(retry && missing.length) setTimeout(() => { if(LIB.conv === conv) loadConvCounts(missing, false); }, 5000);
+}
+/* a conversation's picture count: the list once it is open, else the server's count ('' while unknown) */
+const convCount = sid => { const v = LIB.convImgs.get(sid); return Array.isArray(v) ? v.length : LIB.convCounts && typeof LIB.convCounts[sid] === 'number' ? LIB.convCounts[sid] : ''; };
+const convTotal = () => Array.isArray(LIB.conv) && LIB.convCounts ? LIB.conv.reduce((n, s) => n + (Number(convCount(s.id)) || 0), 0) : 0;
+async function loadConvImgs(sid){
+  if(LIB.convImgs.has(sid)) return; LIB.convImgs.set(sid, undefined);
+  let v;
+  try { const d = await MC.api.get('/api/sessions/' + encodeURIComponent(sid) + '/images?tools=1'); v = d && Array.isArray(d.images) ? d.images.slice().reverse() : []; } /* newest first, like the folders */
+  catch(e){ v = {error: 'Could not read its pictures: ' + e.message}; }
+  LIB.convImgs.set(sid, v); renderLib('images');
+}
+function onTree(e){
+  const dir = e.target.closest('[data-tk]');
+  if(dir){ const k = dir.dataset.tk; if(LIB.open.has(k)) LIB.open.delete(k); else LIB.open.add(k); saveOpen(); renderLib(dir.closest('#docs') ? 'docs' : 'images'); const n = document.querySelector(`[data-tk="${CSS.escape(k)}"]`); if(n) n.focus({preventScroll: true}); return; }
+  const more = e.target.closest('[data-more]');
+  if(more){ LIB.shown.set(more.dataset.more, (LIB.shown.get(more.dataset.more) || SHOW_STEP) + SHOW_STEP); renderLib('images'); return; }
+  const doc = e.target.closest('.tfile');
+  if(doc){ openDoc(doc.dataset.path, doc.dataset.root); return; }
+  const sh = e.target.closest('.tsh'); if(!sh) return;
+  if(sh.dataset.conv){
+    const imgs = LIB.convImgs.get(sh.dataset.conv) || [];
+    MC.gallery.open(imgs.map(m => ({src: m.src, name: m.name, from: m.from, caption: m.caption})), +sh.dataset.i, {opener: sh});
+    return;
+  }
+  /* every picture of the folder, newest first, the same order as the grid */
+  const t = buildTree(LIB.images.files, sh.dataset.root); let node = t;
+  if(sh.dataset.dir) sh.dataset.dir.split('/').forEach(seg => { node = node && node.dirs.get(seg); });
+  const list = node ? node.files.slice().sort((a, b) => Date.parse(b.mtime) - Date.parse(a.mtime)) : [];
+  const label = sh.dataset.dir ? sh.dataset.dir.split('/').pop() : (LIB.images.roots.find(r => r.id === sh.dataset.root) || {}).label;
+  MC.gallery.open(list.map(f => ({src: fileUrl(f.path, f.root), name: f.name + ', ' + ago(f.mtime), label: label || '', tag: ''})), +sh.dataset.i, {opener: sh}); /* the folder is in the header once, not under every thumbnail */
+}
+['docs', 'shots'].forEach(k => { $(k).addEventListener('click', onTree); }); /* Enter on a doc row comes through the rows' own key handler */
+function renderCommits(){
+  const p = P, repo = p.isRepo;
+  $('commits').innerHTML = !repo ? '<div class="mut">Not a git repo.</div>' : (p.commits || []).slice(0, 15).map(c => `<div class="r pick${openCommits.has(c.hash) ? ' open' : ''}" data-h="${esc(c.hash)}" role="button" tabindex="0" aria-expanded="${openCommits.has(c.hash)}" title="Show the files of this commit"><span class="hash">${esc(String(c.hash).slice(0, 7))}</span><span class="x" title="${esc(c.subject)}">${esc(c.subject)}</span><span class="t">${esc(ago(c.date))}</span></div>${openCommits.has(c.hash) ? `<div class="cfiles" data-for="${esc(c.hash)}">${commitCache.has(c.hash) ? fileRows(commitCache.get(c.hash), false, c.hash) : '<div class="mut">Loading...</div>'}</div>` : ''}`).join('') || '<div class="mut">No commits yet.</div>';
+  $('commits').querySelectorAll('.pick[data-h]').forEach(r => { /* commit rows only: the file rows inside open the reader */
+    r.onclick = () => toggleCommit(r.dataset.h);
+    r.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleCommit(r.dataset.h).then(() => { const n = $('commits').querySelector(`.pick[data-h="${CSS.escape(r.dataset.h)}"]`); if(n) n.focus(); }); } };
+  });
+  markRows(); MC.drawFrames();
+}
+/* ---------- Commits tab: what is not committed yet, and what each commit changed ---------- */
+const FILE_WORD = {new: 'New', changed: 'Edited', deleted: 'Deleted', renamed: 'Moved', conflict: 'Conflict'};
+const openCommits = new Set(), commitCache = new Map();
+let chgSeq = 0;
+/* hash: the commit these files belong to (none: not committed yet). A row opens the file's changes in the reader. */
+function fileRows(d, withTime, hash){
+  if(!d.files.length) return '<div class="mut">No file changes.</div>';
+  return d.files.map(f => {
+    const cut = f.path.lastIndexOf('/'), dir = cut >= 0 ? f.path.slice(0, cut + 1) : '', name = f.path.slice(cut + 1);
+    const lines = f.add == null && f.del == null ? '<i>binary</i>' : (f.add ? '+' + f.add : '') + (f.add && f.del ? ' ' : '') + (f.del ? '<i>-' + f.del + '</i>' : '');
+    const tip = (f.from ? 'Moved from ' + f.from + '\n' : '') + f.path;
+    return `<div class="r pick${f.state === 'deleted' ? ' gone' : ''}" role="button" tabindex="0" data-fp="${esc(f.path)}" data-fh="${esc(hash || '')}" data-rk="${esc('diff:' + (hash || '') + ':' + f.path)}"><span class="fs ${esc(f.state)}">${FILE_WORD[f.state] || 'Edited'}</span><span class="x" title="${esc(tip)}"><span class="d">${esc(dir)}</span>${esc(name)}</span><span class="t"><span class="n2">${lines}</span>${withTime && f.mtime ? '<span class="ago">' + esc(ago(f.mtime)) + '</span>' : ''}</span></div>`;
+  }).join('') + (d.total > d.files.length ? `<div class="mut">And ${d.total - d.files.length} more.</div>` : '');
+}
+async function loadChanges(){
+  const box = $('chgBox'), seq = ++chgSeq;
+  if(!P || !P.isRepo || !num(P.dirty)){ box.hidden = true; return; }
+  try {
+    const d = await MC.api.get('/api/projects/' + encodeURIComponent(id) + '/git/changes');
+    if(seq !== chgSeq) return;
+    box.hidden = !d.total;
+    $('chgTitle').textContent = 'Not committed, ' + pl(d.total, 'file', 'files');
+    $('changes').innerHTML = fileRows(d, true); markRows();
+  } catch(e){
+    if(seq !== chgSeq) return;
+    box.hidden = false; $('chgTitle').textContent = 'Not committed';
+    $('changes').innerHTML = '<div class="err">Could not read the changes: ' + esc(e.message) + '</div>';
+  }
+  MC.drawFrames();
+}
+async function toggleCommit(h){
+  if(openCommits.has(h)) openCommits.delete(h); else openCommits.add(h);
+  renderCommits();
+  if(!openCommits.has(h) || commitCache.has(h)) return;
+  let html;
+  try { const d = await MC.api.get('/api/projects/' + encodeURIComponent(id) + '/git/commits/' + encodeURIComponent(h)); commitCache.set(h, d); html = fileRows(d, false, h); }
+  catch(e){ html = '<div class="err">Could not read this commit: ' + esc(e.message) + '</div>'; } /* not cached: opening it again retries */
+  const el = $('commits').querySelector(`.cfiles[data-for="${CSS.escape(h)}"]`);
+  if(el){ el.innerHTML = html; markRows(); MC.drawFrames(); }
+}
+/* a file row (not committed, or in an open commit) opens its changes; one listener for both lists */
+function fileRowOpen(e){
+  const r = e.target.closest('[data-fp]'); if(!r) return;
+  if(e.type === 'keydown'){ if(e.key !== 'Enter' && e.key !== ' ') return; e.preventDefault(); }
+  e.stopPropagation();
+  openDiff(r.dataset.fp, r.dataset.fh || null);
+}
+['changes', 'commits'].forEach(k => { $(k).addEventListener('click', fileRowOpen); $(k).addEventListener('keydown', fileRowOpen); });
+
+/* ---------- jobs: bar, confirm, log drawer ---------- */
+const KINDS = [['build-dev', 'Build, dev'], ['build-release', 'Build, release'], ['export-game', 'Export game'], ['install-local', 'Install on this PC'], ['make-installer', 'Make installer'], ['push-github', 'Push to GitHub'], ['publish-website', 'Publish website'], ['release', 'Release'], ['deploy', 'Deploy'], ['sync', 'Sync'], ['test', 'Test'], ['run-dev', 'Run, dev'], ['clean', 'Clean'], ['other', 'Other']];
+const OUTWARD_KINDS = new Set(['push-github', 'publish-website', 'release', 'deploy', 'sync']);
+const pl = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+const ICON_OUT = '<svg class="jm" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 9L9 3M4.5 3H9V7.5"/></svg>';
+const ICON_WIN = '<svg class="jm" viewBox="0 0 12 12" aria-hidden="true"><rect x="1.5" y="2.5" width="9" height="7"/><path d="M1.5 4.5H10.5"/></svg>';
+const visibleJobs = () => ((P && P.jobs) || []).filter(j => j.visible).sort((a, b) => a.order - b.order);
+const jobFor = kind => visibleJobs().find(j => j.kind === kind) || null;
+const jobTip = j => (j.builtin ? 'Runs git push' : 'Runs ' + (j.file || '')) + (j.outward ? '. Sends something off this PC, so it asks you to type the project name first' : '') + (j.interactive ? '. Opens in its own window' : '');
+let runs = [], curRun = null, attaching = false, pending = [], stick = true, busy = false, stopAsk = false, stopping = false, noteTimer = null, qLines = [], qTimer = null, refTimer = null;
+
+/* App: starts the installed program (not the dev build). It only opens an app, so no confirm. */
+let appChk = null;
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-openapp]'); if(!b || b.disabled || !appChk) return;
+  const chk = appChk;
+  b.disabled = true; b.textContent = 'Opening...';
+  try {
+    const res = await fetch('/api/projects/' + encodeURIComponent(id) + '/checks/' + encodeURIComponent(chk.key) + '/launch', {method: 'POST', headers: {'X-MC': '1', 'Content-Type': 'application/json'}, body: '{}'});
+    if(!res.ok){ const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Could not open the app'); }
+    setTimeout(() => { b.textContent = 'App'; b.disabled = false; }, 3000);
+  } catch(err){
+    b.textContent = 'Could not open'; b.title = err.message;
+    setTimeout(() => { b.textContent = 'App'; b.disabled = false; b.title = chk.launch.label || 'Open the app'; }, 3000);
+  }
+});
+function jobBtn(j, cls, marker){
+  const live = marker && runs.some(r => r.jobId === j.id && r.state === 'running' && r.mode === 'captured');
+  const sel = marker && curRun && curRun.jobId === j.id && !$('jdraw').hidden;
+  return `<button class="act ${cls || ''}${outwardJob(j) ? ' pc-only' : ''} jb${sel ? ' sel' : ''}" data-job="${esc(j.id)}" title="${esc(jobTip(j))}">${esc(j.label)}${j.outward ? ICON_OUT : ''}${j.interactive ? ICON_WIN : ''}${live ? '<span class="jrun">Running</span>' : ''}</button>`;
+}
+function fmtDur(ms){
+  const s = Math.max(0, Math.round(ms / 1000)), p = n => String(n).padStart(2, '0');
+  if(s < 60) return s + 's';
+  if(s < 3600) return Math.floor(s / 60) + ' min ' + p(s % 60) + 's';
+  return Math.floor(s / 3600) + 'h ' + p(Math.floor(s % 3600 / 60)) + ' min';
+}
+function stateChip(r){
+  switch(r.state){
+    case 'running': return MC.chip('live', 'Running');
+    case 'done': return MC.chip('ok', 'Done');
+    case 'failed': return MC.chip('bad', 'Failed' + (r.code != null ? ', code ' + esc(r.code) : ''));
+    case 'stopped': return MC.chip('warn', 'Stopped');
+    case 'window': return MC.chip('idle', 'Opened in a window');
+    default: return MC.chip('idle', esc(r.state || 'Unknown'));
+  }
+}
+/* ---------- Status: one line per thing to keep up to date, its fix on the same line ---------- */
+const lastRunFor = jobId => runs.find(r => r.jobId === jobId && r.state === 'running') || runs.find(r => r.jobId === jobId) || null;
+const ROW_NAMES = {dev: 'Dev build', exe: 'App build', installed: 'Installed', installer: 'Installer', mac: 'Mac bundle'};
+const IC_OK = '<svg class="ti" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.5l2.3 2.3 4.7-5"/></svg>';
+const IC_TODO = '<svg class="ti" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.8l4.6 8.4H1.4z" fill="currentColor" stroke="none"/></svg>';
+/* a check's fix runs as the job "check-<key>" (its own build step from the catalog) */
+const checkJob = c => c.fix ? {id: 'check-' + c.key, label: c.fix.label, kind: 'check', outward: !!c.fix.outward, interactive: !!c.fix.interactive, file: (ROW_NAMES[c.key] || c.label) + ' build step'} : null;
+const allJobs = () => ((P && P.jobs) || []).concat(((P && P.checks) || []).map(checkJob).filter(Boolean));
+const pushJob = () => visibleJobs().find(j => j.builtin === 'git-push' || j.kind === 'push-github') || null;
+/* a run in progress or a failed last run replaces the plain line, so the row always says what is going on now */
+function runNote(jobId){
+  const r = lastRunFor(jobId);
+  if(!r) return '';
+  const log = r.mode === 'captured' && (r.hasLog || r.state === 'running') ? ` <button class="lk" data-viewlog="${esc(r.runId)}">log</button>` : '';
+  if(r.state === 'running') return 'running' + log;
+  if(r.state === 'failed') return 'last run failed' + log;
+  return '';
+}
+function rowHtml(key, name, todo, line, btn){
+  return `<div class="todo${todo ? ' on' : ''}" data-key="${esc(key)}"><span class="tn">${todo ? IC_TODO : IC_OK}<span>${esc(name)}</span><span class="tl">${line}</span></span><span class="tb">${btn || ''}</span></div>`;
+}
+function renderStatus(){
+  const p = P; if(!p) return;
+  const repo = p.isRepo, dirty = num(p.dirty), ahead = num(p.ahead), behind = num(p.behind), hasRemote = p.ahead != null && p.behind != null;
+  const rows = []; let todo = 0;
+  if(!p.exists){ rows.push(rowHtml('folder', 'Folder', true, 'Not found on disk', '')); todo++; }
+  if(repo){
+    const on = dirty > 0; if(on) todo++;
+    rows.push(rowHtml('changes', 'Changes', on, on ? '<button class="lk" data-show-changes title="See them in the Commits tab">' + esc(pl(dirty, 'file', 'files')) + '</button>, <button class="lk" data-commit-own title="Write the commit message yourself">write it myself</button>' : 'none', on ? '<button class="act red" data-commit title="Haiku commits the changes in this folder with a short message in your voice, on this PC only">Commit</button>' : ''));
+  }
+  for(const c of (p.checks || [])){
+    if(c.state === 'none') continue;
+    const on = c.state === 'stale' || c.state === 'missing'; if(on) todo++;
+    const j = checkJob(c), note2 = j ? runNote(j.id) : '';
+    /* a check that waits for another one (installed waits for the app build) has no button of its own: that row's fix comes first */
+    const dep = c.waitsFor && (p.checks || []).find(x => x.key === c.waitsFor);
+    const line = dep ? 'waits for ' + (ROW_NAMES[dep.key] || dep.label) : (c.line || '');
+    rows.push(rowHtml(c.key, ROW_NAMES[c.key] || c.label, on, note2 || esc(line), j && !dep ? jobBtn(j, on ? 'red' : 'quiet', false) : ''));
+  }
+  if(repo && hasRemote){
+    const on = ahead > 0; if(on) todo++;
+    const pj = pushJob(), line = (on ? pl(ahead, 'commit', 'commits') : 'up to date') + (behind ? ', ' + behind + ' behind' : '');
+    const btn = !on ? '' : pj ? jobBtn(pj, 'red', false) : '<button class="act red" data-review title="Haiku runs your github-push skill in this folder: it checks every file for private details, writes clean public commits, and waits for your yes">Review and push</button>';
+    rows.push(rowHtml('push', 'Push', on, pj ? (runNote(pj.id) || esc(line)) : esc(line), btn));
+  }
+  $('todo').innerHTML = rows.join('') || '<div class="mut tnone">Nothing to keep up to date here.</div>';
+  $('todoSum').innerHTML = todo ? MC.chip('warn', pl(todo, 'thing', 'things') + ' to do') : MC.chip('ok', 'All up to date');
+  /* jobs that no row covers (for example Clean rebuild, or a game's builds) */
+  const covered = new Set((p.checks || []).map(c => c.fix && c.fix.jobId).filter(Boolean));
+  const pj = pushJob(); if(pj && repo && hasRemote) covered.add(pj.id);
+  const extra = visibleJobs().filter(j => j.kind !== 'run-dev' && !covered.has(j.id));
+  /* Launch: the dev runs and the installed app, short names (Dev, Game, App) with the full one in the tooltip */
+  const devs = visibleJobs().filter(j => j.kind === 'run-dev' && !covered.has(j.id)); /* one already on a line of its own (Dev build) stays there */
+  const app = appChk ? (appChk.launch.installed ? `<button class="act quiet pc-only" data-openapp title="${esc(appChk.launch.label || 'Open the app')}">App</button>` : '<button class="act quiet pc-only" disabled title="Not installed: build and install it first">App</button>') : '';
+  const launch = devs.length || app ? `<div class="mrow"><span class="mh">Launch</span>${devs.map(j => { const n = runNote(j.id); return jobBtn({...j, label: MC.shortJob(j.label)}, 'quiet', true) + (n ? `<span class="mn">${n}</span>` : ''); }).join('')}${app}</div>` : '';
+  $('more').innerHTML = launch + (extra.length ? `<div class="mrow${extra.every(outwardJob) ? ' pc-only' : ''}"><span class="mh">Jobs</span>${extra.map(j => { const n = runNote(j.id); return jobBtn(j, 'quiet', true) + (n ? `<span class="mn">${n}</span>` : ''); }).join('')}</div>` : '') + '<div class="mrow end pc-only"><button class="lk" id="jobManage">Manage jobs</button></div>';
+  $('jobManage').onclick = () => { gotoTab('settings'); if(isStacked()) $('details').scrollIntoView({behavior: MC.reduce ? 'auto' : 'smooth', block: 'start'}); };
+  MC.drawFrames();
+}
+function renderJobs(){ renderStatus(); }
+
+/* Commit: local only, with your own message; nothing is pushed */
+function showCommit(){
+  const el = $('jask'); placeFlow(); el.hidden = false; el.className = 'jask';
+  el.innerHTML = `<h4>Commit ${esc(pl(num(P.dirty), 'changed file', 'changed files'))}</h4><textarea class="in cm" id="cmMsg" rows="2" placeholder="What changed, in your words" maxlength="2000"></textarea><div class="row2"><button class="act red" id="cmGo" disabled>Commit</button><button class="act ghost" id="cmNo">Cancel</button><span class="mut">Stays on this PC. Ctrl+Enter commits.</span></div>`;
+  const t = $('cmMsg'), go = $('cmGo');
+  t.oninput = () => { go.disabled = !t.value.trim(); };
+  const send = async () => {
+    if(go.disabled) return;
+    go.disabled = true; $('cmNo').disabled = true; go.textContent = 'Committing...';
+    try {
+      const d = await MC.api.post('/api/projects/' + encodeURIComponent(id) + '/git/commit', {message: t.value});
+      closeAsk(); note('Committed: ' + (d.summary || t.value.trim().split('\n')[0]), false, 8000); load(true);
+    } catch(e){ go.disabled = false; $('cmNo').disabled = false; go.textContent = 'Commit'; note('Commit failed: ' + e.message, true); }
+  };
+  go.onclick = send; $('cmNo').onclick = closeAsk;
+  t.onkeydown = e => { if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); send(); } else if(e.key === 'Escape') closeAsk(); };
+  t.focus({preventScroll: true}); reveal(); MC.drawFrames();
+}
+/* Commit and Review and push are short Claude tasks: a new conversation in this project's own folder, on Haiku,
+   in Auto mode (it may run git), with the whole request written out, so Claude never has to guess the project.
+   It shows in the Haiku panel (never read aloud, and it stays open); you answer there, by voice or by the permission buttons. */
+let haikuId;
+async function quickRun(prompt, what, label){
+  if(!MC.comlink){ note('The Com Link is not ready yet.', true, 6000); return; }
+  if(MC.comlink.isBusy && MC.comlink.isBusy()){ note('Claude is still working in the Com Link. Wait for it or press Stop there first.', true, 8000); return; }
+  if(haikuId === undefined){
+    try { const o = await MC.api.get('/api/chat/options'); const h = (o.models || []).find(m => /haiku/i.test(m.id) && !m.disabled); haikuId = h ? h.id : null; }
+    catch(e){ haikuId = null; }
+  }
+  const run = await MC.comlink.send(prompt, {projectId: id, sessionId: null, model: haikuId || undefined, mode: 'auto', silent: true, remote: false, label});
+  if(run) note(what + ' started. Answer in the Haiku panel if Claude asks something.', false, 10000);
+}
+document.addEventListener('click', e => {
+  if(e.target.closest('[data-show-changes]')){ gotoTab('git'); $('chgBox').scrollIntoView({behavior: MC.reduce ? 'auto' : 'smooth', block: 'nearest'}); return; }
+  if(e.target.closest('[data-commit-own]')){ closeAsk(); clearNote(); showCommit(); return; }
+  if(e.target.closest('[data-commit]')){ closeAsk(); clearNote(); quickRun('/commit-here', 'Commit', 'Commit'); return; }
+  if(e.target.closest('[data-review]')){
+    closeAsk(); clearNote();
+    quickRun(`/github-push Push ${P.name} (this folder) to GitHub. Follow the skill fully: audit every tracked file, curate the local commits, show me the list, and wait for my yes before pushing.`, 'The push review', 'Review and push');
+  }
+});
+async function refreshRuns(initial){
+  let all;
+  try { all = (await MC.api.get('/api/jobs')).runs || []; } catch(e){ return; }
+  runs = all.filter(r => r.projectId === id);
+  if(initial && !curRun){
+    const live = runs.find(r => r.state === 'running' && r.mode === 'captured');
+    if(live) attach(live);
+  }
+  if(curRun){ const r = runs.find(x => x.runId === curRun.runId); if(r) Object.assign(curRun, r); renderDrawerHead(); }
+  renderJobs();
+}
+function scheduleRefresh(){ clearTimeout(refTimer); refTimer = setTimeout(() => refreshRuns(), 150); }
+
+const syncLog = () => {
+  $('app').classList.toggle('logopen', !$('jdraw').hidden);
+  if(!$('jdraw').hidden && isStacked()) closeReader(); /* narrow: the reader covers the page, and a job log must be seen */
+  MC.drawFrames();
+};
+function renderDrawerHead(){
+  if(!curRun){ $('jdraw').hidden = true; syncLog(); return; }
+  const r = curRun;
+  if($('jdraw').hidden){ $('jdraw').hidden = false; syncLog(); }
+  $('jdt').textContent = r.label || r.jobId;
+  const sk = r.state + '|' + r.code;
+  if($('jdst').dataset.k !== sk){ $('jdst').dataset.k = sk; $('jdst').innerHTML = stateChip(r); }
+  $('jdel').textContent = r.state === 'running' ? 'Running for ' + fmtDur(Date.now() - Date.parse(r.startedAt)) : (r.durationMs != null ? 'Took ' + fmtDur(r.durationMs) : '');
+  const box = $('jdstopbox'), k = r.state === 'running' ? (stopping ? 'stopping' : stopAsk ? 'ask' : 'stop') : 'none';
+  if(box.dataset.k !== k){
+    box.dataset.k = k;
+    box.innerHTML = k === 'stop' ? '<button class="act" id="jdStop">Stop</button>' : k === 'ask' ? '<span class="stopq">Stop this job? <button class="act red" id="jdYes">Yes, stop</button><button class="act" id="jdNo">Keep running</button></span>' : k === 'stopping' ? '<button class="act" disabled>Stopping...</button>' : '';
+  }
+  MC.drawFrames();
+}
+/* ANSI colors and titles are dropped (not shown as junk), a carriage return keeps the last redraw of a line, other control characters go, and a huge line is cut for display */
+const MAXLINE = 20000, MAXROWS = 4000;
+const clean = l => {
+  let t = String(l == null ? '' : l), more = 0;
+  if(t.length > MAXLINE * 2){ more = t.length - MAXLINE; t = t.slice(0, MAXLINE); }
+  t = t.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?/g, '').replace(/\x1b\[[0-9;?:<=> ]*[@-~]/g, '').replace(/\x1b[@-Z\\-_]/g, '');
+  if(t.indexOf('\r') >= 0){ const parts = t.split('\r').filter(x => x !== ''); t = parts.length ? parts[parts.length - 1] : ''; }
+  t = t.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+  if(t.length > MAXLINE){ more += t.length - MAXLINE; t = t.slice(0, MAXLINE); }
+  return more ? t + ' ... (' + more.toLocaleString('en-US') + ' more characters are only in the log file)' : t;
+};
+function addLines(lines){
+  if(!lines.length) return;
+  const el = $('jlog'); el.removeAttribute('data-empty');
+  if(lines.length > MAXROWS) lines = lines.slice(-MAXROWS);
+  const frag = document.createDocumentFragment();
+  for(const l of lines){ const d = document.createElement('div'); d.textContent = clean(l); frag.appendChild(d); }
+  el.appendChild(frag);
+  while(el.childElementCount > MAXROWS) el.firstElementChild.remove();
+  if(stick) el.scrollTop = el.scrollHeight;
+}
+function queueLine(l){ qLines.push(l); if(qLines.length > MAXROWS * 2) qLines = qLines.slice(-MAXROWS); if(!qTimer) qTimer = setTimeout(flushQ, 60); }
+function flushQ(){ clearTimeout(qTimer); qTimer = null; if(qLines.length){ const l = qLines; qLines = []; addLines(l); } }
+function noOutputWord(){ const el = $('jlog'); if(!el.childElementCount) el.setAttribute('data-empty', curRun && curRun.state === 'running' ? 'Waiting for output...' : 'This run printed nothing.'); }
+
+async function attach(run){
+  stopAsk = false; stopping = false; qLines = []; clearTimeout(qTimer); qTimer = null;
+  curRun = {...run}; attaching = true; pending = []; stick = true;
+  const el = $('jlog'); el.innerHTML = ''; el.setAttribute('data-empty', 'Loading the log...');
+  $('jjump').hidden = true; $('jdst').dataset.k = ''; $('jdstopbox').dataset.k = '';
+  renderDrawerHead(); renderJobs(); if(isStacked()) reveal($('jdraw'));
+  const token = run.runId; let lines = [], cut = false, ok = true;
+  try { const r = await MC.api.get('/api/jobs/' + encodeURIComponent(token) + '/log?tail=400'); lines = r.lines || []; cut = !!r.truncated; }
+  catch(e){ ok = false; if(curRun && curRun.runId === token) el.setAttribute('data-empty', e.status === 404 ? 'No output was kept for this run.' : 'Could not read the log: ' + e.message); }
+  if(!curRun || curRun.runId !== token) return;
+  attaching = false;
+  if(ok){
+    if(cut){ const d = document.createElement('div'); d.className = 'cut'; d.textContent = 'Earlier lines are only in the log file.'; el.appendChild(d); }
+    let k = Math.min(pending.length, lines.length);
+    for(; k > 0; k--){ if(lines.slice(-k).every((l, i) => l === pending[i])) break; }
+    addLines(lines);
+    addLines(pending.slice(k));
+    noOutputWord();
+  }
+  pending = [];
+  renderJobs();
+}
+function finishRun(ev){
+  flushQ();
+  if(!curRun) return;
+  Object.assign(curRun, {state: ev.state || (ev.code === 0 ? 'done' : 'failed'), code: ev.code, durationMs: ev.durationMs, endedAt: new Date().toISOString()});
+  stopAsk = false; stopping = false;
+  if(!attaching) noOutputWord();
+  renderDrawerHead();
+}
+MC.events.on('job', ev => {
+  if(!ev || ev.projectId !== id) return;
+  if(curRun && ev.runId === curRun.runId){
+    if(ev.done) finishRun(ev);
+    else if(attaching) pending.push(ev.line);
+    else queueLine(ev.line);
+  }
+  if(ev.done || !runs.some(r => r.runId === ev.runId)) scheduleRefresh();
+});
+let tick = 0;
+setInterval(() => {
+  if(curRun && curRun.state === 'running'){ renderDrawerHead(); if(++tick % 5 === 0) refreshRuns(); } else tick = 0;
+}, 1000);
+$('jlog').addEventListener('scroll', () => { const el = $('jlog'); stick = el.scrollHeight - el.scrollTop - el.clientHeight < 24; $('jjump').hidden = stick; });
+$('jjump').onclick = () => { const el = $('jlog'); stick = true; el.scrollTop = el.scrollHeight; $('jjump').hidden = true; };
+$('jdclose').onclick = () => { curRun = null; attaching = false; $('jdraw').hidden = true; syncLog(); renderJobs(); };
+$('jdstopbox').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if(!b || !curRun) return;
+  if(b.id === 'jdStop'){ stopAsk = true; renderDrawerHead(); }
+  else if(b.id === 'jdNo'){ stopAsk = false; renderDrawerHead(); }
+  else if(b.id === 'jdYes'){
+    stopAsk = false; stopping = true; renderDrawerHead();
+    try { await MC.api.post('/api/jobs/' + encodeURIComponent(curRun.runId) + '/stop'); }
+    catch(e2){ stopping = false; renderDrawerHead(); note('Could not stop it: ' + e2.message, true); }
+  }
+});
+
+function note(text, bad, ms){
+  placeFlow();
+  const n = $('jnote'); n.hidden = false; n.className = 'jnote' + (bad ? ' bad' : ''); n.textContent = text;
+  clearTimeout(noteTimer); if(ms) noteTimer = setTimeout(() => { n.hidden = true; MC.drawFrames(); }, ms);
+  MC.drawFrames();
+}
+function clearNote(){ clearTimeout(noteTimer); $('jnote').hidden = true; }
+/* the confirm and the note show in the tab the click came from (Build); the log shows under the ship. A stacked page scrolls there, a docked column scrolls the confirm into view */
+function placeFlow(){
+  const h = $('holder-build');
+  if(h && $('jask').parentNode !== h){ h.appendChild($('jnote')); h.appendChild($('jask')); }
+}
+function reveal(el){ el = el || $('jask'); if(el.hidden) return; const r = el.getBoundingClientRect(), beh = MC.reduce ? 'auto' : 'smooth'; if(isStacked()){ if(r.top < 0 || r.top > innerHeight * .5) el.scrollIntoView({behavior: beh, block: 'start'}); } else el.scrollIntoView({behavior: beh, block: 'nearest'}); }
+function closeAsk(){ const el = $('jask'); el.hidden = true; el.innerHTML = ''; MC.drawFrames(); }
+
+function outwardWords(j, push){
+  if(j.builtin === 'git-push') return push && push.ahead ? `This pushes ${pl(push.ahead, 'commit', 'commits')} on ${push.branch} to ${push.upstream}` : 'This pushes your commits to the remote';
+  switch(j.kind){
+    case 'publish-website': return 'This uploads to your website';
+    case 'push-github': return 'This pushes to GitHub';
+    case 'release': return 'This publishes a release';
+    case 'deploy': return 'This sends the build to another place';
+    case 'sync': return 'This copies files to another place';
+    default: return 'This sends something off this PC';
+  }
+}
+function showAsk(j, push, confirmName){
+  const name = confirmName || P.name, out = !!j.outward, el = $('jask');
+  placeFlow();
+  el.hidden = false; el.className = 'jask';
+  const what = out ? outwardWords(j, push) : 'Opens in its own window';
+  const det = [j.builtin ? 'Runs: git push' : 'Runs: ' + (j.file || '')];
+  if(push) det.push(`Branch ${push.branch}, upstream ${push.upstream}, ${pl(num(push.ahead), 'commit', 'commits')} ahead, ${num(push.behind)} behind`);
+  el.innerHTML = `<h4>${esc(j.label)}</h4><p class="what">${esc(what)}.</p>` +
+    (out && j.interactive && !j.builtin ? '<p>It also opens in its own window, so its output does not show here.</p>' : '') +
+    (!out ? '<p>The script waits for you there, so its output does not show here.</p>' : '') +
+    `<div class="det">${det.map(esc).join('<br>')}</div>` +
+    (out ? `<div class="typed"><label for="jaIn">Type <b>${esc(name)}</b> to confirm</label><input class="in" id="jaIn" autocomplete="off" spellcheck="false" placeholder="${esc(name)}"></div>` : '') +
+    `<div class="row2"><button class="act red" id="jaRun"${out ? ' disabled' : ''}>${out ? esc(j.builtin ? 'Push now' : 'Run ' + j.label) : 'Open window'}</button><button class="act ghost" id="jaCancel">Cancel</button></div>`;
+  const run = $('jaRun'), inp = $('jaIn');
+  const go = async () => {
+    if(run.disabled || (out && inp.value !== name)) return;
+    run.disabled = true; $('jaCancel').disabled = true;
+    try { await handleRun(j, await postRun(j.id, out ? inp.value : undefined)); }
+    catch(e){ closeAsk(); note('Could not reach Mission Control: ' + e.message, true); }
+  };
+  run.onclick = go;
+  $('jaCancel').onclick = closeAsk;
+  if(inp){ inp.oninput = () => { run.disabled = inp.value !== name; }; inp.onkeydown = e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); go(); } }; inp.focus({preventScroll: true}); }
+  reveal(); MC.drawFrames();
+}
+function showBlocked(j, d){
+  const el = $('jask'); placeFlow(); el.hidden = false; el.className = 'jask blocked';
+  el.innerHTML = `<h4>${esc(j.label)}: not ready</h4><p>${esc(d.error || 'This cannot run right now.')}</p><div class="row2">${MC.chip('idle', 'Nothing was sent')}<button class="act" id="jaOk">OK</button></div>`;
+  $('jaOk').onclick = closeAsk;
+  reveal(); MC.drawFrames();
+}
+async function postRun(jobId, confirm){
+  const res = await fetch('/api/projects/' + encodeURIComponent(id) + '/jobs/' + encodeURIComponent(jobId) + '/run', {method: 'POST', headers: {'X-MC': '1', 'Content-Type': 'application/json'}, body: JSON.stringify(confirm === undefined ? {} : {confirm})});
+  let data = null; try { data = await res.json(); } catch(e){ data = null; }
+  return {status: res.status, data: data || {}};
+}
+async function handleRun(j, res){
+  const d = res.data;
+  if(res.status === 200 && d.runId){
+    closeAsk();
+    if(d.mode === 'window'){ note('Opened in a window: ' + j.label + '. Answer the script in that window.', false, 12000); refreshRuns(); return; }
+    await refreshRuns();
+    attach(runs.find(x => x.runId === d.runId) || {runId: d.runId, projectId: id, jobId: j.id, label: j.label, mode: 'captured', state: 'running', startedAt: new Date().toISOString()});
+    return;
+  }
+  if(res.status === 409 && d.needsConfirm){ showAsk({...j, outward: true}, d.push || null, typeof d.confirmName === 'string' && d.confirmName ? d.confirmName : null); return; }
+  if(res.status === 409 && d.blocked){ showBlocked(j, d); return; }
+  if(res.status === 409 && d.runId){ closeAsk(); await refreshRuns(); const r = runs.find(x => x.runId === d.runId); if(r) attach(r); else note(d.error || 'This job is already running.', true); return; }
+  closeAsk();
+  note(res.status === 429 ? (d.error || 'Too many jobs are running at once. Wait for one to finish.') : (d.error || 'The server answered ' + res.status + '.'), true);
+}
+async function startFlow(jobId){
+  if(busy || !P) return;
+  const j = allJobs().find(x => x.id === jobId); if(!j) return;
+  const live = runs.find(r => r.jobId === jobId && r.state === 'running' && r.mode === 'captured');
+  if(live){ closeAsk(); attach(live); return; }
+  closeAsk(); clearNote();
+  if(!j.builtin && (j.outward || j.interactive)){ showAsk(j, null); return; }
+  busy = true;
+  try { await handleRun(j, await postRun(j.id)); }
+  catch(e){ note('Could not reach Mission Control: ' + e.message, true); }
+  finally { busy = false; }
+}
+document.addEventListener('click', e => {
+  const v = e.target.closest('[data-viewlog]');
+  if(v){ const r = runs.find(x => x.runId === v.dataset.viewlog); if(r) attach(r); return; }
+  const b = e.target.closest('[data-job]');
+  if(b && b.getAttribute('aria-disabled') !== 'true') startFlow(b.dataset.job);
+});
+/* ---------- settings: one Save ---------- */
+let S = null; // {orig, draft, errors, scripts, saving, msg, banner, force}
+const cloneJob = j => ({id: j.id, label: j.label, file: j.file || null, builtin: j.builtin || null, kind: j.kind, outward: !!j.outward, interactive: !!j.interactive, visible: j.visible !== false});
+function fromP(){
+  const jobs = ((P && P.jobs) || []).slice().sort((a, b) => a.order - b.order).map(cloneJob), checks = {};
+  ((P && P.checks) || []).forEach(c => { checks[c.key] = ((P && P.required) || []).includes(c.key); });
+  return {hidden: !!(P && P.hidden), name: (P && P.name) || '', about: (P && P.about) || '', jobs, checks};
+}
+const jobsNorm = d => d.jobs.map(j => [j.id, j.label, j.file, j.builtin, j.kind, j.outward, j.interactive, j.visible]);
+const normS = d => JSON.stringify({h: d.hidden, n: d.name.trim(), a: d.about.trim(), j: jobsNorm(d), c: Object.keys(d.checks).sort().map(k => [k, d.checks[k]])});
+const settingsDirty = () => !!S && normS(S.orig) !== normS(S.draft);
+function syncSettings(){
+  if(!S || S.force || !settingsDirty()){
+    S = {orig: fromP(), draft: fromP(), errors: {}, scripts: S ? S.scripts : null, leave: null, saving: false, msg: S ? S.msg : '', banner: S && !S.force ? S.banner : '', force: false};
+  }
+}
+/* the server refuses these characters in a script path (they are unsafe in a command line) */
+const badName = f => /["%^&|<>\x00-\x1f]/.test(String(f || ''));
+const normPath = f => String(f || '').replace(/\//g, '\\').toLowerCase();
+const slug = s => String(s).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[^a-z0-9]+|-+$/g, '').slice(0, 36) || 'job';
+function uniqueId(base){ let n = base, i = 2; while(S.draft.jobs.some(j => j.id === n)) n = base + '-' + (i++); return n; }
+function guessKind(n){
+  n = n.toLowerCase();
+  if(/push/.test(n)) return 'push-github';
+  if(/publish|upload/.test(n)) return 'publish-website';
+  if(/installer|setup|nsis/.test(n)) return 'make-installer';
+  if(/install/.test(n)) return 'install-local';
+  if(/build.*release|release.*build/.test(n)) return 'build-release';
+  if(/release/.test(n)) return 'release';
+  if(/deploy/.test(n)) return 'deploy';
+  if(/sync/.test(n)) return 'sync';
+  if(/test/.test(n)) return 'test';
+  if(/clean/.test(n)) return 'clean';
+  if(/export/.test(n)) return 'export-game';
+  if(/build/.test(n)) return 'build-dev';
+  if(/dev|run|start/.test(n)) return 'run-dev';
+  return 'other';
+}
+const niceLabel = n => { const t = n.replace(/[-_]+/g, ' ').trim(); return (t.charAt(0).toUpperCase() + t.slice(1)).slice(0, 40) || 'Job'; };
+function addScript(s){
+  let j;
+  if(s.builtin === 'git-push') j = {id: uniqueId('push'), label: 'Push to GitHub', file: null, builtin: 'git-push', kind: 'push-github', outward: true, interactive: false, visible: true};
+  else {
+    const base = s.file.split(/[\\/]/).pop().replace(/\.(bat|cmd|ps1)$/i, ''), kind = guessKind(base);
+    j = {id: uniqueId(slug(base)), label: niceLabel(base), file: s.file, builtin: null, kind, outward: OUTWARD_KINDS.has(kind), interactive: !!s.interactiveGuess, visible: true};
+  }
+  S.draft.jobs.push(j);
+}
+const rowMark = i => {
+  const j = S.draft.jobs[i], o = S.orig.jobs.find(x => x.id === j.id);
+  if(!o) return 'New';
+  return JSON.stringify(jobsNorm({jobs: [o]})) !== JSON.stringify(jobsNorm({jobs: [j]})) || S.orig.jobs.indexOf(o) !== i ? 'Changed' : '';
+};
+const tgl = (on, act, fk, text, dis, title) => `<button type="button" class="tgl${on ? ' on' : ''}" data-act="${act}" data-fk="${esc(fk)}" role="switch" aria-checked="${on}"${dis ? ' disabled' : ''}${title ? ` title="${esc(title)}"` : ''}><i></i><b>${text}</b></button>`;
+function fieldErr(i, fields){
+  const m = fields.map(f => S.errors[i + ':' + f]).filter(Boolean);
+  return m.length ? `<div class="ferr" role="alert">${m.map(esc).join('<br>')}</div>` : '';
+}
+function jobRow(j, i, n){
+  const mark = rowMark(i), b = !!j.builtin;
+  return `<div class="jrow${mark ? ' chg' : ''}${j.visible ? '' : ' hid'}" data-i="${i}">
+    <div class="l1">
+      <input class="in${S.errors[i + ':label'] ? ' bad' : ''}" data-f="label" data-fk="label-${i}" maxlength="40" value="${esc(j.label)}" aria-label="Button label">
+      ${tgl(j.visible, 'vis', 'vis-' + i, j.visible ? 'Shown' : 'Not shown')}
+      <span class="sp"></span><span class="tag" data-mark${mark ? '' : ' hidden'}>${esc(mark)}</span>
+      <button type="button" class="act mv" data-act="up" data-fk="up-${i}"${i === 0 ? ' disabled' : ''}>Up</button>
+      <button type="button" class="act mv" data-act="down" data-fk="down-${i}"${i === n - 1 ? ' disabled' : ''}>Down</button>
+      <button type="button" class="act" data-act="rm" data-fk="rm-${i}">Remove</button>
+    </div>
+    ${fieldErr(i, ['label'])}
+    <div class="l2">
+      <span class="file">${b ? 'Built in: git push' : esc(j.file)}</span><span class="sp"></span>
+      <select class="in${S.errors[i + ':kind'] ? ' bad' : ''}" data-f="kind" data-fk="kind-${i}" aria-label="Kind">${KINDS.map(k => `<option value="${k[0]}"${k[0] === j.kind ? ' selected' : ''}>${esc(k[1])}</option>`).join('')}</select>
+      ${tgl(j.outward, 'out', 'out-' + i, 'Sends off this PC: ' + (j.outward ? 'Yes' : 'No') + (b ? ' (locked)' : ''), b, b ? 'A git push always goes off this PC' : 'Asks you to type the project name before it runs')}
+      ${tgl(j.interactive, 'int', 'int-' + i, 'Own window: ' + (j.interactive ? 'Yes' : 'No'), b, b ? 'A git push runs with its output shown here' : 'For scripts that wait for a key or an answer')}
+    </div>
+    ${fieldErr(i, ['kind', 'outward', 'interactive', 'visible', 'file', 'builtin', 'id', 'order'])}
+  </div>`;
+}
+function renderSettings(){
+  const box = $('setbox');
+  if(!P || !S) return;
+  const a = document.activeElement; let fk = null, ss = 0, se = 0;
+  if(a && box.contains(a) && a.dataset && a.dataset.fk){ fk = a.dataset.fk; try { ss = a.selectionStart; se = a.selectionEnd; } catch(e){} }
+  const d = S.draft, n = d.jobs.length, checks = P.checks || [];
+  const tracked = f => d.jobs.some(j => j.file && normPath(j.file) === normPath(f));
+  let others;
+  if(S.scripts === null || S.scripts === 'loading') others = '<div class="mut">Looking for scripts...</div>';
+  else if(S.scripts.error) others = `<div class="err">Could not list the scripts: ${esc(S.scripts.error)}</div>`;
+  else {
+    const rest = S.scripts.filter(s => s.builtin ? !d.jobs.some(j => j.builtin === s.builtin) : !tracked(s.file));
+    others = rest.length ? rest.map((s, k) => `<div class="scr"><span class="file">${esc(s.file)}</span><span>${s.interactiveGuess ? MC.chip('idle', 'Seems to wait for a key') : ''}</span>${badName(s.file) ? MC.chip('bad', 'Name not allowed') : `<button type="button" class="act" data-act="add" data-k="${S.scripts.indexOf(s)}" data-fk="add-${k}">Add</button>`}</div>`).join('') : '<div class="mut">Every script in this folder is already tracked.</div>';
+  }
+  box.innerHTML = `<div class="sethead"><span id="setChip"></span><span class="sp"></span><span class="msg2" id="setMsg" role="status"></span><button type="button" class="act" id="setRevert">Revert</button><button type="button" class="act red" id="setSave">Save changes</button></div>
+    ${S.leave ? '<div class="leave" role="alert"><span>You have unsaved changes in Settings. Nothing is saved until you press Save changes.</span><button type="button" class="act red" id="leaveSave">Save and leave</button><button type="button" class="act" id="leaveDrop">Leave and discard</button><button type="button" class="act ghost" id="leaveStay">Stay here</button></div>' : ''}
+    ${S.banner ? `<div class="banner" role="alert">${esc(S.banner)}</div>` : ''}
+    <div class="setsec"><div class="sh"><span>Project</span></div>
+      <div class="pfields">
+        <label>Name<input class="in${S.errors['p:name'] ? ' bad' : ''}" data-pf="name" data-fk="p-name" maxlength="60" value="${esc(d.name)}" placeholder="${esc(P.folder.split(/[\\/]/).pop())}"></label>
+        <label>Subtitle<input class="in${S.errors['p:about'] ? ' bad' : ''}" data-pf="about" data-fk="p-about" maxlength="160" value="${esc(d.about)}" placeholder="One line under the name"></label>
+      </div>
+      ${S.errors['p:name'] || S.errors['p:about'] ? `<div class="ferr" role="alert">${esc(S.errors['p:name'] || S.errors['p:about'])}</div>` : ''}
+      <div class="help" style="margin:4px 0 12px">The name shows everywhere in Mission Control. The folder keeps its own name: ${esc(P.folder)}</div>
+      ${tgl(d.hidden, 'hide', 'hide', 'Archive this project: ' + (d.hidden ? 'Yes' : 'No'))}
+      <div class="help" style="margin-top:6px">An archived project stays off Home, the title bar and the project lists. Archived projects are listed at the bottom of the <a href="settings.html#archived" style="text-decoration:underline">Settings page</a>, where you can bring them back.</div>
+    </div>
+    <div class="setsec"><div class="sh"><span>Jobs</span><span>${n ? pl(n, 'tracked script', 'tracked scripts') : ''}</span></div>
+      <div class="help">Each tracked script gets a button on this page. Shown turns that button on or off. Up and Down set the order. Scripts that send something off this PC ask you to type the project name first.</div>
+      ${n ? d.jobs.map((j, i) => jobRow(j, i, n)).join('') : '<div class="mut">No scripts are tracked yet. Add some from the list below.</div>'}
+    </div>
+    <div class="setsec"><div class="sh"><span>Other scripts in this folder</span></div>
+      <div class="help">Scripts found here (up to three folders deep) that have no button yet. Add one, then Save.</div>${others}
+    </div>
+    <div class="setsec"><div class="sh"><span>Build checks</span></div>
+      <div class="help">The checks that count decide whether the build is Fresh or Stale. The Build tab shows the state of every check.${P.requiredSource === 'default' ? ' Right now the default rule applies.' : ''}</div>
+      ${checks.length ? checks.map(c => `<div class="chk"><b>${esc(c.label)}</b>${chipFor(c.state)}<small>${esc(c.detail || '')}</small>${tgl(!!d.checks[c.key], 'chk', 'chk-' + c.key, 'Counts for status: ' + (d.checks[c.key] ? 'On' : 'Off')).replace('data-act="chk"', () => 'data-act="chk" data-k="' + esc(c.key) + '"')}</div>`).join('') : '<div class="mut">No build checks are set up for this project.</div>'}
+    </div>`;
+  updateDirtyUI();
+  if(fk){ const el = box.querySelector(`[data-fk="${CSS.escape(fk)}"]`); if(el && !el.disabled){ el.focus({preventScroll: true}); try { el.setSelectionRange(ss, se); } catch(e){} } }
+  MC.drawFrames();
+}
+function updateDirtyUI(){
+  if(!S) return;
+  const dirty = settingsDirty(), chip = $('setChip');
+  if(chip) chip.innerHTML = dirty ? MC.chip('warn', 'Unsaved changes') : MC.chip('idle', 'No changes');
+  if($('setSave')){ $('setSave').disabled = !dirty || S.saving; $('setSave').textContent = S.saving ? 'Saving...' : 'Save changes'; }
+  if($('setRevert')) $('setRevert').disabled = !dirty || S.saving;
+  if($('setMsg')) $('setMsg').textContent = S.msg || '';
+  const tb = $('tabs').querySelector('[data-t="settings"]');
+  if(tb){ const u = tb.querySelector('.un'); if(dirty && !u) tb.insertAdjacentHTML('beforeend', '<span class="n un">Unsaved</span>'); else if(!dirty && u) u.remove(); }
+}
+async function putSettings(body){
+  const res = await fetch('/api/projects/' + encodeURIComponent(id) + '/settings', {method: 'PUT', headers: {'X-MC': '1', 'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  let data = null; try { data = await res.json(); } catch(e){ data = null; }
+  if(!res.ok) throw new Error((data && data.error) || 'HTTP ' + res.status);
+  return data;
+}
+async function loadScripts(){
+  if(!S) return;
+  S.scripts = 'loading'; renderSettings();
+  try { S.scripts = (await MC.api.get('/api/projects/' + encodeURIComponent(id) + '/scripts')).scripts || []; }
+  catch(e){ S.scripts = {error: e.message}; }
+  renderSettings();
+}
+async function saveSettings(){
+  if(isPhone() || !S || S.saving || !settingsDirty()) return;
+  const d = S.draft, o = S.orig, body = {};
+  if(d.hidden !== o.hidden) body.hidden = d.hidden;
+  if(d.name.trim() !== o.name.trim()) body.name = d.name.trim() || P.folder.split(/[\\/]/).pop(); /* an empty box means the folder's name */
+  if(d.about.trim() !== o.about.trim()) body.about = d.about.trim();
+  if(JSON.stringify(jobsNorm(d)) !== JSON.stringify(jobsNorm(o))) body.jobs = d.jobs.map((j, i) => ({id: j.id, label: j.label.trim(), file: j.builtin ? null : j.file, builtin: j.builtin || null, kind: j.kind, outward: j.outward, interactive: j.interactive, order: i, visible: j.visible}));
+  const ch = {}; Object.keys(d.checks).forEach(k => { if(d.checks[k] !== o.checks[k]) ch[k] = {required: d.checks[k]}; });
+  if(Object.keys(ch).length) body.checks = ch;
+  S.saving = true; S.banner = ''; S.errors = {}; S.msg = 'Saving...'; updateDirtyUI();
+  try {
+    await putSettings(body);
+    S.force = true; S.msg = body.hidden === true ? 'Saved. This project is archived. It is listed at the bottom of the Settings page.' : 'Saved'; S.saving = false;
+    closeAsk();
+    await load(true);
+    refreshRuns();
+    S.scripts = null;
+    if(curTab === 'settings') loadScripts(); else renderSettings();
+  } catch(e){
+    S.saving = false; S.msg = '';
+    const m = /^jobs\[(\d+)\]\.(\w+)\s*(.*)$/.exec(e.message);
+    const pm = /^(name|about) (.*)$/.exec(e.message);
+    if(pm){ S.errors['p:' + pm[1]] = (pm[1] === 'name' ? 'Name ' : 'Subtitle ') + pm[2]; S.banner = 'Not saved. ' + S.errors['p:' + pm[1]]; }
+    else if(m){ S.errors[m[1] + ':' + m[2]] = m[2].charAt(0).toUpperCase() + m[2].slice(1) + ' ' + m[3]; S.banner = 'Not saved. ' + S.errors[m[1] + ':' + m[2]]; }
+    else S.banner = 'Not saved. ' + e.message;
+    renderSettings();
+  }
+}
+const origCopy = () => ({hidden: S.orig.hidden, name: S.orig.name, about: S.orig.about, jobs: S.orig.jobs.map(x => ({...x})), checks: {...S.orig.checks}});
+function moveJob(i, dir){ const a = S.draft.jobs, k = i + dir; if(k < 0 || k >= a.length) return; [a[i], a[k]] = [a[k], a[i]]; }
+$('setbox').addEventListener('click', e => {
+  if(e.target.id === 'setSave'){ saveSettings(); return; }
+  if(e.target.id === 'leaveStay'){ if(S){ S.leave = null; renderSettings(); } return; }
+  if(e.target.id === 'leaveDrop'){ if(S && !S.saving){ const t = S.leave; S.draft = origCopy(); S.errors = {}; S.banner = ''; S.msg = ''; S.leave = null; renderSettings(); if(t) show(t); } return; }
+  if(e.target.id === 'leaveSave'){ if(S && !S.saving){ const t = S.leave; S.leave = null; saveSettings().then(() => { if(t && S && !settingsDirty() && !S.banner) show(t); }); } return; }
+  if(e.target.id === 'setRevert'){
+    if(S && !S.saving){ S.draft = origCopy(); S.errors = {}; S.banner = ''; S.msg = 'Reverted'; S.leave = null; renderSettings(); }
+    return;
+  }
+  const b = e.target.closest('[data-act]'); if(!b || !S || S.saving || b.disabled) return;
+  const act = b.dataset.act, row = b.closest('.jrow'), i = row ? Number(row.dataset.i) : -1, d = S.draft, j = d.jobs[i];
+  if(act === 'hide') d.hidden = !d.hidden;
+  else if(act === 'vis' && j) j.visible = !j.visible;
+  else if(act === 'out' && j && !j.builtin) j.outward = !j.outward;
+  else if(act === 'int' && j && !j.builtin) j.interactive = !j.interactive;
+  else if(act === 'up' && j) moveJob(i, -1);
+  else if(act === 'down' && j) moveJob(i, 1);
+  else if(act === 'rm' && j) d.jobs.splice(i, 1);
+  else if(act === 'add' && Array.isArray(S.scripts) && S.scripts[Number(b.dataset.k)] && !badName(S.scripts[Number(b.dataset.k)].file)) addScript(S.scripts[Number(b.dataset.k)]);
+  else if(act === 'chk') d.checks[b.dataset.k] = !d.checks[b.dataset.k];
+  else return;
+  S.errors = {}; S.banner = ''; S.msg = ''; S.leave = null;
+  renderSettings();
+});
+function onJobField(e){
+  const t = e.target;
+  if(S && t.dataset && t.dataset.pf){ /* the project's name or subtitle */
+    S.draft[t.dataset.pf] = t.value; delete S.errors['p:' + t.dataset.pf]; t.classList.remove('bad'); S.banner = ''; S.msg = '';
+    updateDirtyUI(); return;
+  }
+  if(!S || !t.dataset || !t.dataset.f) return;
+  const row = t.closest('.jrow'), i = Number(row.dataset.i), j = S.draft.jobs[i]; if(!j) return;
+  delete S.errors[i + ':' + t.dataset.f]; S.banner = ''; S.msg = '';
+  if(t.dataset.f === 'label'){
+    j.label = t.value; t.classList.remove('bad');
+    const mk = rowMark(i); row.classList.toggle('chg', !!mk);
+    const tag = row.querySelector('[data-mark]'); tag.textContent = mk; tag.hidden = !mk;
+    updateDirtyUI(); return;
+  }
+  if(t.dataset.f === 'kind'){
+    j.kind = t.value;
+    if(OUTWARD_KINDS.has(j.kind) && !j.outward && !j.builtin) j.outward = true; // a kind that sends things out asks first by default
+    renderSettings();
+  }
+}
+$('setbox').addEventListener('input', onJobField);
+$('setbox').addEventListener('change', onJobField);
+addEventListener('beforeunload', e => { if(settingsDirty()){ e.preventDefault(); e.returnValue = ''; } });
+
+/* new session: hands the text to the shared Com Link */
+function sendNew(){
+  const t = $('nsText'), v = t.value.trim(), h = $('nsHint');
+  if(!v) return;
+  if(!(MC.comlink && MC.comlink.send)){ h.textContent = 'Com Link is not available on this page.'; return; }
+  t.value = '';
+  h.innerHTML = 'Started a new session with your default model. Follow it on the <a href="chat.html" style="text-decoration:underline">Talk page</a>.';
+  /* real work, so not the Com Link's quick Haiku: the default model and effort */
+  Promise.resolve(MC.comlink.send(v, {projectId: id, model: 'default', effort: 'default', quiet: true})).then(r => { if(r === null){ t.value = v; h.textContent = 'Not sent. A run is still working or Com Link refused it.'; } }).catch(e => { t.value = v; h.textContent = 'Not sent: ' + e.message; });
+}
+$('nsMic').innerHTML = MC.ic.mic;
+$('nsSend').onclick = sendNew;
+/* Enter only makes a new line: the Send button starts the session */
+
+/* archived conversations (the Talk page menu, or the Com Link end phrase) stay out of this list until "Show archived" is clicked */
+let archN = 0, showArch = false;
+async function loadSessions(){
+  let active = 0;
+  try {
+    const base = '/api/sessions?project=' + encodeURIComponent(id);
+    sessions = await MC.api.get(base + '&limit=20&archived=hide');
+    if(!Array.isArray(sessions)) throw new Error('unexpected answer');
+    active = sessions.length;
+    try {
+      const c = await MC.api.get('/api/sessions/archived-count?project=' + encodeURIComponent(id));
+      archN = c && Number.isFinite(c.count) ? c.count : 0;
+      if(showArch && archN) sessions = sessions.concat((await MC.api.get(base + '&limit=50&archived=only')) || []);
+    } catch(e){ archN = 0; } /* an older server has no archive: nothing is hidden */
+    if(!archN) showArch = false;
+  } catch(e){ sessions = null; $('convs').innerHTML = '<div class="err">Could not load sessions: ' + esc(e.message) + '</div>'; }
+  if(sessions === null) return;
+  const n = $('tabs').querySelector('[data-t="sessions"]');
+  if(n){ const old = n.querySelector('.n'); if(old) old.remove(); if(active) n.insertAdjacentHTML('beforeend', `<span class="n">${active}</span>`); }
+  const tog = archN || showArch ? `<button type="button" class="archtog" id="archTog" aria-expanded="${showArch}">${showArch ? 'Hide archived' : 'Show archived (' + archN + ')'}</button>` : '';
+  $('convs').innerHTML = (sessions.length ? sessions.map((s, i) => `<div class="r pick" data-i="${i}" data-rk="${esc('ses:' + s.id)}"><span class="badge">C</span><span class="x" title="${esc(plain(s.title))}">${esc(plain(s.title) || 'Untitled session')}<small${s.elsewhere ? ' style="white-space:nowrap"' : ''}>${s.elsewhere ? `<span style="color:var(--red);font-weight:700">${esc(s.elsewhere)}</span> // ` : ''}${esc(ago(s.lastAt))}${s.archived ? ' // archived' : ''}</small></span><span class="t">${s.sizeKB ? esc(s.sizeKB) + 'KB' : ''}</span></div>`).join('') : '<div class="mut">' + (archN ? 'No sessions to show.' : 'No Claude sessions in this folder yet.') + '</div>') + tog;
+  $('convs').querySelectorAll('.pick').forEach(r => r.onclick = () => openSession(sessions[+r.dataset.i].id));
+  markRows();
+  const at = $('archTog'); if(at) at.onclick = () => { showArch = !showArch; loadSessions(); };
+}
+
+/* project.html with no id (the nav button): last project opened, else the one with the newest commit or session */
+async function pickDefault(){
+  const list = (await MC.api.get('/api/projects')).projects || [];
+  if(!list.length) return null;
+  let last = null; try { last = localStorage.getItem(LAST_KEY); } catch(e){}
+  if(last && list.some(p => p.id === last)) return last;
+  const times = await Promise.all(list.map(async p => {
+    let t = Date.parse(p.lastCommit && p.lastCommit.date) || 0;
+    try { const s = await MC.api.get('/api/sessions?project=' + encodeURIComponent(p.id) + '&limit=1'); if(Array.isArray(s) && s[0]) t = Math.max(t, Date.parse(s[0].lastAt) || 0); } catch(e){}
+    return [p.id, t];
+  }));
+  times.sort((a, b) => b[1] - a[1]);
+  return times[0][0];
+}
+async function load(keepSessions){
+  if(!id){
+    try {
+      const pick = await pickDefault();
+      if(!pick) return notFound('No projects are registered in Mission Control yet.');
+      id = pick;
+      history.replaceState(null, '', '?id=' + encodeURIComponent(id) + location.hash);
+    } catch(e){ return notFound('Server offline (' + e.message + '). Check that Mission Control is running.'); }
+  }
+  try {
+    P = await MC.api.get('/api/projects/' + encodeURIComponent(id));
+  } catch(e){
+    if(e.status === 404) return notFound('No project with the id "' + id + '" is registered in Mission Control.');
+    P = null; notFound('Server offline (' + e.message + '). Check that Mission Control is running.'); return;
+  }
+  try { localStorage.setItem(LAST_KEY, id); } catch(e){}
+  syncSettings();
+  render();
+  if(!keepSessions) { loadSessions(); refreshRuns(true); }
+  else loadSessions();
+  /* a run started from a project card that needs a question first (#run=<job>): ask it here, once */
+  const rj = (location.hash.match(/run=([^&]+)/) || [])[1];
+  if(rj && !keepSessions){ history.replaceState(null, '', location.pathname + location.search); startFlow(decodeURIComponent(rj)); }
+}
+/* ---------- office mode: what is running now ----------
+   The ship's crew data without the ship. GET /api/projects/:id/crew every 3s while the page is visible (backing off to 30s
+   after failures, stopped while hidden), nudged early by the chat stream. Only conversations that are working are listed;
+   the ones that are not are in the Sessions tab, so nothing is said twice. */
+let crewList = null, crewFails = 0, crewBusy = false, crewOn = false, crewTimer = 0, crewKickAt = 0, crewHtml = '';
+const turnAt = new Map(); /* session id -> when its current stretch of work began (your last message), 0 when unknown */
+const TOOLSAY = {Read:'Reading', Grep:'Searching', Glob:'Searching', Edit:'Editing', Write:'Writing', Bash:'Running', WebSearch:'Looking up', WebFetch:'Looking up', Agent:'Sending helpers', Task:'Sending helpers'};
+const modelName = m => { const s = String(m || ''), k = s.match(/(?:claude-)?(opus|sonnet|haiku)(?:-(\d+)-(\d+))?/i); if(!k) return s; return k[1][0].toUpperCase() + k[1].slice(1).toLowerCase() + (k[2] ? ` ${k[2]}.${k[3]}` : ''); };
+/* what a helper is, by its type first and then by the words of its description (the same rule the ship uses for its rooms) */
+const KIND_RE = {
+  model3d: /\b(3d|blender|mesh|render|rendering|model(?:ing|ling)?|sculpt|rig|geometry|three\.?js)\b/i,
+  art: /\b(image|images|icon|logo|art|design|draw|drawing|paint|illustrat\w*|sprite|texture|mockup|palette|animation|visual|ui|css|style|theme|layout|polish|cosmetic|shader|svg|font|screenshot art)\b/i,
+  code: /\b(fix|edit|implement\w*|write|add|refactor|code|patch|change|update|create|wire|port|migrate|rename|remove|delete|move|rewrite|script|endpoint|server|api|function)\b/i,
+  test: /\b(test|tests|testing|build|builds|compile|lint|audit|verify|validat\w*|qa|review|regression|benchmark|install|release|screenshots?)\b/i
+};
+function kindOf(g){
+  const ty = String(g.type || '').toLowerCase(), ds = String(g.description || '');
+  if(/^(explore|plan|claude-code-guide)$|research|scout/.test(ty)) return 'Researcher';
+  if(/statusline|coder|developer|engineer|implement/.test(ty)) return 'Coder';
+  if(/test|qa|review|audit|verif/.test(ty)) return 'Tester';
+  if(/design|art|image|frontend|ui/.test(ty)) return KIND_RE.model3d.test(ds) ? '3D modeler' : 'Artist';
+  if(KIND_RE.model3d.test(ds)) return '3D modeler';
+  if(KIND_RE.art.test(ds)) return 'Artist';
+  if(KIND_RE.code.test(ds)) return 'Coder';
+  if(KIND_RE.test.test(ds)) return 'Tester';
+  return 'Researcher';
+}
+/* what a conversation is doing now: its last tool call, else the last thing it said */
+function doingNow(s){
+  const t = s.lastTool;
+  if(t && t.name) return (TOOLSAY[t.name] || 'Using ' + String(t.name).replace(/^mcp__/, '').replace(/_+/g, ' ')) + (t.hint ? ' ' + t.hint : '');
+  return s.text || '';
+}
+function runRow(s){
+  const title = plain(s.title) || 'Untitled session', model = modelName(s.model), doing = doingNow(s), agents = s.agents || [];
+  const since = s.id ? turnAt.get(s.id) : Date.parse(s.lastAt); /* a run with no session yet counts from its start */
+  return `<article class="run"><div class="rh"${s.id ? ` data-sid="${esc(s.id)}"` : ''}>` +
+    (s.id ? `<button type="button" class="lk rt" title="Open this conversation in Sessions">${esc(title)}</button>` : `<span class="rt" title="${esc(title)}">${esc(title)}</span>`) +
+    `<span class="rm">${model ? `<span>${esc(model)}</span>` : ''}${since ? `<span class="dur" data-since="${since}"></span>` : ''}</span>` +
+    (doing ? `<span class="rd" title="${esc(doing)}">${esc(doing)}</span>` : '') + '</div>' +
+    (agents.length ? `<div class="rg"><div class="gh">Helpers</div>${agents.map((g, i) => {
+      const gm = modelName(g.model), gs = Date.parse(g.startedAt);
+      return `<div class="ra${i ? '' : ' first'}"><span class="ad">${esc(g.description || 'Working')}</span><span class="am"><span title="${esc(g.type)}">${esc(kindOf(g))}</span>${gm ? `<span>${esc(gm)}</span>` : ''}${gs ? `<span class="dur" data-since="${gs}"></span>` : ''}${g.background ? MC.chip('idle', 'Background') : ''}</span></div>`;
+    }).join('')}</div>` : '') + '</article>';
+}
+function renderRunning(){
+  const box = $('runList'), plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+  let html, count = '';
+  if(!crewList) html = `<div class="rnone${crewFails ? ' bad' : ''}">${crewFails ? 'Could not read what is running' : 'Loading'}</div>`;
+  else if(!crewList.length) html = '<div class="rnone">Nothing running</div>';
+  else {
+    html = crewList.map(runRow).join('');
+    const helpers = crewList.reduce((n, s) => n + (s.agents || []).length, 0);
+    count = plural(crewList.length, 'conversation', 'conversations') + (helpers ? ', ' + plural(helpers, 'helper', 'helpers') : '');
+  }
+  $('runCount').textContent = count;
+  if(html !== crewHtml){ /* repaint only when something changed, so a focused row stays focused */
+    const f = document.activeElement, row = f && box.contains(f) ? f.closest('.rh') : null, keep = row ? row.dataset.sid : null;
+    box.innerHTML = html; crewHtml = html;
+    if(keep){ const n = [...box.querySelectorAll('.rh')].find(r => r.dataset.sid === keep), b = n && n.querySelector('button'); if(b) b.focus(); }
+    MC.drawFrames();
+  }
+  tickRunning();
+}
+function tickRunning(){
+  if(document.hidden) return;
+  const now = Date.now();
+  document.querySelectorAll('#runList .dur').forEach(el => { el.textContent = fmtDur(now - Number(el.dataset.since)); });
+}
+/* a running conversation opens in the reader, the same way the Sessions tab opens one */
+function openRunning(sid){
+  if(!P || !sid) return;
+  openSession(sid);
+}
+async function loadTurnStart(sid){
+  turnAt.set(sid, 0);
+  try {
+    const s = await MC.api.get('/api/sessions/' + encodeURIComponent(sid) + '?limit=40');
+    /* your last message, or the open turn's own start: a long run has more than 40 tool calls since your message, so the page holds no message of yours */
+    const msgs = s.messages || [], m = msgs.filter(x => x.role === 'user' && x.at).pop(), tm = msgs.filter(x => x.turn && x.turn.startedAt).pop();
+    /* while a process answers, the saved part stops where the turn began, so the turn's own start (s.live) is the one to count from */
+    const liveAt = MC.liveTurn.startedAt(s);
+    const at = liveAt !== null ? liveAt : Math.max(m ? Date.parse(m.at) || 0 : 0, tm ? Date.parse(tm.turn.startedAt) || 0 : 0);
+    if(turnAt.has(sid)) turnAt.set(sid, at);
+  } catch(e){ /* no start time: the row shows no duration */ }
+  renderRunning();
+}
+async function crewPoll(){
+  if(!crewOn || document.hidden || crewBusy) return;
+  crewBusy = true;
+  try {
+    const d = await MC.api.get('/api/projects/' + encodeURIComponent(id) + '/crew');
+    if(!d || !Array.isArray(d.sessions)) throw new Error('unexpected answer');
+    crewList = d.sessions; crewFails = 0;
+    const ids = new Set(crewList.filter(s => s.id).map(s => s.id));
+    for(const k of [...turnAt.keys()]) if(!ids.has(k)) turnAt.delete(k);
+    ids.forEach(k => { if(!turnAt.has(k)) loadTurnStart(k); });
+  } catch(e){ crewFails++; /* keep the last picture */ }
+  crewBusy = false;
+  renderRunning();
+}
+function crewSchedule(){
+  clearTimeout(crewTimer);
+  if(!crewOn || document.hidden) return;
+  crewTimer = setTimeout(async () => { await crewPoll(); crewSchedule(); }, Math.min(30000, 3000 * Math.pow(2, Math.max(0, crewFails - 1))));
+}
+/* chat news that can change the list: a run ending, a helper sent out, a tool answered (a helper may be done) */
+function onCrewChat(d){
+  if(!crewOn || !d || document.hidden || Date.now() - crewKickAt < 1500) return;
+  const c = d.event && d.event.message && Array.isArray(d.event.message.content) ? d.event.message.content : [];
+  if(d.done || c.some(b => b && (b.type === 'tool_result' || (b.type === 'tool_use' && (b.name === 'Agent' || b.name === 'Task'))))){ crewKickAt = Date.now(); setTimeout(crewPoll, 700); }
+}
+function startRunning(){
+  crewOn = true;
+  renderRunning();
+  $('runList').addEventListener('click', e => { const r = e.target.closest('.rh[data-sid]'); if(r) openRunning(r.dataset.sid); });
+  document.addEventListener('visibilitychange', () => { if(!crewOn) return; if(document.hidden) clearTimeout(crewTimer); else crewPoll().then(crewSchedule); });
+  if(MC.events) MC.events.on('chat', onCrewChat);
+  setInterval(tickRunning, 1000);
+  crewPoll().then(crewSchedule);
+}
+function stopRunning(){ crewOn = false; clearTimeout(crewTimer); }
+if(OFFICE) startRunning();
+
+MC.events.on('projects.changed', () => { if(P) load(true); });
+load();
+
+/* ---------- layout: the free area, the columns, the BG switch ----------
+   ship.js reads the free area every frame, so the ship follows it as it resizes or the right panel slides.
+   Here we only set the variables the BG switch uses and let a scrolling column take the pointer (so its scrollbar works). */
+const freeEl = $('free'), colEls = [$('leftcol'), $('rightcol')];
+function measure(){
+  const r = freeEl.getBoundingClientRect(), st = document.documentElement.style;
+  st.setProperty('--ft', r.top + 'px'); st.setProperty('--frr', (innerWidth - r.right) + 'px');
+  colEls.forEach(e => { e.classList.toggle('scrolls', e.scrollHeight > e.clientHeight + 1); fadeCol(e); });
+}
+/* the shared MC.fades (redline.js) fades every scroll box; this page's own bottom fade is only a fallback while that is missing */
+const fadeCol = e => e.classList.toggle('fadeb', !MC.fades && e.scrollHeight > e.clientHeight + 2 && e.scrollTop + e.clientHeight < e.scrollHeight - 2);
+colEls.forEach(e => e.addEventListener('scroll', () => fadeCol(e), {passive: true}));
+const layoutRO = new ResizeObserver(() => { measure(); MC.drawFrames(); });
+layoutRO.observe(freeEl); colEls.forEach(e => layoutRO.observe(e)); document.querySelectorAll('.fr').forEach(e => layoutRO.observe(e));
+addEventListener('resize', measure);
+measure();
+</script>
+</body>
+</html>

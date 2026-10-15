@@ -1,0 +1,10 @@
+# Design references (other people's work): keep them local, never in git.
+research/
+
+# Your settings, conversations data, keys and logs
+.data/
+node_modules/
+
+# Phone bridge program: working copy of the built exe (run-bridge.bat), and a build in the default folder
+bridge/run/
+bridge/target/

@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connections // Mission Control</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="redline.css">
+<style>
+.grp{grid-column:1/-1;display:flex;align-items:baseline;gap:14px;margin-top:6px}
+.grp h2{font-weight:700;font-size:20px;letter-spacing:.14em;text-transform:uppercase}
+.grp span{font-family:var(--mono);font-size:11px;color:var(--w3)}
+.grp .line{flex:1;border-top:1px solid var(--line-2);transform:translateY(-4px)}
+.card{--c:14px;display:flex;flex-direction:column}
+.card .top{flex-wrap:wrap;display:flex;gap:12px;align-items:center;padding:12px 14px 6px}
+.card .logo{width:40px;height:40px;flex:none;border:1px solid var(--line);display:grid;place-items:center;font:700 15px var(--sans);letter-spacing:.04em;clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px)}
+.card .logo.red{background:var(--red);border-color:var(--red)}
+.card .logo.wh{background:var(--white);color:#0b0b0d}
+.card .nm b{display:block;font-size:19px;letter-spacing:.04em;line-height:1}
+.card .nm small{font-family:var(--mono);font-size:10px;color:var(--w3)}
+.card .top .chip{margin-left:auto}
+.card .nm small{display:none}
+.card .mid{padding:4px 14px 8px;font-size:14px;color:var(--w2);font-weight:500;line-height:1.3;min-height:38px}
+.card .use{padding:0 14px 8px}
+.card .use .lb{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--w3);margin-bottom:4px}
+.card .key{display:flex;align-items:center;gap:8px;margin:0 14px 8px;padding:6px 8px;border:1px dashed var(--line-2);font-family:var(--mono);font-size:10.5px;color:var(--w2)}
+.card .key svg{width:12px;height:12px}
+.card .tg{display:flex;gap:14px;flex-wrap:wrap;padding:0 14px 10px}
+.card .btns{display:flex;gap:6px;padding:8px 14px 12px;border-top:1px solid var(--line-2);margin-top:auto}
+.card.off{opacity:.62}
+.dim{font-family:var(--mono);font-size:11px;color:var(--w3);padding:14px 16px;line-height:1.5}
+.card .key code{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--white);font-family:var(--mono)}
+.card .res{padding:0 14px 8px;font-family:var(--mono);font-size:10.5px;color:var(--w2);display:flex;gap:6px;align-items:center;min-height:14px}
+.card .res svg{width:11px;height:11px;flex:none}
+.card .btns a.act{text-decoration:none}
+.howto{font-size:13px;color:var(--w2);padding:12px 16px;line-height:1.5}
+.howto code{font-family:var(--mono);color:var(--white)}
+.tbl td.wrap{white-space:normal}
+.act .soon{color:#fff;border-color:rgba(255,255,255,.5)}
+.soon{font:600 9.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;border:1px dashed var(--line-2);color:var(--w3);padding:1px 5px;margin-left:6px}
+.card .vr{display:flex;flex-direction:column;gap:4px}
+.card .facts{padding:0 14px 8px;font-family:var(--mono);font-size:11px;color:var(--w2);display:grid;gap:3px}
+.card .facts b{color:var(--white);font-weight:600}
+.act:disabled{opacity:.5;cursor:default;pointer-events:none}
+.hdbtns{display:flex;gap:6px}
+/* a phone: the two header buttons share the row or wrap under the title, never past the right edge */
+@media (max-width:560px){#services,#localApps{grid-template-columns:minmax(0,1fr) !important}.hdbtns{flex-wrap:wrap;max-width:100%}.hdbtns .act.big{min-height:40px;padding:8px 12px;max-width:100%;justify-content:center}}
+/* devices */
+.dv-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:4px 18px 12px}
+.dv-top .why{font-size:13px;color:var(--w2)}
+.dv-top .ver{font-family:var(--mono);font-size:11px;color:var(--w3)}
+.dv-top .push{margin-left:auto;display:flex;align-items:center;gap:10px}
+.dv-pairbtn:disabled{pointer-events:auto;cursor:not-allowed}
+.dv-pairbtn:disabled:hover{background:var(--red);color:#fff}
+.dv-note{display:flex;align-items:center;gap:10px;padding:0 18px 12px;font-size:13px;color:var(--w2)}
+.dv-note[hidden]{display:none}
+.dv-pair:not([hidden]) + #dvList{border-top:1px solid var(--line-3)}
+.dv-pair{display:flex;gap:32px;flex-wrap:wrap;align-items:center;padding:18px;border-top:1px solid var(--line-3)}
+.dv-pair[hidden]{display:none}
+.dv-qr{display:flex;flex-direction:column;align-items:center;gap:12px}
+.dv-qrbox{display:block;background:var(--white);line-height:0}
+.dv-qrbox svg{display:block}
+.dv-code{font:500 24px var(--mono);letter-spacing:.24em;padding-left:.24em;color:var(--white);user-select:all}
+.dv-side{display:flex;flex-direction:column;gap:12px;flex:1;min-width:240px;max-width:460px}
+.dv-side p{font-size:14px;color:var(--w2);line-height:1.5}
+.dv-side .left{font-size:13px;color:var(--w2)}
+.dv-side .left b{font-family:var(--mono);font-weight:600;color:var(--white)}
+.dv-btns{display:flex;gap:8px;flex-wrap:wrap}
+.dv-in{width:220px;max-width:100%;background:rgba(0,0,0,.18);border:1px solid var(--line);color:var(--white);font:500 14px var(--sans);padding:4px 8px;outline:none}
+.dv-in:focus{border-color:var(--white)}
+.dv-ask{color:var(--w2);font-size:13px;margin-right:8px}
+.tbl td.dv-act{text-align:right}
+.tbl td.dv-act .act{margin-left:6px}
+/* wake words */
+.wk-form{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;padding:4px 18px 12px}
+.wk-f{display:flex;flex-direction:column;gap:5px;min-width:0}
+.wk-f > label,.wk-lb{font-size:12px;font-weight:600;color:var(--w3)}
+.wk-in{background:rgba(0,0,0,.18);border:1px solid var(--line);color:var(--white);font:500 14px var(--sans);padding:0 10px;height:36px;outline:none;min-width:0}
+.wk-in:focus{border-color:var(--white)}
+.wk-in[aria-invalid="true"]{border-color:var(--red-2)}
+.wk-in:disabled,.wk-sel:disabled{opacity:.55}
+.wk-phrase{width:300px;max-width:100%}
+.wk-sel{background:#0e1622;border:1px solid var(--line);color:var(--white);font:500 14px var(--sans);padding:0 10px;height:36px;outline:none}
+.wk-sel:focus{border-color:var(--white)}
+.wk-go{display:flex;gap:8px;align-items:center}
+.wk-bad{padding:0 18px 8px;font-size:13px;color:var(--red-2);display:flex;gap:8px;align-items:center}
+.wk-bad[hidden]{display:none}
+.wk-bad svg{width:12px;height:12px;flex:none}
+.wk-est{padding:0 18px 12px;font-size:12px;color:var(--w3)}
+.wk-cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:0;border-top:1px solid var(--line-3)}
+.wk-col{padding:14px 18px 16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.wk-col + .wk-col{border-left:1px solid var(--line-3)}
+.wk-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.wk-hd h4{font-family:var(--head);font-weight:700;font-size:15px;letter-spacing:.1em;text-transform:uppercase}
+.wk-hd .chip{margin-left:auto}
+.wk-chips{display:flex;gap:6px;flex-wrap:wrap;min-height:30px}
+.wk-chip{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--field-line);padding:2px 2px 2px 10px;font-size:13px;font-weight:500}
+.wk-chip button{background:transparent;border:0;color:var(--w2);cursor:pointer;width:24px;height:22px;display:grid;place-items:center}
+.wk-chip button:hover{color:var(--white)}
+.wk-chip button svg{width:9px;height:9px}
+.wk-chip button svg path{stroke:currentColor}
+.wk-add{display:flex;gap:8px}
+.wk-add .wk-in{flex:1;max-width:260px}
+.wk-rec{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.wk-meter{flex:1;min-width:140px;max-width:320px;height:10px;border:1px solid var(--line-2);position:relative;background:rgba(0,0,0,.18)}
+.wk-meter i{position:absolute;inset:0 auto 0 0;width:0;background:var(--white)}
+.wk-rec .t{font:500 12px var(--mono);color:var(--w2);min-width:130px}
+.wk-clips{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px;max-height:210px;overflow-y:auto;padding-right:4px}
+.wk-clip{display:flex;align-items:center;gap:4px;border:1px solid var(--line-2);padding:2px 2px 2px 8px;font:500 12px var(--mono);color:var(--w2)}
+.wk-clip b{font-weight:500;flex:1}
+.wk-clip button{background:transparent;border:0;color:var(--w2);cursor:pointer;width:24px;height:24px;display:grid;place-items:center}
+.wk-clip button:hover:not(:disabled){color:var(--white);background:rgba(220,231,243,.08)}
+.wk-clip button:disabled{opacity:.4;cursor:default}
+.wk-clip button svg{width:11px;height:11px}
+.wk-clip.playing{border-color:var(--white);color:var(--white)}
+.wk-note{font-size:13px;color:var(--w2);display:flex;gap:10px;align-items:center}
+.wk-note[hidden]{display:none}
+.wk-run{border-top:1px solid var(--line-3);padding:14px 18px 16px;display:flex;flex-direction:column;gap:12px}
+.wk-run[hidden]{display:none}
+.wk-rt{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:14px}
+.wk-rt b{font-weight:600}
+.wk-rt .el{font:500 12px var(--mono);color:var(--w2)}
+.wk-rt .push{margin-left:auto;display:flex;gap:8px;align-items:center}
+.wk-st{display:grid;grid-template-columns:minmax(150px,200px) 24px minmax(0,1fr) 64px;gap:6px 12px;align-items:center;max-width:760px}
+.wk-st .nm{font-size:13px;font-weight:500;color:var(--w2)}
+.wk-st .nm.on{color:var(--white);font-weight:600}
+.wk-st .ic{width:14px;height:14px;display:grid;place-items:center;color:var(--w2)}
+.wk-st .ic svg{width:11px;height:11px}
+.wk-st .pc{font:500 12px var(--mono);color:var(--w2);text-align:right}
+.wk-st .bar{height:6px}
+.wk-msg{font:400 12px var(--mono);color:var(--w3);overflow-wrap:anywhere}
+.wk-res{font-size:14px;color:var(--white);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.wk-res code{font:500 12px var(--mono);color:var(--w2)}
+.wk-tbl td.act-c{text-align:right}
+.wk-tbl td.act-c .act{margin-left:6px}
+@media (max-width:1100px){.wk-cols{grid-template-columns:1fr}.wk-col + .wk-col{border-left:0;border-top:1px solid var(--line-3)}}
+</style>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="bgfx" aria-hidden="true"></div>
+<div class="app">
+  <nav class="rail" aria-label="Main"></nav>
+    <header class="page">
+      <div class="ruler" aria-hidden="true"></div>
+      <div class="hd">
+        <div><h1>Connec<em>tions</em></h1><div class="sub" id="sub">Loading</div></div>
+        <div class="hdbtns"><button class="act big" disabled title="Not wired yet">Scan for MCP servers<span class="soon">Soon</span></button><button class="act big red" disabled title="Not wired yet">Add connection<span class="soon">Soon</span></button></div>
+              </div>
+    </header>
+
+  <main class="main">
+
+    <section class="fr span-8" aria-label="Spend this month">
+      <div class="ttl"><h3>Spend this month</h3><span class="soon">Soon</span></div>
+      <div class="dim">No data source yet. Spend per service will show here.</div>
+    </section>
+    <section class="fr span-4" aria-label="Recent calls">
+      <div class="ttl"><h3>Recent calls</h3><span class="soon">Soon</span></div>
+      <div class="dim">No data source yet. Calls will show here once they are logged.</div>
+    </section>
+
+    <div class="grp"><h2>AI services</h2><i class="line"></i></div>
+    <section class="fr span-12" aria-label="How to add a key"><div class="howto" id="howto">Keys stay in the Windows vault and never show on this page. To add one, open a terminal, run the command shown on its card, and paste the key when it asks. The key is not echoed on screen.</div></section>
+    <div class="span-12" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px" id="services"><div class="dim">Loading services</div></div>
+
+    <div class="grp"><h2>Local apps</h2><i class="line"></i></div>
+    <div class="span-12" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px" id="localApps"><div class="dim">Loading local apps</div></div>
+
+    <div class="grp"><h2>Local engines</h2><i class="line"></i></div>
+    <section class="fr span-12" aria-label="Local engines"><div class="ttl"><h3>Ollama, BlitzVoice, Pinokio</h3><span class="soon">Soon</span></div><div class="dim">No data source yet. Local engines will show here.</div></section>
+
+    <div class="grp"><h2>MCP servers</h2><i class="line"></i></div>
+    <section class="fr span-12" aria-label="MCP servers"><div class="ttl"><h3>Configured servers</h3><span class="cnt" id="mcpCnt"></span></div><div id="mcp"><div class="dim">Loading MCP servers</div></div></section>
+
+    <div class="grp"><h2>Devices</h2><i class="line"></i></div>
+    <section class="fr span-12" aria-label="Paired phones">
+      <div class="ttl"><h3>Paired phones</h3><span class="cnt" id="dvCnt"></span></div>
+      <div class="dv-top pc-only" id="dvBridge"></div>
+      <div class="dv-note" id="dvNote" role="status" hidden></div>
+      <div class="dv-pair" id="dvPair" hidden></div>
+      <div id="dvList"><div class="dim">Loading devices</div></div>
+    </section>
+
+  </main>
+</div>
+
+<script src="api.js"></script>
+<script src="redline.js"></script>
+<script src="vendor/qrcodegen.js"></script>
+<script>
+MC.init('conn');
+const $ = id => document.getElementById(id);
+const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const lock = '<svg viewBox="0 0 12 12"><rect x="2" y="5" width="8" height="6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>';
+let data = null;
+function abbr(n){ const w = String(n).replace(/[^A-Za-z0-9 ]/g, ' ').trim().split(/\s+/); return (w.length > 1 ? w[0][0] + w[1][0] : String(n).slice(0, 2)).toUpperCase(); }
+function cmd(s){ return 'cmdkey /generic:' + (s.credentialTarget || 'MissionControl:' + s.id) + ' /user:api /pass'; }
+function stateChip(s){
+  if(s.keyStored) return MC.chip('ok', 'Key stored');
+  if(data.keyCheck === 'unavailable') return MC.chip('warn', 'Could not check');
+  return MC.chip('idle', 'No key');
+}
+function card(s){
+  const c = cmd(s);
+  const mid = s.keyStored ? 'A key is stored in the Windows vault.' : data.keyCheck === 'unavailable' ? 'The Windows vault could not be read, so the key state is unknown.' : 'No key stored yet. Add one with the command below.';
+  return '<section class="fr card ' + (!s.keyStored && data.keyCheck !== 'unavailable' ? 'off' : '') + '" data-id="' + esc(s.id) + '"><div class="top"><span class="logo ' + (s.keyStored ? 'wh' : '') + '">' + esc(abbr(s.name)) + '</span><span class="nm"><b>' + esc(s.name) + '</b></span>' + stateChip(s) + '</div>' +
+    '<div class="mid">' + mid + '</div>' +
+    '<div class="key">' + lock + '<code>' + esc(c) + '</code><button class="act" data-copy="' + esc(c) + '">Copy</button></div>' +
+    '<div class="res" data-res></div>' +
+    '<div class="tg"><span class="tog" style="opacity:.5;pointer-events:none" title="Not wired yet"><i></i>Claude can use <span class="soon">Soon</span></span></div><div class="btns"><button class="act" data-test="' + esc(s.id) + '">Test</button>' + (/^https?:\/\//i.test(s.docsUrl || '') ? '<a class="act" href="' + esc(s.docsUrl) + '" target="_blank" rel="noopener">Docs</a>' : '') + '</div></section>';
+}
+function draw(){
+  const mcp = data.mcp || [], svc = data.services || [];
+  const keys = svc.filter(s => s.keyStored).length;
+  $('sub').textContent = (mcp.length + keys) + ' connected (' + mcp.length + ' MCP server' + (mcp.length === 1 ? '' : 's') + ', ' + keys + ' key' + (keys === 1 ? '' : 's') + '). Keys stay in the Windows vault.';
+  $('mcpCnt').textContent = mcp.length;
+  $('services').innerHTML = svc.length ? svc.map(card).join('') : '<div class="dim">No services are listed.</div>';
+  $('mcp').innerHTML = mcp.length ? '<table class="tbl"><thead><tr><th class="i">#</th><th>NAME</th><th>TYPE</th><th>COMMAND OR HOST</th><th>SCOPE</th><th>PROJECT</th></tr></thead><tbody>' +
+    mcp.map((m, i) => '<tr><td class="i">' + String(i + 1).padStart(2, '0') + '</td><td>' + esc(m.name) + '</td><td class="m">' + esc(m.type) + '</td><td class="m">' + esc(m.host || m.command || 'Unknown') + '</td><td class="m">' + esc(m.scope) + '</td><td class="m wrap">' + esc(m.project || 'All projects') + '</td></tr>').join('') + '</tbody></table>'
+    : '<div class="dim">No MCP servers found in your Claude settings.</div>';
+}
+document.addEventListener('click', async e => {
+  const cp = e.target.closest('button[data-copy]');
+  if(cp){
+    const txt = cp.dataset.copy;
+    try { await navigator.clipboard.writeText(txt); cp.textContent = 'Copied'; }
+    catch(err){
+      const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); cp.textContent = 'Copied'; } catch(e2){ cp.textContent = 'Copy failed'; }
+      ta.remove();
+    }
+    setTimeout(() => { cp.textContent = 'Copy'; }, 1800);
+    return;
+  }
+  const tb = e.target.closest('button[data-test]');
+  if(tb){
+    const res = tb.closest('.card').querySelector('[data-res]');
+    res.innerHTML = 'Testing';
+    tb.disabled = true;
+    try {
+      const r = await MC.api.post('/api/connections/' + encodeURIComponent(tb.dataset.test) + '/test', {});
+      res.innerHTML = (r.ok ? MC.ic.ok : MC.ic.warn) + '<span>' + (r.ok ? 'Works. ' : 'Not working. ') + esc(r.reason || '') + '</span>';
+    } catch(err){ res.innerHTML = MC.ic.bad + '<span>' + esc(err.message) + '</span>'; }
+    tb.disabled = false;
+  }
+});
+function comfyCard(a){
+  const on = a.running;
+  const chip = on ? MC.chip('ok', 'Running') : MC.chip('idle', 'Not running');
+  const mid = on ? 'Running on port ' + esc(a.port) + (a.process && a.process.name ? ' (' + esc(a.process.name) + ', pid ' + esc(a.process.pid) + ')' : '') : 'Not running. Start the ComfyUI app and this card fills in.';
+  let facts = '';
+  if(on){
+    const used = a.vramUsedGB, tot = a.vramTotalGB;
+    const frac = tot ? used / tot : 0;
+    facts = '<div class="facts"><div>Version <b>' + esc(a.version || 'Unknown') + '</b>' + (a.python ? ' (Python ' + esc(a.python) + ')' : '') + '</div>' +
+      '<div class="vr"><div>VRAM <b>' + (tot ? esc(used.toFixed(1)) + ' of ' + esc(tot.toFixed(1)) + 'GB used' : 'Unknown') + '</b></div>' +
+      (tot ? '<div class="bar"><i class="' + (frac > .9 ? 'hot' : '') + '" style="width:' + Math.min(100, Math.round(frac * 100)) + '%"></i></div>' : '') + '</div>' +
+      '<div>Queue <b>' + (a.queue ? esc(a.queue.running) + ' running, ' + esc(a.queue.pending) + ' pending' : 'Unknown') + '</b></div></div>';
+  }
+  const btn = on ? '<a class="act pc-only" href="http://127.0.0.1:' + esc(a.port) + '/" target="_blank" rel="noopener">Open in browser</a>' : '<button class="act pc-only" disabled>Open in browser</button>';
+  return '<section class="fr card ' + (on ? '' : 'off') + '" data-id="comfyui"><div class="top"><span class="logo ' + (on ? 'wh' : '') + '">CU</span><span class="nm"><b>ComfyUI</b></span>' + chip + '</div><div class="mid">' + mid + '</div>' + facts + '<div class="btns">' + btn + '</div></section>';
+}
+function loadLocal(){
+  return MC.api.get('/api/connections/local').then(d => {
+    const el = $('localApps'), apps = (d && d.apps) || [];
+    const html = apps.map(a => a.id === 'comfyui' ? comfyCard(a) : '').join('');
+    if(el.dataset.html !== html){ el.dataset.html = html; el.innerHTML = html || '<div class="dim">No local apps are listed.</div>'; }
+  }).catch(() => { $('localApps').innerHTML = '<div class="dim">Server offline. Local apps cannot be read right now.</div>'; delete $('localApps').dataset.html; });
+}
+loadLocal();
+setInterval(() => { if(!document.hidden) loadLocal(); }, 5000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden) loadLocal(); });
+MC.api.get('/api/connections').then(d => { data = d; draw(); }).catch(() => {
+  $('sub').textContent = 'Server offline';
+  $('services').innerHTML = '<div class="dim">Server offline. Connections cannot be read right now.</div>';
+  $('mcp').innerHTML = '<div class="dim">Server offline.</div>';
+});
+
+/* ---------- Devices: pair a phone, list, rename, remove ---------- */
+const dv = {
+  view: null,        // last answer of GET /api/devices, or null while loading or when the server is offline
+  failed: false,
+  pair: null,        // the code this tab opened: { code, uri, expiresAt (ms) }
+  opening: false,
+  note: null,        // { kind: 'ok' | 'warn', text }
+  editing: null,     // { id, kind: 'rename' | 'remove', busy }
+  seq: 0,
+};
+const DV_ERR = {
+  bridge_offline: 'The bridge is not running.',
+  list_unreadable: 'The saved device list could not be read, so nothing was changed.',
+  write_failed: 'The device list could not be saved, so nothing was changed.',
+};
+const dvErr = e => DV_ERR[e && e.message] || (e && e.message) || 'Something went wrong.';
+const dvDate = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+function dvAgo(iso){
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if(isNaN(s)) return '';
+  if(s < 10) return 'just now';
+  if(s < 60) return s + 's ago';
+  if(s < 3600) return Math.floor(s / 60) + ' min ago';
+  if(s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+function dvLeft(ms){
+  const s = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(s / 60), r = s % 60;
+  return m ? m + ' min' + (r ? ' ' + r + 's' : '') : r + 's';
+}
+function dvQr(text){
+  const qr = qrcodegen.QrCode.encodeText(text, qrcodegen.QrCode.Ecc.MEDIUM);
+  const q = 2, n = qr.size, px = 6;   // two light modules around the code, as few as scanners need
+  let d = '';
+  for(let y = 0; y < n; y++) for(let x = 0; x < n; x++) if(qr.getModule(x, y)) d += 'M' + (x + q) + ',' + (y + q) + 'h1v1h-1z';
+  const w = (n + 2 * q);
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + w + ' ' + w + '" width="' + (w * px) + '" height="' + (w * px) + '" shape-rendering="crispEdges" role="img" aria-label="Pairing QR code"><rect width="' + w + '" height="' + w + '" fill="#e2e9f0"/><path d="' + d + '" fill="#0a1019"/></svg>';
+}
+function dvOpenUntil(){
+  if(dv.pair) return dv.pair.expiresAt;
+  const p = dv.view && dv.view.pairing;
+  return p ? new Date(p.expiresAt).getTime() : null;
+}
+
+function dvDrawBridge(){
+  const el = $('dvBridge');
+  const v = dv.view;
+  if(!v){ el.innerHTML = ''; return; }
+  const on = !!(v.bridge && v.bridge.online);
+  const open = dvOpenUntil() !== null;
+  el.innerHTML = (on ? MC.chip('ok', 'Bridge online') + (v.bridge.version ? '<span class="ver">' + esc(v.bridge.version) + '</span>' : '')
+    : MC.chip('bad', 'Bridge offline') + '<span class="why">The bridge program is not running, so phones cannot connect.</span>') +
+    '<span class="push">' +
+    /* Restart picks up a new build of the bridge (bridge\run\mc-bridge.new.exe). Phones drop for a few seconds and reconnect. */
+    (on ? '<button class="act pc-only" data-dv="restart"' + (dv.restarting ? ' disabled' : '') + ' title="Phones drop for a few seconds, then reconnect">' + (dv.restarting ? 'Restarting...' : 'Restart bridge') + '</button>' : '') +
+    (open ? '' : '<button class="act red dv-pairbtn" data-dv="pair"' + (on && !dv.opening ? '' : ' disabled') + (on ? '' : ' title="The bridge is not running"') + '>Pair a phone</button>') +
+    '</span>';
+}
+function dvDrawNote(){
+  const el = $('dvNote');
+  if(!dv.note){ el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = MC.chip(dv.note.kind === 'ok' ? 'ok' : 'warn', esc(dv.note.text));
+}
+let dvPairKey = '';
+function dvDrawPair(){
+  const el = $('dvPair');
+  const until = dvOpenUntil();
+  if(until === null){ el.hidden = true; el.innerHTML = ''; dvPairKey = ''; return; }
+  const key = dv.pair ? dv.pair.uri : 'elsewhere';
+  el.hidden = false;
+  if(key !== dvPairKey){
+    dvPairKey = key;
+    if(dv.pair){
+      el.innerHTML = '<div class="dv-qr"><span class="dv-qrbox">' + dvQr(dv.pair.uri) + '</span><div class="dv-code" aria-label="Pairing code">' + esc(dv.pair.code) + '</div></div>' +
+        '<div class="dv-side"><p>Open Mission Control on the phone and scan this code.</p><p>A paired phone can drive Claude on this PC and read your project files.</p>' +
+        '<div class="left">Expires in <b role="timer" id="dvLeft"></b></div>' +
+        '<div class="dv-btns"><button class="act" data-dv="copy">Copy pairing text</button><button class="act" data-dv="cancel">Cancel</button></div></div>';
+    } else {
+      el.innerHTML = '<div class="dv-side"><p>A pairing code is open, but its QR code is only shown where it was made.</p>' +
+        '<div class="left">Expires in <b role="timer" id="dvLeft"></b></div>' +
+        '<div class="dv-btns"><button class="act red" data-dv="pair">Make a new code</button><button class="act" data-dv="cancel">Cancel</button></div></div>';
+    }
+  }
+  dvTick();
+}
+function dvRow(d){
+  const ed = dv.editing && dv.editing.id === d.id ? dv.editing : null;
+  const name = ed && ed.kind === 'rename'
+    ? '<input class="dv-in" maxlength="40" value="' + esc(d.name) + '" aria-label="Phone name" data-dv-in="' + esc(d.id) + '">'
+    : esc(d.name);
+  let act;
+  if(ed && ed.kind === 'rename') act = '<button class="act" data-dv="save" data-id="' + esc(d.id) + '"' + (ed.busy ? ' disabled' : '') + '>Save</button><button class="act ghost" data-dv="stop">Cancel</button>';
+  else if(ed && ed.kind === 'remove') act = '<span class="dv-ask">Remove this phone? It loses access at once.</span><button class="act red" data-dv="remove" data-id="' + esc(d.id) + '"' + (ed.busy ? ' disabled' : '') + '>Remove</button><button class="act ghost" data-dv="stop">Cancel</button>';
+  else act = '<button class="act pc-only" data-dv="rename" data-id="' + esc(d.id) + '">Rename</button><button class="act" data-dv="ask" data-id="' + esc(d.id) + '">Remove</button>';
+  return '<tr><td>' + name + '</td><td class="m">' + esc(dvDate(d.pairedAt)) + '</td><td class="m">' + (d.online ? '' : esc(dvAgo(d.lastSeen))) + '</td><td>' + (d.online ? MC.chip('ok', 'Online') : MC.chip('idle', 'Offline')) + '</td><td class="dv-act">' + act + '</td></tr>';
+}
+function dvDrawList(force){
+  const el = $('dvList');
+  if(dv.failed && !dv.view){ el.innerHTML = '<div class="dim">Server offline. Devices cannot be read right now.</div>'; $('dvCnt').textContent = ''; return; }
+  if(!dv.view){ return; }
+  // a rename being typed is not wiped by a refresh; it is drawn again when the edit ends
+  if(!force && dv.editing && dv.editing.kind === 'rename' && !dv.editing.busy && el.querySelector('[data-dv-in]')) return;
+  const list = dv.view.devices || [];
+  $('dvCnt').textContent = list.length;
+  el.innerHTML = list.length
+    ? '<table class="tbl"><thead><tr><th>NAME</th><th>PAIRED</th><th>LAST SEEN</th><th>STATUS</th><th></th></tr></thead><tbody>' + list.map(dvRow).join('') + '</tbody></table>'
+    : '<div class="dim">No phones are paired.</div>';
+  const inp = el.querySelector('[data-dv-in]');
+  if(inp){ inp.focus(); inp.select(); }
+}
+function dvDraw(){ dvDrawBridge(); dvDrawNote(); dvDrawPair(); dvDrawList(); }
+
+function dvTick(){
+  const until = dvOpenUntil();
+  if(until === null) return;
+  const left = until - Date.now();
+  if(left <= 0){
+    const had = !!dv.pair;
+    dv.pair = null;
+    if(dv.view) dv.view.pairing = null; /* the server's copy is just as expired: without this, drawing ticks again forever */
+    if(had) dv.note = { kind: 'warn', text: 'The pairing code expired.' };
+    dvDraw(); /* the QR goes at once */
+    dvLoad();
+    return;
+  }
+  const b = document.getElementById('dvLeft');
+  if(b) b.textContent = dvLeft(left);
+}
+
+async function dvLoad(){
+  const mine = ++dv.seq;
+  try {
+    const v = await MC.api.get('/api/devices');
+    if(mine !== dv.seq) return;
+    dv.view = v; dv.failed = false;
+    // The server closed the code this tab was showing (used, cancelled, expired or burned).
+    if(dv.pair && !v.pairing) dv.pair = null;
+  } catch(e){
+    if(mine !== dv.seq) return;
+    dv.failed = true;
+  }
+  dvDraw();
+}
+// A confirmation fades after a few seconds; a warning stays until the next action.
+function dvNote(kind, text){
+  const n = dv.note = { kind, text };
+  if(kind === 'ok') setTimeout(() => { if(dv.note === n){ dv.note = null; dvDrawNote(); } }, 8000);
+}
+
+MC.events.on('devices.changed', ev => {
+  ev = ev || {};
+  if(ev.reason === 'paired'){
+    dv.pair = null;
+    dvNote('ok', (ev.name || 'A phone') + ' paired');
+  } else if(ev.reason === 'pairing' && dv.pair && (ev.state === 'expired' || ev.state === 'burned')){
+    dv.pair = null;
+    dv.note = { kind: 'warn', text: ev.state === 'expired' ? 'The pairing code expired.' : 'The pairing code was closed after too many wrong tries.' };
+  } else if(ev.reason === 'removed' && dv.note && dv.note.kind === 'ok') {
+    dv.note = null;
+  }
+  dvLoad();
+});
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button[data-dv]');
+  if(!b || b.disabled) return;
+  const act = b.dataset.dv, id = b.dataset.id;
+  if(act === 'pair'){
+    dv.opening = true; dv.note = null; dvDraw();
+    try {
+      const r = await MC.api.post('/api/devices/pair', {});
+      dv.pair = { code: r.code, uri: r.uri, expiresAt: new Date(r.expiresAt).getTime() };
+    } catch(err){
+      if(err.status === 409 && err.message === 'bridge_offline') dv.note = null;
+      else dv.note = { kind: 'warn', text: dvErr(err) };
+    }
+    dv.opening = false;
+    await dvLoad();
+  } else if(act === 'restart'){
+    dv.restarting = true; dv.note = null; dvDraw();
+    try {
+      await MC.api.post('/api/devices/bridge/restart', {});
+      dv.note = { kind: 'ok', text: 'The bridge is restarting. Phones reconnect in a few seconds.' };
+      await new Promise(r => setTimeout(r, 4000)); /* long enough for the bridge to be back, so the chip does not flash Offline last */
+    } catch(err){
+      dv.note = { kind: 'warn', text: dvErr(err) };
+    }
+    dv.restarting = false;
+    await dvLoad();
+  } else if(act === 'cancel'){
+    dv.pair = null; dvDraw(); /* the QR goes at once, not after the server answers */
+    try { await MC.api.post('/api/devices/pair/cancel', {}); } catch(err){ dv.note = { kind: 'warn', text: dvErr(err) }; }
+    await dvLoad();
+  } else if(act === 'copy'){
+    const txt = dv.pair && dv.pair.uri;
+    if(!txt) return;
+    try { await navigator.clipboard.writeText(txt); b.textContent = 'Copied'; }
+    catch(err){
+      const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); b.textContent = 'Copied'; } catch(e2){ b.textContent = 'Copy failed'; }
+      ta.remove();
+    }
+    setTimeout(() => { b.textContent = 'Copy pairing text'; }, 1800);
+  } else if(act === 'rename' || act === 'ask'){
+    dv.editing = { id, kind: act === 'rename' ? 'rename' : 'remove', busy: false };
+    dvDrawList(true);
+  } else if(act === 'stop'){
+    dv.editing = null; dvDrawList(true);
+  } else if(act === 'save'){
+    const inp = document.querySelector('[data-dv-in]');
+    const name = inp ? inp.value.trim() : '';
+    if(!name){ if(inp) inp.focus(); return; }
+    dv.editing.busy = true;
+    try { await MC.api.post('/api/devices/' + encodeURIComponent(id) + '/rename', { name }); dv.editing = null; dv.note = null; }
+    catch(err){ dv.editing = null; dv.note = { kind: 'warn', text: 'Could not rename: ' + dvErr(err) }; }
+    await dvLoad();
+  } else if(act === 'remove'){
+    dv.editing.busy = true;
+    try { await MC.api.post('/api/devices/' + encodeURIComponent(id) + '/remove', {}); dv.editing = null; dv.note = null; }
+    catch(err){ dv.editing = null; dv.note = { kind: 'warn', text: 'Could not remove: ' + dvErr(err) }; }
+    await dvLoad();
+  }
+});
+document.addEventListener('keydown', e => {
+  const inp = e.target.closest && e.target.closest('[data-dv-in]');
+  if(!inp) return;
+  if(e.key === 'Enter'){ e.preventDefault(); const s = document.querySelector('button[data-dv="save"]'); if(s) s.click(); }
+  else if(e.key === 'Escape'){ dv.editing = null; dvDrawList(true); }
+});
+
+dvLoad();
+setInterval(dvTick, 1000);
+setInterval(() => { if(!document.hidden && !dv.editing) dvLoad(); }, 15000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden) dvLoad(); });
+
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+.venv/
+data/
+runs/
+cache/
+tmp/
+models/
+tools/
+src/
+__pycache__/
+*.pyc
+*.onnx
+*.log
+logs/
+clips/

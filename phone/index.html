@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Mission Control</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <header class="brand">
+        <svg class="eye" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="12" fill="none" stroke="#5a6478" stroke-width="2.4" />
+          <circle cx="16" cy="16" r="8" fill="#d6473c" />
+          <circle cx="16" cy="16" r="3" fill="#ffe9d6" />
+        </svg>
+        <span class="brand-name">Mission Control</span>
+      </header>
+
+      <section id="view-loading" class="view" hidden>
+        <p class="lead" role="status">Starting.</p>
+      </section>
+
+      <section id="view-enter" class="view" hidden>
+        <h1>Connecting<span id="enter-pc"></span></h1>
+        <p class="lead" role="status">Opening your PC. This takes a few seconds.</p>
+      </section>
+
+      <section id="view-pair" class="view" hidden>
+        <h1>Pair with <em>your PC</em></h1>
+        <p id="pair-note" class="note" hidden></p>
+        <p class="lead">On your PC, open Mission Control, go to Connections and choose Pair a phone. Then scan the QR code, or paste the pairing text.</p>
+
+        <label for="name">Name for this phone</label>
+        <input id="name" type="text" maxlength="40" autocomplete="off" spellcheck="false" value="Phone" />
+
+        <button id="scan" class="primary" type="button" hidden>Scan QR code</button>
+
+        <label for="paste">Pairing text</label>
+        <textarea id="paste" rows="3" placeholder="missioncontrol-pair:..." autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+        <button id="pair" class="secondary" type="button" disabled>Pair</button>
+
+        <div id="confirm" class="confirm" role="alertdialog" aria-labelledby="confirm-text" hidden>
+          <p id="confirm-text"></p>
+          <div class="row">
+            <button id="replace" class="primary" type="button">Replace</button>
+            <button id="cancel" class="quiet" type="button">Cancel</button>
+          </div>
+        </div>
+
+        <p id="pair-error" class="error" role="alert" hidden></p>
+
+        <div id="known" class="known" hidden>
+          <p>This phone is set up with <b id="known-name"></b>.</p>
+          <div class="row">
+            <button id="back" class="secondary" type="button">Back to my PC</button>
+            <button id="forget" class="quiet" type="button">Forget this PC</button>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

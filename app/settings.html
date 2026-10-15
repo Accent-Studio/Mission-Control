@@ -1,0 +1,888 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings // Mission Control</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="redline.css">
+<link rel="stylesheet" href="md.css">
+<style>
+.grp{grid-column:1/-1;display:flex;align-items:baseline;gap:14px;margin-top:6px}
+.grp h2{font-weight:700;font-size:20px;letter-spacing:.14em;text-transform:uppercase}
+.grp span{font-family:var(--mono);font-size:11px;color:var(--w3)}
+.grp .line{flex:1;border-top:1px solid var(--line-2);transform:translateY(-4px)}
+.card{--c:14px;display:flex;flex-direction:column}
+.card .top{flex-wrap:wrap;display:flex;gap:12px;align-items:center;padding:12px 14px 6px}
+.card .logo{width:40px;height:40px;flex:none;border:1px solid var(--line);display:grid;place-items:center;font:700 15px var(--sans);letter-spacing:.04em;clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px)}
+.card .logo.red{background:var(--red);border-color:var(--red)}
+.card .logo.wh{background:var(--white);color:#0b0b0d}
+.card .nm b{display:block;font-size:19px;letter-spacing:.04em;line-height:1}
+.card .nm small{font-family:var(--mono);font-size:10px;color:var(--w3)}
+.card .top .chip{margin-left:auto}
+.card .nm small{display:none}
+.card .mid{padding:4px 14px 8px;font-size:14px;color:var(--w2);font-weight:500;line-height:1.3;min-height:38px}
+.card .use{padding:0 14px 8px}
+.card .use .lb{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--w3);margin-bottom:4px}
+.card .key{display:flex;align-items:center;gap:8px;margin:0 14px 8px;padding:6px 8px;border:1px dashed var(--line-2);font-family:var(--mono);font-size:10.5px;color:var(--w2)}
+.card .key svg{width:12px;height:12px}
+.card .tg{display:flex;gap:14px;flex-wrap:wrap;padding:0 14px 10px}
+.card .btns{display:flex;gap:6px;padding:8px 14px 12px;border-top:1px solid var(--line-2);margin-top:auto}
+.card.off{opacity:.62}
+.dim{font-family:var(--mono);font-size:11px;color:var(--w3);padding:14px 16px;line-height:1.5}
+.card .key code{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--white);font-family:var(--mono)}
+.card .res{padding:0 14px 8px;font-family:var(--mono);font-size:10.5px;color:var(--w2);display:flex;gap:6px;align-items:center;min-height:14px}
+.card .res svg{width:11px;height:11px;flex:none}
+.card .btns a.act{text-decoration:none}
+.howto{font-size:13px;color:var(--w2);padding:12px 16px;line-height:1.5}
+.howto code{font-family:var(--mono);color:var(--white)}
+.tbl td.wrap{white-space:normal}
+.act .soon{color:#fff;border-color:rgba(255,255,255,.5)}
+.soon{font:600 9.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;border:1px dashed var(--line-2);color:var(--w3);padding:1px 5px;margin-left:6px}
+.card .vr{display:flex;flex-direction:column;gap:4px}
+.card .facts{padding:0 14px 8px;font-family:var(--mono);font-size:11px;color:var(--w2);display:grid;gap:3px}
+.card .facts b{color:var(--white);font-weight:600}
+.act:disabled{opacity:.5;cursor:default;pointer-events:none}
+/* devices */
+.dv-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:4px 18px 12px}
+.dv-top .why{font-size:13px;color:var(--w2)}
+.dv-top .ver{font-family:var(--mono);font-size:11px;color:var(--w3)}
+.dv-top .push{margin-left:auto;display:flex;align-items:center;gap:10px}
+.dv-pairbtn:disabled{pointer-events:auto;cursor:not-allowed}
+.dv-pairbtn:disabled:hover{background:var(--red);color:#fff}
+.dv-note{display:flex;align-items:center;gap:10px;padding:0 18px 12px;font-size:13px;color:var(--w2)}
+.dv-note[hidden]{display:none}
+.dv-pair:not([hidden]) + #dvList{border-top:1px solid var(--line-3)}
+.dv-pair{display:flex;gap:32px;flex-wrap:wrap;align-items:center;padding:18px;border-top:1px solid var(--line-3)}
+.dv-pair[hidden]{display:none}
+.dv-qr{display:flex;flex-direction:column;align-items:center;gap:12px}
+.dv-qrbox{display:block;background:var(--white);line-height:0}
+.dv-qrbox svg{display:block}
+.dv-code{font:500 24px var(--mono);letter-spacing:.24em;padding-left:.24em;color:var(--white);user-select:all}
+.dv-side{display:flex;flex-direction:column;gap:12px;flex:1;min-width:240px;max-width:460px}
+.dv-side p{font-size:14px;color:var(--w2);line-height:1.5}
+.dv-side .left{font-size:13px;color:var(--w2)}
+.dv-side .left b{font-family:var(--mono);font-weight:600;color:var(--white)}
+.dv-btns{display:flex;gap:8px;flex-wrap:wrap}
+.dv-in{width:220px;max-width:100%;background:rgba(0,0,0,.18);border:1px solid var(--line);color:var(--white);font:500 14px var(--sans);padding:4px 8px;outline:none}
+.dv-in:focus{border-color:var(--white)}
+.dv-ask{color:var(--w2);font-size:13px;margin-right:8px}
+.tbl td.dv-act{text-align:right}
+.tbl td.dv-act .act{margin-left:6px}
+/* wake words */
+.wk-form{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;padding:4px 18px 12px}
+.wk-f{display:flex;flex-direction:column;gap:5px;min-width:0}
+.wk-f > label,.wk-lb{font-size:12px;font-weight:600;color:var(--w3)}
+.wk-in{background:rgba(0,0,0,.18);border:1px solid var(--line);color:var(--white);font:500 14px var(--sans);padding:0 10px;height:36px;outline:none;min-width:0}
+.wk-in:focus{border-color:var(--white)}
+.wk-in[aria-invalid="true"]{border-color:var(--red-2)}
+.wk-in:disabled,.wk-sel:disabled{opacity:.55}
+.wk-phrase{width:300px;max-width:100%}
+.wk-sel{background:#0e1622;border:1px solid var(--line);color:var(--white);font:500 14px var(--sans);padding:0 10px;height:36px;outline:none}
+.wk-sel:focus{border-color:var(--white)}
+.wk-go{display:flex;gap:8px;align-items:center}
+.wk-bad{padding:0 18px 8px;font-size:13px;color:var(--red-2);display:flex;gap:8px;align-items:center}
+.wk-bad[hidden]{display:none}
+.wk-bad svg{width:12px;height:12px;flex:none}
+.wk-est{padding:0 18px 12px;font-size:12px;color:var(--w3)}
+.wk-cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:0;border-top:1px solid var(--line-3)}
+.wk-col{padding:14px 18px 16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.wk-col + .wk-col{border-left:1px solid var(--line-3)}
+.wk-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.wk-hd h4{font-family:var(--head);font-weight:700;font-size:15px;letter-spacing:.1em;text-transform:uppercase}
+.wk-hd .chip{margin-left:auto}
+.wk-chips{display:flex;gap:6px;flex-wrap:wrap;min-height:30px}
+.wk-chip{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--field-line);padding:2px 2px 2px 10px;font-size:13px;font-weight:500}
+.wk-chip button{background:transparent;border:0;color:var(--w2);cursor:pointer;width:24px;height:22px;display:grid;place-items:center}
+.wk-chip button:hover{color:var(--white)}
+.wk-chip button svg{width:9px;height:9px}
+.wk-chip button svg path{stroke:currentColor}
+.wk-add{display:flex;gap:8px}
+.wk-add .wk-in{flex:1;max-width:260px}
+.wk-rec{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.wk-meter{flex:1;min-width:140px;max-width:320px;height:10px;border:1px solid var(--line-2);position:relative;background:rgba(0,0,0,.18)}
+.wk-meter i{position:absolute;inset:0 auto 0 0;width:0;background:var(--white)}
+.wk-rec .t{font:500 12px var(--mono);color:var(--w2);min-width:130px}
+.wk-clips{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px;max-height:210px;overflow-y:auto;padding-right:4px}
+.wk-clip{display:flex;align-items:center;gap:4px;border:1px solid var(--line-2);padding:2px 2px 2px 8px;font:500 12px var(--mono);color:var(--w2)}
+.wk-clip b{font-weight:500;flex:1}
+.wk-clip button{background:transparent;border:0;color:var(--w2);cursor:pointer;width:24px;height:24px;display:grid;place-items:center}
+.wk-clip button:hover:not(:disabled){color:var(--white);background:rgba(220,231,243,.08)}
+.wk-clip button:disabled{opacity:.4;cursor:default}
+.wk-clip button svg{width:11px;height:11px}
+.wk-clip.playing{border-color:var(--white);color:var(--white)}
+.wk-note{font-size:13px;color:var(--w2);display:flex;gap:10px;align-items:center}
+.wk-note[hidden]{display:none}
+.wk-run{border-top:1px solid var(--line-3);padding:14px 18px 16px;display:flex;flex-direction:column;gap:12px}
+.wk-run[hidden]{display:none}
+.wk-rt{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:14px}
+.wk-rt b{font-weight:600}
+.wk-rt .el{font:500 12px var(--mono);color:var(--w2)}
+.wk-rt .push{margin-left:auto;display:flex;gap:8px;align-items:center}
+.wk-st{display:grid;grid-template-columns:minmax(150px,200px) 24px minmax(0,1fr) 64px;gap:6px 12px;align-items:center;max-width:760px}
+.wk-st .nm{font-size:13px;font-weight:500;color:var(--w2)}
+.wk-st .nm.on{color:var(--white);font-weight:600}
+.wk-st .ic{width:14px;height:14px;display:grid;place-items:center;color:var(--w2)}
+.wk-st .ic svg{width:11px;height:11px}
+.wk-st .pc{font:500 12px var(--mono);color:var(--w2);text-align:right}
+.wk-st .bar{height:6px}
+.wk-msg{font:400 12px var(--mono);color:var(--w3);overflow-wrap:anywhere}
+.wk-res{font-size:14px;color:var(--white);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.wk-res code{font:500 12px var(--mono);color:var(--w2)}
+.wk-tbl td.act-c{text-align:right}
+.wk-tbl td.act-c .act{margin-left:6px}
+@media (max-width:1100px){.wk-cols{grid-template-columns:1fr}.wk-col + .wk-col{border-left:0;border-top:1px solid var(--line-3)}}
+.st-rows{padding:2px 18px 14px}
+.st-row{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:11px 0;border-top:1px solid var(--line-2)}
+.st-row:first-child{border-top:0}
+.st-row .st-t{min-width:0}
+.st-row .st-t b{display:block;font-size:14px;font-weight:600;color:var(--white)}
+.st-row .st-t small{display:block;font-size:12px;color:var(--w3);margin-top:3px;line-height:1.45}
+.st-row .st-c{flex:none;display:flex;align-items:center;gap:8px}
+.st-sel{background:rgba(0,0,0,.18);border:1px solid var(--line);color:var(--white);font:500 13.5px var(--sans);height:34px;padding:0 8px;min-width:170px;outline:none}
+.st-sel:focus{border-color:var(--white)}
+.st-sel option{background:#0d1622;color:var(--white)}
+.st-num{width:84px;text-align:right}
+.st-name{width:200px}
+.st-unit{font-size:12px;color:var(--w3)}
+.st-mem{width:100%;min-height:180px;resize:vertical;background:rgba(0,0,0,.18);border:1px solid var(--line);color:var(--white);font:500 13px/1.55 var(--mono);padding:10px 12px;outline:none}
+.st-mem:focus{border-color:var(--white)}
+.st-memb{display:flex;gap:10px;align-items:center;margin-top:10px}
+.st-saved{font-size:12px;color:var(--w3)}
+.st-err{font-size:12.5px;color:#ff8a80;padding:0 18px 12px}
+@media (max-width:640px){.st-row{flex-direction:column;align-items:stretch}.st-row .st-c{justify-content:flex-start}}
+/* reading style: the text size switch and the theme cards (the sample inside a card is a real .md block) */
+.md-seg{display:flex;gap:2px;border:1px solid var(--line-2);padding:3px;background:rgba(12,19,29,.5)}
+.md-seg button{background:transparent;border:0;color:var(--w2);font:600 13px var(--sans);min-width:76px;height:30px;padding:0 12px;cursor:pointer}
+.md-seg button:hover{color:var(--white)}
+.md-seg button[aria-checked="true"]{background:var(--white);color:var(--bg)}
+.md-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,310px),1fr));gap:12px;padding:6px 18px 18px}
+.md-card{display:flex;flex-direction:column;min-width:0;border:1px solid var(--line-2);background:rgba(0,0,0,.14);cursor:pointer}
+.md-card:hover{border-color:var(--line)}
+.md-card:focus-visible{outline:2px solid var(--white);outline-offset:2px}
+.md-card[aria-checked="true"]{border-color:var(--white);box-shadow:inset 0 0 0 1px var(--white)}
+.md-card .nm{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line-2);font:600 14px var(--sans);color:var(--white)}
+.md-card .pick{display:inline-flex;align-items:center;gap:6px;font:600 12px var(--sans);color:var(--w3)}
+.md-card .pick svg{width:12px;height:12px}
+.md-card[aria-checked="true"] .pick{color:var(--white)}
+.md-card .md{--md-base-size:13px;padding:12px 14px 14px;flex:1}
+.md-card .md a{pointer-events:none}
+</style>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="bgfx" aria-hidden="true"></div>
+<div class="app">
+  <nav class="rail" aria-label="Main"></nav>
+    <header class="page">
+      <div class="ruler" aria-hidden="true"></div>
+      <div class="hd">
+        <div><h1>Set<em>tings</em></h1><div class="sub" id="sub">Com Link, voice, wake words and archived projects</div></div>
+              </div>
+    </header>
+
+  <main class="main">
+
+    <div class="grp" id="comlink"><h2>Com Link</h2><i class="line"></i></div>
+    <section class="fr span-12" aria-label="How the Com Link works">
+      <div class="ttl"><h3>Brain</h3></div>
+      <div class="st-rows">
+        <div class="st-row"><div class="st-t"><b>Name</b><small>What the assistant is called on every page.</small></div><div class="st-c"><input class="wk-in st-name" type="text" maxlength="24" data-set="comlinkName" data-kind="text" aria-label="Assistant name"></div></div>
+        <div class="st-row"><div class="st-t"><b>Model</b><small>Who answers in the Com Link. Haiku is the fastest and cheapest.</small></div><div class="st-c"><select class="st-sel" data-set="comlinkModel" aria-label="Model"><option value="">Newest Haiku</option></select></div></div>
+        <div class="st-row"><div class="st-t"><b>Effort</b><small>How hard it thinks before it answers. More effort is slower.</small></div><div class="st-c"><select class="st-sel" data-set="comlinkEffort" aria-label="Effort"><option value="default">Model default</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Max</option></select></div></div>
+        <div class="st-row"><div class="st-t"><b>Permissions</b><small>Auto runs safe commands without asking. Ask first asks before every command.</small></div><div class="st-c"><select class="st-sel" data-set="comlinkMode" aria-label="Permissions"><option value="auto">Auto</option><option value="default">Ask first</option><option value="acceptEdits">Accept edits</option><option value="plan">Plan only</option></select></div></div>
+        <div class="st-row"><div class="st-t"><b>Personality</b><small>On: it follows its persona prompt (.data/comlink-prompt.md) and keeps its own memory. Off: plain Claude.</small></div><div class="st-c"><span class="tog" role="switch" tabindex="0" aria-checked="false" data-set="comlinkPersona"><i></i><span>Persona</span></span></div></div>
+      </div>
+      <div class="st-err" data-err="brain" role="alert" hidden></div>
+    </section>
+    <section class="fr span-12" aria-label="Listening">
+      <div class="ttl"><h3>Listening</h3></div>
+      <div class="st-rows">
+        <div class="st-row"><div class="st-t"><b>Listen again after an answer</b><small>When the answer has been read aloud, the mic opens again for your next question.</small></div><div class="st-c"><span class="tog" role="switch" tabindex="0" aria-checked="false" data-set="autoListen"><i></i><span>Listen again</span></span></div></div>
+        <div class="st-row"><div class="st-t"><b>Stop listening after silence</b><small>If you say nothing for this long, the mic closes. The conversation stays.</small></div><div class="st-c"><input class="wk-in st-num" type="number" min="5" max="600" step="1" data-set="listenSilenceSec" aria-label="Seconds of silence"><span class="st-unit">seconds</span></div></div>
+        <div class="st-row"><div class="st-t"><b>Hide the panel after</b><small>The conversation panel hides this long after the answer. 0 keeps it open. Hiding never ends the conversation.</small></div><div class="st-c"><input class="wk-in st-num" type="number" min="0" max="3600" step="1" data-set="hidePanelSec" aria-label="Seconds before the panel hides"><span class="st-unit">seconds</span></div></div>
+      </div>
+      <div class="st-err" data-err="listen" role="alert" hidden></div>
+    </section>
+    <section class="fr span-12" aria-label="Memory">
+      <div class="ttl"><h3>Memory</h3><span class="cnt" id="memCnt"></span></div>
+      <div class="st-rows">
+        <div class="st-t" style="margin-bottom:10px"><small>What the assistant remembers about you, one line each. It adds to it by itself. You can edit or delete lines here.</small></div>
+        <textarea class="st-mem" id="mem" spellcheck="false" aria-label="Memory"></textarea>
+        <div class="st-memb"><button type="button" class="act red" id="memSave">Save memory</button><span class="st-saved" id="memSaved" role="status"></span></div>
+      </div>
+    </section>
+
+    <div class="grp" id="talk"><h2>Talk page</h2><i class="line"></i></div>
+    <section class="fr span-12" aria-label="Talk page">
+      <div class="st-rows">
+        <div class="st-row"><div class="st-t"><b>Read replies aloud</b><small>On the Talk page, Claude's answers are spoken. The Com Link always speaks.</small></div><div class="st-c"><span class="tog" role="switch" tabindex="0" aria-checked="false" data-set="readAloud"><i></i><span>Read aloud</span></span></div></div>
+        <div class="st-row"><div class="st-t"><b>Clean up dictation</b><small>BlitzVoice tidies what you dictate on the Talk page before it is sent.</small></div><div class="st-c"><span class="tog" role="switch" tabindex="0" aria-checked="false" data-set="cleanup"><i></i><span>Cleanup</span></span></div></div>
+      </div>
+    </section>
+
+    <div class="grp" id="claude"><h2>Claude</h2><i class="line"></i></div>
+    <section class="fr span-12" aria-label="Claude">
+      <div class="st-rows">
+        <div class="st-row"><div class="st-t"><b>Show on claude.ai</b><small>Conversations started here also appear on claude.ai and in the Claude phone app, where you can continue them. While connected, the conversation is stored on claude.ai too.</small></div><div class="st-c"><span class="tog" role="switch" tabindex="0" aria-checked="false" data-set="remoteControl"><i></i><span>Show on claude.ai</span></span></div></div>
+      </div>
+    </section>
+
+    <div class="grp" id="reading"><h2>Reading</h2><i class="line"></i></div>
+    <section class="fr span-12" aria-label="Markdown reading style">
+      <div class="ttl"><h3>Markdown style</h3></div>
+      <div class="st-rows">
+        <div class="st-row"><div class="st-t"><b>Text size</b><small>How big the text is in Claude's answers. A larger size helps on a phone.</small></div><div class="st-c"><div class="md-seg" id="mdSize" role="radiogroup" aria-label="Text size"></div></div></div>
+        <div class="st-row"><div class="st-t"><b>Theme</b><small>Colors and fonts for Claude's answers on the Talk page and in the project Sessions and Docs tabs. Kept in this browser.</small></div></div>
+      </div>
+      <div class="md-grid" id="mdGrid" role="radiogroup" aria-label="Theme"></div>
+    </section>
+
+    <div class="grp pc-only" id="spoken"><h2>Spoken commands</h2><i class="line"></i></div>
+    <section class="fr span-12 pc-only" id="spPhr" aria-label="Spoken commands">
+      <div class="ttl"><h3>Spoken commands</h3></div>
+      <div class="wk-form">
+        <div class="wk-f"><label for="spSend">Send phrase</label><input class="wk-in wk-phrase" id="spSend" data-key="sendPhrase" maxlength="250" autocomplete="off" spellcheck="false" aria-describedby="spHint spBad"></div>
+        <div class="wk-f"><label for="spCancel">Cancel phrase</label><input class="wk-in wk-phrase" id="spCancel" data-key="cancelPhrase" maxlength="250" autocomplete="off" spellcheck="false" aria-describedby="spHint spBad"></div>
+        <div class="wk-f"><label for="spRewrite">Start over phrase</label><input class="wk-in wk-phrase" id="spRewrite" data-key="rewritePhrase" maxlength="250" autocomplete="off" spellcheck="false" aria-describedby="spHint spBad"></div>
+        <div class="wk-f"><label for="spEnd">End conversation phrase</label><input class="wk-in wk-phrase" id="spEnd" data-key="endPhrase" maxlength="250" autocomplete="off" spellcheck="false" aria-describedby="spHint spBad"></div>
+      </div>
+      <div class="wk-est" id="spHint">Say it at the end. Add variations separated by commas, like "send message, send it now". Small words (a, an, the) are ignored, so "send a message" already counts as "send message".</div>
+      <div class="wk-bad" id="spBad" role="alert" hidden></div>
+      <div class="wk-bad" id="spWarn" role="status" style="color:var(--w2)" hidden></div>
+    </section>
+
+    <div class="grp pc-only" id="wake"><h2>Wake words</h2><i class="line"></i></div>
+    <div class="wk-note span-12 pc-only" id="wkNote" role="status" hidden></div>
+    <section class="fr span-12 pc-only" id="wkTrain" aria-label="Train a wake word">
+      <div class="ttl"><h3>Train a wake word</h3></div>
+      <div class="wk-form">
+        <div class="wk-f"><label for="wkPhrase">Phrase</label><input class="wk-in wk-phrase" id="wkPhrase" maxlength="40" placeholder="hey mission control" autocomplete="off" spellcheck="false"></div>
+        <div class="wk-f"><label for="wkPreset">Size</label><select class="wk-sel" id="wkPreset"><option value="quick">Quick, about 15 min</option><option value="standard" selected>Standard, about 45 min</option><option value="thorough">Thorough, about 2h</option></select></div>
+        <div class="wk-go" id="wkGo"></div>
+      </div>
+      <div class="wk-bad" id="wkBad" role="alert" hidden></div>
+      <div class="wk-est">Times are estimates from past runs on this PC.</div>
+      <div class="wk-cols">
+        <div class="wk-col">
+          <div class="wk-hd"><h4>Near misses</h4></div>
+          <div class="wk-lb">Sound-alikes the model must ignore</div>
+          <div class="wk-chips" id="wkChips"></div>
+          <div class="wk-add"><input class="wk-in" id="wkNegIn" maxlength="40" placeholder="Add a sound-alike" aria-label="Add a near miss" autocomplete="off" spellcheck="false"><button class="act" id="wkNegAdd" type="button">Add</button></div>
+        </div>
+        <div class="wk-col">
+          <div class="wk-hd"><h4>Your voice</h4><span id="wkCount"></span></div>
+          <div class="wk-rec">
+            <button class="act red big" id="wkRec" type="button">Record</button>
+            <div class="wk-meter" aria-hidden="true"><i id="wkMeter"></i></div>
+            <span class="t" id="wkRecT" role="status"></span>
+          </div>
+          <div class="wk-clips" id="wkClips"></div>
+        </div>
+      </div>
+      <div class="wk-run" id="wkRun" aria-live="polite" hidden></div>
+    </section>
+
+    <section class="fr span-12 pc-only" id="wkModels" aria-label="Wake word models">
+      <div class="ttl"><h3>Models</h3><span class="cnt" id="wkLink"></span></div>
+      <div id="wkList"><div class="dim">Loading models</div></div>
+    </section>
+
+    <div class="grp" id="archived"><h2>Archived projects</h2><i class="line"></i></div>
+    <section class="fr span-12" aria-label="Archived projects">
+      <div class="st-rows" id="arcList"><div class="dim">Loading</div></div>
+    </section>
+  </main>
+</div>
+
+<script src="api.js"></script>
+<script src="md.js"></script>
+<script src="redline.js"></script>
+<script>
+MC.init('set');
+const $ = id => document.getElementById(id);
+const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- Archived projects: the ones left off Home, the title bar and the lists (Settings tab of a project, Archive) ---------- */
+(function arcInit(){
+  const box = $('arcList');
+  async function load(){
+    try {
+      const list = ((await MC.api.get('/api/projects?all=1')).projects || []).filter(p => p.hidden).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      box.innerHTML = list.length ? list.map(p => `<div class="st-row"><div class="st-t"><b>${esc(p.name || p.id)}</b><small>${esc(p.folder || '')}</small></div><div class="st-c" style="display:flex;gap:8px"><a class="act" href="project.html?id=${encodeURIComponent(p.id)}">Open</a><button type="button" class="act pc-only" data-unarc="${esc(p.id)}">Bring back</button></div></div>`).join('')
+        : '<div class="st-row"><div class="st-t"><small>No archived projects. To archive one, open its page, then Settings, Archive this project.</small></div></div>';
+    } catch(e){ box.innerHTML = '<div class="st-row"><div class="st-t"><small>Could not list them: ' + esc(e.message) + '</small></div></div>'; }
+    MC.drawFrames();
+  }
+  box.addEventListener('click', async e => {
+    const b = e.target.closest('[data-unarc]'); if(!b || b.disabled) return;
+    b.disabled = true; b.textContent = 'Bringing back...';
+    try {
+      const res = await fetch('/api/projects/' + encodeURIComponent(b.dataset.unarc) + '/settings', { method:'PUT', headers:{ 'X-MC':'1', 'Content-Type':'application/json' }, body: JSON.stringify({ hidden:false }) });
+      if(!res.ok){ const d = await res.json().catch(() => ({})); throw new Error(d.error || 'HTTP ' + res.status); }
+      load();
+    } catch(err){ b.disabled = false; b.textContent = 'Bring back'; b.title = 'Not saved: ' + err.message; }
+  });
+  MC.events.on('projects.changed', load);
+  load();
+})();
+
+/* ---------- The Com Link and the Talk page: settings kept by the server (MC.voicePrefs) ---------- */
+(function stInit(){
+  const P = MC.voicePrefs;
+  const ERR = { comlinkName:'brain', comlinkModel:'brain', comlinkEffort:'brain', comlinkMode:'brain', comlinkPersona:'brain', listenSilenceSec:'listen', hidePanelSec:'listen' };
+  function say(key, msg){
+    const box = document.querySelector('[data-err="' + (ERR[key] || 'listen') + '"]'); if(!box) return;
+    box.hidden = !msg; box.textContent = msg || '';
+  }
+  function show(){
+    document.querySelectorAll('[data-set]').forEach(el => {
+      const k = el.dataset.set, v = P[k];
+      if(el.classList.contains('tog')){ el.classList.toggle('on', !!v); el.setAttribute('aria-checked', v ? 'true' : 'false'); }
+      else if(document.activeElement !== el) el.value = v == null ? '' : String(v);
+    });
+  }
+  async function save(k, v){
+    say(k, '');
+    try { await P.set(k, v); }
+    catch(e){ const m = String((e && e.message) || 'Could not save').replace(/^\w+ /, 'This value '); say(k, m.charAt(0).toUpperCase() + m.slice(1) + '.'); }
+    show();
+  }
+  document.querySelectorAll('[data-set]').forEach(el => {
+    const k = el.dataset.set;
+    if(el.classList.contains('tog')){
+      const flip = () => save(k, !P[k]);
+      el.addEventListener('click', flip);
+      el.addEventListener('keydown', e => { if(e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); flip(); } });
+    } else if(el.tagName === 'SELECT'){
+      el.addEventListener('change', () => save(k, el.value));
+    } else if(el.dataset.kind === 'text'){
+      const go = () => { const v = el.value.trim(); if(!v){ show(); return; } if(v !== P[k]) save(k, v); };
+      el.addEventListener('change', go);
+      el.addEventListener('keydown', e => { if(e.key === 'Enter') el.blur(); });
+    } else {
+      const go = () => { const n = Math.round(Number(el.value)); if(!isFinite(n) || String(el.value).trim() === ''){ show(); return; } if(n !== P[k]) save(k, n); };
+      el.addEventListener('change', go);
+      el.addEventListener('keydown', e => { if(e.key === 'Enter') el.blur(); });
+    }
+  });
+  /* the model list: the models the Claude app offers, newest first */
+  MC.api.get('/api/chat/options').then(o => {
+    const sel = document.querySelector('[data-set="comlinkModel"]');
+    ((o && o.models) || []).filter(m => !m.disabled).forEach(m => {
+      const op = document.createElement('option'); op.value = m.id; op.textContent = m.label || m.id; sel.appendChild(op);
+    });
+    if(P.comlinkModel && !Array.from(sel.options).some(x => x.value === P.comlinkModel)){
+      const op = document.createElement('option'); op.value = P.comlinkModel; op.textContent = P.comlinkModel; sel.appendChild(op);
+    }
+    show();
+  }).catch(() => {});
+  P.on(show);
+  if(P.ready) P.ready.then(show);
+  show();
+
+  /* the assistant's memory */
+  const mem = $('mem'), saved = $('memSaved');
+  let memMax = 8000;
+  const count = () => { $('memCnt').textContent = mem.value.trim() ? mem.value.trim().split(/\n/).filter(l => l.trim()).length + ' lines' : 'Empty'; };
+  function loadMem(){
+    MC.api.get('/api/voice/memory').then(m => { if(document.activeElement !== mem){ mem.value = (m && m.text) || ''; } memMax = (m && m.max) || memMax; count(); }).catch(() => { saved.textContent = 'Could not load the memory.'; });
+  }
+  mem.addEventListener('input', () => { count(); saved.textContent = 'Not saved yet'; });
+  $('memSave').addEventListener('click', async () => {
+    saved.textContent = 'Saving';
+    try { const m = await MC.api.put('/api/voice/memory', { text: mem.value }); mem.value = m.text || ''; count(); saved.textContent = 'Saved'; }
+    catch(e){ saved.textContent = 'Could not save. ' + ((e && e.message) || ''); }
+  });
+  loadMem();
+  document.addEventListener('visibilitychange', () => { if(!document.hidden && saved.textContent !== 'Not saved yet') loadMem(); });
+})();
+
+/* ---------- Reading: markdown theme and text size (MC.mdStyle in md.js, kept per browser, applied live) ---------- */
+(function rdInit(){
+  const S = MC.mdStyle;
+  if(!S) return;
+  const SAMPLE = '# Heading 1\n## Heading 2\n### Heading 3\n#### Heading 4\n##### Heading 5\n###### Heading 6\n\nA paragraph with **bold**, *italic*, a [link](https://example.com) and `inline code`.\n\n- First item\n- Second item\n\n```js\nconst answer = 42;\n```\n\n> A quote from the notes.';
+  const tick = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5l3 3 5-6.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+  const grid = $('mdGrid'), seg = $('mdSize');
+  S.loadAllFonts(); // the previews need every theme's font; other pages load only the chosen one
+  grid.innerHTML = S.themes.map(t => '<div class="md-card md-prev" role="radio" tabindex="0" data-id="' + t.id + '" data-md-theme="' + t.id + '" aria-label="' + esc(t.name) + '"><div class="nm"><b>' + esc(t.name) + '</b><span class="pick"></span></div><div class="md">' + MC.md(SAMPLE) + '</div></div>').join('');
+  seg.innerHTML = S.sizes.map(z => '<button type="button" role="radio" data-size="' + z.id + '">' + esc(z.name) + '</button>').join('');
+  function draw(){
+    grid.querySelectorAll('.md-card').forEach(c => {
+      const on = c.dataset.id === S.theme;
+      c.setAttribute('aria-checked', on ? 'true' : 'false');
+      c.querySelector('.pick').innerHTML = on ? tick + 'Selected' : 'Choose';
+    });
+    seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-checked', b.dataset.size === S.size ? 'true' : 'false'));
+  }
+  grid.addEventListener('click', e => { const c = e.target.closest('.md-card'); if(c) S.setTheme(c.dataset.id); });
+  grid.addEventListener('keydown', e => {
+    const c = e.target.closest('.md-card'); if(!c) return;
+    if(e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); S.setTheme(c.dataset.id); }
+  });
+  seg.addEventListener('click', e => { const b = e.target.closest('button[data-size]'); if(b) S.setSize(b.dataset.size); });
+  S.on(draw);
+  draw();
+})();
+
+/* ---------- Wake words: train a model, record your voice, install it into BlitzVoice ---------- */
+const wk = {
+  presets: { quick: 15, standard: 45, thorough: 120 },
+  stages: ['generate', 'augment', 'features', 'train', 'export', 'verify'],
+  target: 30,
+  maxNeg: 12,
+  train: null,       // the server's training state (also pushed as 'waketrain' events)
+  models: null,      // answer of GET /api/waketrain/models
+  clips: [],         // clips of the phrase in the box
+  slug: '',
+  phrase: '',
+  neg: [],           // near-miss chips for the phrase in the box
+  rec: null,         // { level, t0, stop } while recording
+  busy: false,       // a request from a button is running
+  confirmStop: false,
+  playing: null,     // { name, audio }
+  note: null,
+  seq: 0,
+};
+const WK_STAGE = { generate: 'Generate voices', augment: 'Add noise and rooms', features: 'Extract features', train: 'Train', export: 'Export', verify: 'Verify' };
+const WK_REC_SECONDS = 2;
+const wkX = '<svg viewBox="0 0 10 10"><path d="M1 1L9 9M9 1L1 9" stroke-width="1.6" fill="none"/></svg>';
+const wkPlay = '<svg viewBox="0 0 12 12"><path d="M3 1.5L10 6L3 10.5Z" fill="currentColor"/></svg>';
+const wkStopI = '<svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" fill="currentColor"/></svg>';
+
+function wkEst(min){ return min >= 60 && min % 60 === 0 ? (min / 60) + 'h' : min + ' min'; }
+function wkTime(sec){
+  sec = Math.max(0, Math.round(sec));
+  if(sec < 60) return sec + 's';
+  const m = Math.floor(sec / 60), r = sec % 60;
+  return m + ' min' + (r ? ' ' + r + 's' : '');
+}
+/* the same rules as the server: letters, spaces and apostrophes, 2 to 40 characters */
+function wkClean(v){
+  const s = String(v == null ? '' : v).replace(/[‘’]/g, "'").replace(/ +/g, ' ').replace(/^ | $/g, '').toLowerCase();
+  if(s.length < 2 || s.length > 40 || !/^[a-z' ]+$/.test(s) || (s.match(/[a-z]/g) || []).length < 2) return null;
+  return s;
+}
+const wkSlug = p => String(p).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+function wkDefaults(phrase){
+  const rest = phrase.replace(/^(hey|hi|ok|okay|hello) +/, '');
+  return rest !== phrase && wkClean(rest) ? [rest] : [];
+}
+function wkStore(slug, list){
+  try {
+    if(list === undefined){ const j = localStorage.getItem('mc-wake-neg:' + slug); return j ? JSON.parse(j) : null; }
+    localStorage.setItem('mc-wake-neg:' + slug, JSON.stringify(list));
+  } catch(e){ /* storage may be blocked */ }
+  return null;
+}
+const wkLocked = () => !!(wk.train && wk.train.running && wk.slug && wk.train.slug === wk.slug);
+const wkRunning = () => !!(wk.train && wk.train.running);
+function wkSay(kind, text){
+  const n = wk.note = { kind, text };
+  wkDrawNote();
+  if(kind === 'ok') setTimeout(() => { if(wk.note === n){ wk.note = null; wkDrawNote(); } }, 8000);
+}
+function wkDrawNote(){
+  const el = $('wkNote');
+  if(!wk.note){ el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = MC.chip(wk.note.kind === 'ok' ? 'ok' : 'warn', esc(wk.note.text));
+}
+async function wkFetch(url, opts){
+  const res = await fetch(url, opts);
+  let j = null;
+  try { j = await res.json(); } catch(e){ j = null; }
+  if(!res.ok){ const err = new Error((j && (j.message || j.error)) || ('HTTP ' + res.status)); err.status = res.status; err.code = j && j.error; throw err; }
+  return j;
+}
+const wkJson = (method, body) => ({ method, headers: { 'X-MC': '1', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+/* ----- the phrase, near misses and the Train button ----- */
+function wkPhraseChanged(){
+  const raw = $('wkPhrase').value;
+  const phrase = wkClean(raw);
+  const bad = $('wkBad');
+  if(raw.trim() && !phrase){
+    $('wkPhrase').setAttribute('aria-invalid', 'true');
+    bad.hidden = false;
+    bad.innerHTML = MC.ic.warn + '<span>Use 2 to 40 characters: letters, spaces and apostrophes.</span>';
+  } else {
+    $('wkPhrase').removeAttribute('aria-invalid');
+    bad.hidden = true; bad.innerHTML = '';
+  }
+  const slug = phrase ? wkSlug(phrase) : '';
+  if(slug !== wk.slug){
+    wk.slug = slug; wk.phrase = phrase || '';
+    wk.neg = slug ? (wkStore(slug) || wkDefaults(phrase)) : [];
+    wk.clips = [];
+    if(slug){ try { localStorage.setItem('mc-wake-phrase', phrase); } catch(e){ /* ignore */ } }
+    wkLoadClips();
+  } else { wk.phrase = phrase || ''; }
+  wkDrawChips(); wkDrawGo(); wkDrawClips();
+}
+function wkDrawChips(){
+  const el = $('wkChips');
+  el.innerHTML = wk.neg.length
+    ? wk.neg.map((n, i) => '<span class="wk-chip">' + esc(n) + '<button type="button" data-wk="negdel" data-i="' + i + '" aria-label="Remove ' + esc(n) + '">' + wkX + '</button></span>').join('')
+    : '<span class="dim" style="padding:0">None yet.</span>';
+  $('wkNegAdd').disabled = !wk.slug || wk.neg.length >= wk.maxNeg;
+  $('wkNegIn').disabled = !wk.slug;
+}
+function wkNegAdd(){
+  const inp = $('wkNegIn');
+  if(!inp.value.trim()) return;
+  const n = wkClean(inp.value);
+  if(!n){ wkSay('warn', 'A near miss is 2 to 40 characters: letters, spaces and apostrophes.'); return; }
+  if(n === wk.phrase){ wkSay('warn', 'That is the wake phrase itself.'); return; }
+  if(wk.neg.length >= wk.maxNeg){ wkSay('warn', wk.maxNeg + ' is the most near misses.'); return; }
+  if(!wk.neg.includes(n)) wk.neg.push(n);
+  wkStore(wk.slug, wk.neg);
+  inp.value = '';
+  wkDrawChips();
+}
+function wkDrawGo(){
+  const run = wkRunning();
+  $('wkPhrase').disabled = run; $('wkPreset').disabled = run;
+  let h;
+  if(run){
+    h = wk.confirmStop
+      ? '<span class="dv-ask">Stop training? The work so far is lost.</span><button class="act red" data-wk="stopyes" type="button">Stop</button><button class="act ghost" data-wk="stopno" type="button">Keep going</button>'
+      : '<button class="act" data-wk="stop" type="button">' + wkStopI + 'Stop</button>';
+  } else {
+    h = '<button class="act red big" data-wk="start" type="button"' + (wk.phrase && !wk.busy ? '' : ' disabled') + '>Train</button>';
+  }
+  const el = $('wkGo');
+  if(el.dataset.html !== h){ el.dataset.html = h; el.innerHTML = h; }
+}
+
+/* ----- clips: record, list, play, delete ----- */
+async function wkLoadClips(){
+  const slug = wk.slug, mine = ++wk.seq;
+  if(!slug){ wk.clips = []; wkDrawClips(); return; }
+  try {
+    const r = await MC.api.get('/api/waketrain/clips/' + encodeURIComponent(slug));
+    if(mine !== wk.seq || slug !== wk.slug) return;
+    wk.clips = r.clips || [];
+  } catch(e){ if(mine !== wk.seq) return; wk.clips = []; }
+  wkDrawClips();
+}
+function wkDrawClips(){
+  const n = wk.clips.length;
+  $('wkCount').innerHTML = wk.slug ? (n >= wk.target ? MC.chip('ok', n + ' clips') : MC.chip('idle', n + ' of ' + wk.target)) : '';
+  const lock = wkLocked(), rec = !!wk.rec;
+  const b = $('wkRec');
+  b.disabled = !wk.slug || lock || (wk.busy && !rec);
+  b.innerHTML = rec ? wkStopI + 'Stop' : 'Record';
+  b.title = !wk.slug ? 'Type the phrase first' : lock ? 'Training is using these clips' : '';
+  $('wkClips').innerHTML = n
+    ? wk.clips.map(c => {
+        const num = c.name.replace(/^clip-|\.wav$/g, '');
+        const on = wk.playing && wk.playing.name === c.name;
+        return '<div class="wk-clip' + (on ? ' playing' : '') + '"><b>' + num.padStart(2, '0') + '</b><button type="button" data-wk="play" data-name="' + esc(c.name) + '" aria-label="' + (on ? 'Stop clip ' : 'Play clip ') + num + '">' + (on ? wkStopI : wkPlay) + '</button><button type="button" data-wk="clipdel" data-name="' + esc(c.name) + '" aria-label="Delete clip ' + num + '"' + (lock ? ' disabled' : '') + '>' + wkX + '</button></div>';
+      }).join('')
+    : '<div class="dim" style="padding:0;grid-column:1/-1">' + (wk.slug ? 'No recordings yet. Say the phrase when you press Record.' : 'Type the phrase to start recording.') + '</div>';
+}
+function wkPlayClip(name){
+  if(wk.playing){
+    const old = wk.playing; wk.playing = null;
+    try { old.audio.pause(); } catch(e){ /* ignore */ }
+    if(old.name === name){ wkDrawClips(); return; }
+  }
+  const audio = new Audio('/api/waketrain/clips/' + encodeURIComponent(wk.slug) + '/' + encodeURIComponent(name));
+  const me = wk.playing = { name, audio };
+  const done = () => { if(wk.playing === me){ wk.playing = null; wkDrawClips(); } };
+  audio.addEventListener('ended', done); audio.addEventListener('error', done);
+  audio.play().catch(done);
+  wkDrawClips();
+}
+async function wkDelClip(name){
+  try {
+    const r = await wkFetch('/api/waketrain/clips/' + encodeURIComponent(wk.slug) + '/' + encodeURIComponent(name) + '/delete', wkJson('POST', {}));
+    wk.clips = r.clips || [];
+  } catch(e){ wkSay('warn', 'Could not delete the clip: ' + e.message); }
+  wkDrawClips();
+}
+
+/* the WAV encoder, the 16kHz resampler and the capture processor are shared with the phone Com Link (MC.audio in redline.js) */
+const wkWav = MC.audio.wav, wkTo16k = MC.audio.to16k, WK_WORKLET = MC.audio.WORKLET;
+
+async function wkRecord(){
+  if(wk.rec){ wk.rec.stop(); return; }
+  if(!wk.slug || wkLocked() || wk.busy) return;
+  const slug = wk.slug;
+  let stream, ctx;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  } catch(e){ wkSay('warn', 'The microphone is blocked or missing. Allow it for this page and try again.'); return; }
+  try {
+    ctx = new AudioContext();
+    const url = URL.createObjectURL(new Blob([WK_WORKLET], { type: 'text/javascript' }));
+    await ctx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    const node = new AudioWorkletNode(ctx, 'wk-cap', { numberOfOutputs: 0 });
+    const chunks = []; let total = 0;
+    const need = Math.round(WK_REC_SECONDS * ctx.sampleRate);
+    const rec = wk.rec = { level: 0, t0: performance.now(), stopped: false, stop: () => finish() };
+    node.port.onmessage = e => {
+      const d = e.data; chunks.push(d); total += d.length;
+      let peak = 0; for(let i = 0; i < d.length; i++){ const a = Math.abs(d[i]); if(a > peak) peak = a; }
+      rec.level = Math.max(peak, rec.level * 0.8);
+      if(total >= need) finish();
+    };
+    ctx.createMediaStreamSource(stream).connect(node);
+    // A microphone that never delivers audio must not leave the button stuck on Stop.
+    setTimeout(() => finish(), (WK_REC_SECONDS + 2) * 1000);
+    wkDrawClips();
+    wkMeterLoop();
+    async function finish(){
+      if(rec.stopped) return;
+      rec.stopped = true;
+      const rate = ctx.sampleRate;
+      stream.getTracks().forEach(t => t.stop());
+      try { await ctx.close(); } catch(e){ /* ignore */ }
+      wk.rec = null; wk.busy = true; wkDrawClips();
+      try {
+        const all = new Float32Array(total); let o = 0; for(const c of chunks){ all.set(c, o); o += c.length; }
+        const mono = await wkTo16k(all.subarray(0, Math.min(all.length, need)), rate);
+        let peak = 0; for(let i = 0; i < mono.length; i++){ const a = Math.abs(mono[i]); if(a > peak) peak = a; }
+        if(mono.length < 16000 * 0.3) wkSay('warn', 'That recording was too short.');
+        else if(peak < 0.005) wkSay('warn', 'Nothing was heard. Check the microphone.');
+        else {
+          const r = await wkFetch('/api/waketrain/clips/' + encodeURIComponent(slug), { method: 'POST', headers: { 'X-MC': '1', 'Content-Type': 'audio/wav' }, body: wkWav(mono) });
+          if(slug === wk.slug) wk.clips = r.clips || [];
+        }
+      } catch(e){ wkSay('warn', 'Could not save the clip: ' + e.message); }
+      wk.busy = false; wkDrawClips(); wkDrawGo();
+    }
+  } catch(e){
+    stream.getTracks().forEach(t => t.stop());
+    try { if(ctx) await ctx.close(); } catch(e2){ /* ignore */ }
+    wk.rec = null; wkDrawClips();
+    wkSay('warn', 'Recording does not work in this browser.');
+  }
+}
+function wkMeterLoop(){
+  const m = $('wkMeter'), t = $('wkRecT');
+  const step = () => {
+    if(!wk.rec){ m.style.width = '0'; t.textContent = ''; return; }
+    const s = Math.min(WK_REC_SECONDS, (performance.now() - wk.rec.t0) / 1000);
+    m.style.width = Math.min(100, Math.round(Math.sqrt(wk.rec.level) * 100)) + '%';
+    t.textContent = 'Recording ' + s.toFixed(1) + 's of ' + WK_REC_SECONDS + 's';
+    requestAnimationFrame(step);
+  };
+  step();
+}
+
+/* ----- training progress ----- */
+function wkDrawRun(){
+  const el = $('wkRun'), t = wk.train;
+  if(!t || t.phase === 'idle'){ el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  const chip = t.phase === 'running' ? MC.chip('live', 'Training') : t.phase === 'done' ? MC.chip('ok', 'Done') : t.phase === 'stopped' ? MC.chip('warn', 'Stopped') : t.phase === 'interrupted' ? MC.chip('warn', 'Interrupted') : MC.chip('bad', 'Failed');
+  const rows = wk.stages.map(s => {
+    const pct = t.stages && t.stages[s] != null ? t.stages[s] : null;
+    const done = pct === 100 || t.phase === 'done';
+    const on = t.running && t.stage === s && !done;
+    const icon = done ? MC.ic.ok : on ? MC.ic.live : MC.ic.idle;
+    const word = done ? 'Done' : pct != null ? pct + '%' : 'Waiting';
+    const w = done ? 100 : pct || 0;
+    return '<span class="nm' + (on ? ' on' : '') + '">' + WK_STAGE[s] + '</span><span class="ic">' + icon + '</span><div class="bar" role="progressbar" aria-label="' + WK_STAGE[s] + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + w + '"><i style="width:' + w + '%"></i></div><span class="pc">' + word + '</span>';
+  }).join('');
+  let tail = '';
+  if(t.phase === 'running') tail = t.msg ? '<div class="wk-msg">' + esc(t.msg) + '</div>' : '';
+  else if(t.phase === 'done'){
+    const m = wk.models && wk.models.models.find(x => x.id === t.slug);
+    const inst = m && m.installed && !m.stale;
+    tail = '<div class="wk-res"><span>Trained "' + esc(t.phrase) + '" in ' + esc(wkTime(t.seconds != null ? t.seconds : t.elapsed)) + '.</span><code>' + esc(t.out || '') + '</code>' +
+      (inst ? '' : '<button class="act red" data-wk="install" data-id="' + esc(t.slug) + '" type="button"' + (wk.busy ? ' disabled' : '') + '>' + (m && m.stale ? 'Install update' : 'Install') + '</button>') + '</div>';
+  } else if(t.phase === 'error') tail = '<div class="wk-res"><span>' + esc(t.error || 'The training failed.') + '</span>' + (t.log ? '<code>' + esc(t.log) + '</code>' : '') + '</div>';
+  else if(t.phase === 'interrupted') tail = '<div class="wk-res"><span>' + esc(t.error || 'This training was interrupted.') + ' Nothing was installed.</span></div>';
+  else if(t.phase === 'stopped') tail = '<div class="wk-res"><span>Training was stopped. Nothing was installed.</span></div>';
+  el.innerHTML = '<div class="wk-rt">' + chip + '<b>' + esc(t.phrase || '') + '</b><span class="el">' + esc(t.preset || '') + '</span><span class="el" id="wkElapsed"></span></div>' +
+    '<div class="wk-st">' + rows + '</div>' + tail;
+  wkTick();
+}
+function wkTick(){
+  const el = document.getElementById('wkElapsed'), t = wk.train;
+  if(!el || !t) return;
+  const end = t.running ? Date.now() : t.finishedAt;
+  el.textContent = t.startedAt && end ? wkTime((end - t.startedAt) / 1000) : '';
+}
+
+/* ----- models: trained, installed, and which one BlitzVoice uses ----- */
+function wkDrawModels(){
+  const d = wk.models, el = $('wkList');
+  if(!d) return;
+  $('wkLink').innerHTML = d.linked ? MC.chip('ok', 'BlitzVoice linked') : MC.chip('idle', 'BlitzVoice not running');
+  if(!d.models.length){ el.innerHTML = '<div class="dim">No wake word models yet. Train one above.</div>'; return; }
+  el.innerHTML = '<table class="tbl wk-tbl"><thead><tr><th>PHRASE</th><th>STATE</th><th>SOURCE</th><th></th></tr></thead><tbody>' + d.models.map(m => {
+    const state = m.selected ? MC.chip('live', 'In use') : m.installed ? MC.chip('ok', 'Installed') : MC.chip('idle', 'Not installed');
+    const src = m.bundled ? 'Built in' : m.trained ? 'Trained here' + (m.clips ? ', ' + m.clips + ' clips' : '') : 'Added by hand';
+    let act = '';
+    if(m.trained && (!m.installed || m.stale)) act += '<button class="act' + (m.installed ? '' : ' red') + '" data-wk="install" data-id="' + esc(m.id) + '" type="button"' + (wk.busy ? ' disabled' : '') + '>' + (m.stale ? 'Install update' : 'Install') + '</button>';
+    if(m.installed && !m.selected) act += '<button class="act" data-wk="use" data-id="' + esc(m.id) + '" type="button"' + (d.linked && !wk.busy ? '' : ' disabled title="BlitzVoice is not running"') + '>Use</button>';
+    return '<tr><td>' + esc(m.phrase) + '</td><td>' + state + '</td><td class="m">' + esc(src) + '</td><td class="act-c">' + act + '</td></tr>';
+  }).join('') + '</tbody></table>';
+}
+async function wkLoadModels(){
+  try { wk.models = await MC.api.get('/api/waketrain/models'); }
+  catch(e){ $('wkList').innerHTML = '<div class="dim">Server offline. Models cannot be read right now.</div>'; return; }
+  wkDrawModels(); wkDrawRun();
+}
+async function wkLoadState(){
+  try {
+    const r = await MC.api.get('/api/waketrain');
+    wk.presets = r.presets || wk.presets; wk.stages = r.stages || wk.stages; wk.target = r.clipTarget || wk.target; wk.maxNeg = r.maxNegatives || wk.maxNeg;
+    const sel = $('wkPreset'), cur = sel.value;
+    sel.innerHTML = ['quick', 'standard', 'thorough'].map(k => '<option value="' + k + '">' + k[0].toUpperCase() + k.slice(1) + ', about ' + wkEst(wk.presets[k]) + '</option>').join('');
+    sel.value = cur;
+    wk.train = r.state;
+  } catch(e){ return; }
+  wkDrawRun(); wkDrawGo(); wkDrawClips();
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button[data-wk]');
+  if(!b || b.disabled) return;
+  const act = b.dataset.wk;
+  if(act === 'negdel'){ wk.neg.splice(Number(b.dataset.i), 1); wkStore(wk.slug, wk.neg); wkDrawChips(); }
+  else if(act === 'play') wkPlayClip(b.dataset.name);
+  else if(act === 'clipdel') wkDelClip(b.dataset.name);
+  else if(act === 'start'){
+    if(!wk.phrase) return;
+    wk.busy = true; wk.note = null; wkDrawNote(); wkDrawGo();
+    try { wk.train = await wkFetch('/api/waketrain/start', wkJson('POST', { phrase: wk.phrase, preset: $('wkPreset').value, negatives: wk.neg })); }
+    catch(err){ wkSay('warn', err.code === 'busy' ? 'A training is already running.' : 'Could not start: ' + err.message); }
+    wk.busy = false; wkDrawGo(); wkDrawRun(); wkDrawClips();
+  }
+  else if(act === 'stop'){ wk.confirmStop = true; wkDrawGo(); }
+  else if(act === 'stopno'){ wk.confirmStop = false; wkDrawGo(); }
+  else if(act === 'stopyes'){
+    wk.confirmStop = false; wkDrawGo();
+    try { wk.train = await wkFetch('/api/waketrain/stop', wkJson('POST', {})); }
+    catch(err){ if(err.status !== 409) wkSay('warn', 'Could not stop: ' + err.message); }
+    wkDrawRun();
+  }
+  else if(act === 'install'){
+    wk.busy = true; wkDrawModels(); wkDrawRun();
+    try {
+      const r = await wkFetch('/api/waketrain/install', wkJson('POST', { model: b.dataset.id }));
+      wkSay(r.selected ? 'ok' : 'warn', r.selected ? 'Installed, and BlitzVoice now uses "' + r.phrase + '".' : r.reason === 'not_linked' ? 'Installed. Press Use once BlitzVoice is running.' : 'Installed, but BlitzVoice did not switch to it. Press Use.');
+    } catch(err){ wkSay('warn', 'Could not install: ' + err.message); }
+    wk.busy = false; await wkLoadModels();
+  }
+  else if(act === 'use'){
+    wk.busy = true; wkDrawModels();
+    try { await MC.api.post('/api/voice/wake', { model: b.dataset.id }); wkSay('ok', 'BlitzVoice now uses "' + b.closest('tr').firstChild.textContent + '".'); }
+    catch(err){ wkSay('warn', 'Could not switch: ' + err.message); }
+    wk.busy = false; await wkLoadModels();
+  }
+});
+$('wkRec').addEventListener('click', wkRecord);
+$('wkNegAdd').addEventListener('click', wkNegAdd);
+$('wkNegIn').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); wkNegAdd(); } });
+$('wkPhrase').addEventListener('input', wkPhraseChanged);
+$('wkPhrase').addEventListener('keydown', e => { if(e.key === 'Enter'){ const s = document.querySelector('button[data-wk="start"]'); if(s && !s.disabled) s.click(); } });
+
+MC.events.on('waketrain', ev => {
+  wk.train = ev;
+  if(!ev.running) wk.confirmStop = false;
+  wkDrawRun(); wkDrawGo(); wkDrawClips();
+  if(ev.kind === 'done' || ev.kind === 'error' || ev.kind === 'stopped' || ev.kind === 'started') wkLoadModels();
+});
+let wkVoiceTimer = null;
+MC.events.on('voice', d => {
+  if(!d || (d.kind !== 'wake_state' && d.kind !== 'status')) return;
+  clearTimeout(wkVoiceTimer); wkVoiceTimer = setTimeout(wkLoadModels, 400);
+});
+
+(async function wkInit(){
+  await wkLoadState();
+  let first = '';
+  try { first = localStorage.getItem('mc-wake-phrase') || ''; } catch(e){ /* ignore */ }
+  const t = wk.train;
+  if(t && t.phrase) first = t.phrase;
+  if(t && t.preset && wk.presets[t.preset]) $('wkPreset').value = t.preset;
+  $('wkPhrase').value = first;
+  wkPhraseChanged();
+  if(t && t.negatives && t.negatives.length && t.slug === wk.slug && !wkStore(wk.slug)){ wk.neg = t.negatives.slice(); wkDrawChips(); }
+  wkLoadModels();
+})();
+setInterval(wkTick, 1000);
+
+/* ----- Spoken commands: the send, cancel, start over and end phrases, kept by the server (MC.voicePrefs) ----- */
+(function spInit(){
+  const inputs = [$('spSend'), $('spCancel'), $('spRewrite'), $('spEnd')], bad = $('spBad'), warn = $('spWarn');
+  const LABEL = { sendPhrase: 'Send phrase', cancelPhrase: 'Cancel phrase', rewritePhrase: 'Start over phrase', endPhrase: 'End conversation phrase' };
+  const P = MC.voicePrefs;
+  const squash = v => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  const norm = v => squash(v).toLowerCase().replace(/['’]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+  const ends = (a, b) => a === b || a.endsWith(' ' + b);
+  function drawWarn(){
+    const v = inputs.map(i => String(i.value).split(',').map(norm).filter(Boolean)); /* each setting: its variations */
+    let t = '';
+    for(let i = 0; i < v.length && !t; i++) for(let j = i + 1; j < v.length && !t; j++) for(const x of v[i]) for(const y of v[j]){
+      if(t) break;
+      if(x === y) t = 'Two commands share the phrase "' + x + '", so one of them could never win.';
+      else if(ends(x, y) || ends(y, x)) t = 'The phrase "' + (x.length < y.length ? x : y) + '" ends another one, so it also fires on the longer one.';
+    }
+    warn.hidden = !t;
+    warn.innerHTML = t ? MC.ic.warn + '<span>' + esc(t) + '</span>' : '';
+  }
+  function fail(el, msg){
+    el.dataset.err = '1'; el.setAttribute('aria-invalid', 'true');
+    bad.hidden = false; bad.innerHTML = MC.ic.warn + '<span>' + esc(msg) + '</span>';
+  }
+  function clear(el){
+    delete el.dataset.err; el.removeAttribute('aria-invalid');
+    if(!inputs.some(i => i.dataset.err)){ bad.hidden = true; bad.innerHTML = ''; }
+  }
+  function show(force){
+    inputs.forEach(el => {
+      if(!force && (document.activeElement === el || el.dataset.err)) return;
+      el.value = P[el.dataset.key]; clear(el);
+    });
+    drawWarn();
+  }
+  async function save(el){
+    const key = el.dataset.key, v = squash(el.value);
+    if(el._busy) return;
+    if(v === P[key]){ el.value = v; clear(el); drawWarn(); return; }
+    el._busy = true;
+    try { await P.set(key, v); clear(el); el.value = P[key]; }
+    catch(err){
+      const m = String((err && err.message) || 'Could not save').replace(/sendPhrase/g, 'send phrase').replace(/cancelPhrase/g, 'cancel phrase').replace(/rewritePhrase/g, 'start over phrase').replace(/endPhrase/g, 'end conversation phrase');
+      fail(el, m.charAt(0).toUpperCase() + m.slice(1) + (/[.!?]$/.test(m) ? '' : '.'));
+    }
+    el._busy = false; drawWarn();
+  }
+  inputs.forEach(el => {
+    el.value = P[el.dataset.key];
+    el.addEventListener('input', () => { clear(el); drawWarn(); });
+    el.addEventListener('blur', () => save(el));
+    el.addEventListener('keydown', e => {
+      if(e.key === 'Enter'){ e.preventDefault(); save(el); }
+      else if(e.key === 'Escape'){ el.value = P[el.dataset.key]; clear(el); drawWarn(); }
+    });
+  });
+  P.on(() => show(false));
+  if(P.ready) P.ready.then(() => show(false));
+  drawWarn();
+})();
+/* #wake: the page renders asynchronously, so scroll once the section exists and has a size */
+(function wkAnchor(){
+  if(location.hash !== '#wake') return;
+  let tries = 0;
+  const t = setInterval(() => {
+    const el = document.getElementById('wake');
+    tries++;
+    if(el && el.offsetHeight > 0 && wk.models){ clearInterval(t); setTimeout(() => el.scrollIntoView({ block: 'start' }), 100); }
+    else if(tries > 40){ clearInterval(t); if(el) el.scrollIntoView({ block: 'start' }); }
+  }, 150);
+})();
+setInterval(() => { if(!document.hidden && !wkRunning() && !wk.rec) wkLoadModels(); }, 20000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden){ wkLoadState(); wkLoadModels(); } });
+</script>
+</body>
+</html>

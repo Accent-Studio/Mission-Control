@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usage // Mission Control</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="redline.css">
+<style>
+/* model colors: a validated categorical order for the dark surface (blue, orange, aqua, yellow), always with the name next
+   to them, so no chart reads by color alone. Gray is everything else. */
+:root{--opus:#3987e5;--fable:#d95926;--sonnet:#199e70;--haiku:#c98500;--other:#627488;--s1:#3987e5;--s2:#d95926}
+.bar2{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:12px 16px 12px calc(var(--c) + 8px)}
+.bar2 .lbl{font:600 10.5px var(--mono);letter-spacing:.12em;color:var(--w3);margin-right:4px}
+.pick{display:inline-flex;gap:2px}
+.pick button{font:600 12px var(--sans);color:var(--w2);background:transparent;border:1px solid var(--line-2);padding:5px 11px;cursor:pointer}
+.pick button:hover{color:var(--white);border-color:var(--line)}
+.pick button.on{background:var(--white);color:#0b0b0d;border-color:var(--white)}
+.bar2 .sp{width:18px}
+.bar2 .stamp{margin-left:auto;font:11px var(--mono);color:var(--w3)}
+.tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:22px}
+.tile{padding:14px 16px 14px 22px}
+.tile .n{font-family:var(--head);font-weight:700;font-size:38px;line-height:1;letter-spacing:.02em;white-space:nowrap}
+.tile .t{font-size:12.5px;font-weight:600;color:var(--w2);margin-top:6px}
+.tile .s{font:11px var(--mono);color:var(--w3);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.body{padding:6px 16px 14px calc(var(--c) + 8px);min-width:0}
+.chart{width:100%;display:block;overflow:visible}
+.chart text{font:11px var(--mono);fill:var(--w3)}
+.chart .lab{fill:var(--w2)}
+.chart .val{fill:var(--white);font-weight:600}
+.chart .grid{stroke:rgba(220,231,243,.08);stroke-width:1}
+.chart .base{stroke:rgba(220,231,243,.25);stroke-width:1}
+.chart [data-tip]{cursor:default}
+.chart .hit{fill:transparent}
+.chart .hit:hover{fill:rgba(220,231,243,.05)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--w2);margin:2px 0 8px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;display:inline-block}
+.legend .ln{width:14px;height:2px}
+.dim{font:11px var(--mono);color:var(--w3);line-height:1.5}
+.empty{font:12px var(--mono);color:var(--w3);padding:18px 0}
+/* records: one line each */
+.rec{display:grid;grid-template-columns:auto 1fr;gap:9px 14px;font-size:13px;align-items:baseline}
+.rec dt{font:11px var(--mono);color:var(--w3);white-space:nowrap}
+.rec dd{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rec dd small{font:11px var(--mono);color:var(--w3);font-weight:400;margin-left:6px}
+/* model share rows: a 100% bar per measure, segments with a 2px gap */
+.share{display:grid;grid-template-columns:76px 1fr;gap:10px 12px;align-items:center;margin-top:6px}
+.share .k{font:11px var(--mono);color:var(--w3)}
+.share .sb{display:flex;gap:2px;height:16px}
+.share .sb i{display:block;min-width:2px;position:relative}
+.tbl td.r,.tbl th.r{text-align:right}
+.tbl .sw{display:inline-block;width:9px;height:9px;margin-right:7px;vertical-align:0}
+.tbl .pb{display:block;height:3px;background:rgba(220,231,243,.08);margin-top:5px;position:relative;min-width:60px}
+.tbl .pb i{position:absolute;inset:0 auto 0 0;background:var(--w2)}
+.tbl td.ttlc{max-width:340px;overflow:hidden;text-overflow:ellipsis}
+.tbl tr.click:focus-visible td{outline:1px solid var(--line)}
+.tbl small{font:10.5px var(--mono);color:var(--w3);display:block;margin-top:2px}
+.tip{position:fixed;z-index:200;pointer-events:none;background:rgba(10,16,25,.97);border:1px solid rgba(220,231,243,.2);padding:8px 10px;font:12px var(--sans);color:var(--white);line-height:1.5;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.tip b{font-weight:700}
+.tip .tr{display:flex;gap:10px;justify-content:space-between}
+.tip .tr span:last-child{font-family:var(--mono);font-size:11.5px}
+.tip i{display:inline-block;width:8px;height:8px;margin-right:6px}
+.tip[hidden]{display:none}
+.hm-key{display:flex;gap:4px;align-items:center;justify-content:flex-end;font:10.5px var(--mono);color:var(--w3);margin-top:6px}
+.hm-key i{width:11px;height:11px;display:inline-block}
+.more2{background:transparent;border:0;border-top:1px solid var(--line-3);color:var(--w2);font:600 12px var(--sans);padding:9px;width:100%;cursor:pointer}
+.more2:hover{color:var(--white)}
+.wait{display:flex;align-items:center;gap:10px;font:12px var(--mono);color:var(--w2)}
+@media (max-width:1400px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:900px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tile .n{font-size:30px}.hide-s{display:none}}
+</style>
+</head>
+<body>
+<div class="bgfx" aria-hidden="true"></div>
+<div class="app">
+  <nav class="rail" aria-label="Main"></nav>
+  <header class="page">
+    <div class="ruler" aria-hidden="true"></div>
+    <div class="hd">
+      <div><h1>Usage <em>&amp; cost</em></h1><div class="sub" id="sub">What Claude did, what it would cost at API prices, and where the time went</div></div>
+      <svg class="barcode" aria-hidden="true"></svg>
+      <div class="clock"><b data-clock>00:00</b></div>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="fr span-12" aria-label="Range and measure">
+      <div class="bar2">
+        <span class="lbl">RANGE</span><span class="pick" id="pRange"><button data-v="7">7d</button><button data-v="30">30d</button><button data-v="90">90d</button><button data-v="365">1y</button><button data-v="all">All</button></span>
+        <span class="sp"></span>
+        <span class="lbl">MEASURE</span><span class="pick" id="pMeasure"><button data-v="cost">Cost</button><button data-v="tokens">Tokens</button><button data-v="req">Requests</button><button data-v="time">Time</button></span>
+        <span class="stamp" id="stamp"></span>
+      </div>
+    </section>
+
+    <div class="span-12 tiles" id="tiles"></div>
+
+    <section class="fr span-8" aria-label="Activity">
+      <div class="ttl"><h3>Activity</h3><span class="cnt" id="hmCnt"></span></div>
+      <div class="body" id="hm"></div>
+    </section>
+    <section class="fr span-4" aria-label="Records">
+      <div class="ttl"><h3>Records</h3></div>
+      <div class="body"><dl class="rec" id="records"></dl></div>
+    </section>
+
+    <section class="fr span-12" aria-label="Over time">
+      <div class="ttl"><h3>Over time</h3><span class="right"><span class="pick" id="pStep"><button data-v="day">Day</button><button data-v="week">Week</button><button data-v="month">Month</button></span></span></div>
+      <div class="body"><div class="legend" id="legend"></div><div id="ts"></div></div>
+    </section>
+
+    <section class="fr span-6" aria-label="Models">
+      <div class="ttl"><h3>Models</h3><span class="cnt">share of each measure</span></div>
+      <div class="body"><div class="share" id="share"></div><table class="tbl" id="modelTbl" style="margin-top:14px"></table></div>
+    </section>
+    <section class="fr span-6" aria-label="Plan usage">
+      <div class="ttl"><h3>Plan usage</h3><span class="cnt">5-hour session and weekly limits</span></div>
+      <div class="body"><div class="legend" id="planLegend"></div><div id="plan"></div></div>
+    </section>
+
+    <section class="fr span-6" aria-label="When I work">
+      <div class="ttl"><h3>When I work</h3><span class="cnt" id="pcCnt"></span></div>
+      <div class="body" id="punch"></div>
+    </section>
+    <section class="fr span-6" aria-label="Token mix">
+      <div class="ttl"><h3>Token mix</h3><span class="cnt" id="mixCnt"></span></div>
+      <div class="body" id="mix"></div>
+    </section>
+
+    <section class="fr span-5" aria-label="Projects">
+      <div class="ttl"><h3>Projects</h3><span class="cnt" id="prCnt"></span></div>
+      <table class="tbl" id="projTbl"></table>
+    </section>
+    <section class="fr span-7" aria-label="Conversations">
+      <div class="ttl"><h3>Conversations</h3><span class="cnt" id="cvCnt"></span></div>
+      <table class="tbl" id="convTbl"></table>
+      <button class="more2" id="convMore" hidden></button>
+    </section>
+  </main>
+</div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+
+<script src="api.js"></script>
+<script src="phrases.js"></script>
+<script src="redline.js"></script>
+<script>
+MC.init('usage');
+const $ = id => document.getElementById(id);
+const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const H = 3600e3, DAY = 24 * H;
+const FAM = ['opus', 'fable', 'sonnet', 'haiku', 'other']; /* stack order = the validated color order */
+const FNAME = { opus: 'Opus', fable: 'Fable', sonnet: 'Sonnet', haiku: 'Haiku', other: 'Other' };
+const FCOL = { opus: '#3987e5', fable: '#d95926', sonnet: '#199e70', haiku: '#c98500', other: '#627488' };
+const MNAME = { cost: 'API cost', tokens: 'Tokens', req: 'Requests', time: 'Active time' };
+/* the activity scale: one blue, darker for little and lighter for a lot, so lightness carries the amount */
+const HEAT = ['rgba(220,231,243,.06)', '#184f95', '#256abf', '#3987e5', '#6da7ec', '#b7d3f6'];
+
+const LS = 'mc.usage.view';
+const view = Object.assign({ range: '30', measure: 'cost', step: 'auto' }, (() => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { return {}; } })());
+let data = null, err = null, convShown = 15;
+
+/* ---------- numbers ---------- */
+function money(v) { if (!v) return '$0'; if (v < 10) return '$' + v.toFixed(2); if (v < 1000) return '$' + Math.round(v); return '$' + Math.round(v).toLocaleString('en-US'); }
+function toks(n) { if (!n) return '0'; if (n >= 1e9) return (n / 1e9).toFixed(n >= 1e10 ? 0 : 1) + 'B'; if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M'; if (n >= 1e3) return Math.round(n / 1e3) + 'k'; return String(Math.round(n)); }
+function dur(ms) { if (!ms) return '0 min'; const m = ms / 60000; if (m < 60) return Math.max(1, Math.round(m)) + ' min'; const h = m / 60; return (h < 10 ? h.toFixed(1).replace(/\.0$/, '') : Math.round(h).toLocaleString('en-US')) + 'h'; }
+function count(n) { return Math.round(n || 0).toLocaleString('en-US'); }
+function fmtM(m, v) { return m === 'cost' ? money(v) : m === 'tokens' ? toks(v) : m === 'time' ? dur(v) : count(v); }
+function pct(a, b) { return b ? Math.round(a / b * 100) + '%' : '0%'; }
+const tokOf = t => t[1] + t[2] + t[3] + t[4] + t[5];
+function famOf(model) { const m = /(fable|mythos|opus|sonnet|haiku)/.exec(model || ''); return m ? (m[1] === 'mythos' ? 'fable' : m[1]) : 'other'; }
+/* one hour's value of a measure, per family: { fam: v } and the total */
+function hourVals(hr, m) {
+  const out = {}; let tot = 0;
+  for (const [model, t] of Object.entries(hr.m || {})) {
+    const f = famOf(model), v = m === 'cost' ? t[7] : m === 'tokens' ? tokOf(t) : m === 'req' ? t[0] : t[6];
+    out[f] = (out[f] || 0) + v; tot += v;
+  }
+  if (m === 'time') { tot = hr.a || 0; } /* active time is the conversation's, the per model part splits it */
+  return { f: out, tot };
+}
+function dayKey(ms) { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function startOfDay(ms) { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
+function startOfWeek(ms) { const d = new Date(startOfDay(ms)); const wd = (d.getDay() + 6) % 7; d.setDate(d.getDate() - wd); return d.getTime(); } /* weeks start on Monday */
+function startOfMonth(ms) { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); }
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function dateText(ms, withYear) { const d = new Date(ms); return MON[d.getMonth()] + ' ' + d.getDate() + (withYear ? ', ' + d.getFullYear() : ''); }
+
+/* ---------- the range ---------- */
+function rangeFrom() {
+  if (view.range === 'all') return 0;
+  return startOfDay(Date.now()) - (Number(view.range) - 1) * DAY;
+}
+function inRange(hr) { return hr.h * H >= rangeStart(); }
+function rangeStart() {
+  if (view.range !== 'all') return rangeFrom();
+  const first = data && data.hours.find(x => Object.keys(x.m || {}).length || x.a);
+  return first ? startOfDay(first.h * H) : startOfDay(Date.now());
+}
+
+/* ---------- tooltip: one floating box for every [data-tip] ---------- */
+const tip = $('tip');
+function showTip(el, x, y) { tip.innerHTML = el.getAttribute('data-tip'); tip.hidden = false; placeTip(x, y); }
+function placeTip(x, y) { const w = tip.offsetWidth, h = tip.offsetHeight; let l = x + 14, t = y + 14; if (l + w > innerWidth - 8) l = x - w - 14; if (t + h > innerHeight - 8) t = y - h - 14; tip.style.left = Math.max(8, l) + 'px'; tip.style.top = Math.max(8, t) + 'px'; }
+document.addEventListener('mouseover', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) showTip(el, e.clientX, e.clientY); else tip.hidden = true; });
+document.addEventListener('mousemove', e => { if (!tip.hidden) placeTip(e.clientX, e.clientY); });
+document.addEventListener('focusin', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) { const r = el.getBoundingClientRect(); showTip(el, r.right, r.top); } });
+document.addEventListener('focusout', () => { tip.hidden = true; });
+function tipRows(title, rows) { return '<b>' + esc(title) + '</b>' + rows.map(r => '<div class="tr"><span>' + (r[2] ? '<i style="background:' + r[2] + '"></i>' : '') + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>').join(''); }
+
+/* ---------- loading ---------- */
+async function load() {
+  const from = view.range === 'all' ? 0 : rangeFrom();
+  try { data = await MC.api.get('/api/usage/stats?from=' + from + '&to=' + (Date.now() + H)); err = null; }
+  catch (e) { err = e && e.message ? e.message : 'the server did not answer'; }
+  draw();
+  if (data && !data.index.ready) setTimeout(load, 4000); /* the first read of every transcript is still going */
+}
+function setPick(id, v) { document.querySelectorAll('#' + id + ' button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); }
+function save() { try { localStorage.setItem(LS, JSON.stringify(view)); } catch (e) {} }
+$('pRange').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; view.range = b.dataset.v; view.step = 'auto'; save(); load(); setPicks(); });
+$('pMeasure').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; view.measure = b.dataset.v; save(); setPicks(); draw(); });
+$('pStep').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; view.step = b.dataset.v; save(); setPicks(); drawSeries(); });
+function autoStep() { const days = (Date.now() - rangeStart()) / DAY; return days <= 45 ? 'day' : days <= 200 ? 'week' : 'month'; }
+/* more than about two years of days would be bars too thin to see: weeks then */
+function step() { const s = view.step === 'auto' ? autoStep() : view.step; return s === 'day' && (Date.now() - rangeStart()) / DAY > 760 ? 'week' : s; }
+function setPicks() { setPick('pRange', view.range); setPick('pMeasure', view.measure); setPick('pStep', step()); }
+
+function draw() {
+  setPicks();
+  if (err && !data) { $('tiles').innerHTML = '<section class="fr tile" style="grid-column:1/-1"><div class="empty">Could not load the numbers: ' + esc(err) + '</div></section>'; MC.drawFrames(); return; }
+  if (!data) return;
+  const ready = data.index.ready;
+  $('stamp').textContent = ready ? data.conversationCount + ' conversations // ' + data.index.files + ' transcripts read' : 'Reading every transcript the first time...';
+  drawTiles(); drawHeat(); drawRecords(); drawSeries(); drawModels(); drawPlan(); drawPunch(); drawMix(); drawProjects(); drawConvs();
+  MC.drawFrames();
+}
+
+/* ---------- stat tiles ---------- */
+function drawTiles() {
+  const T = data.total, days = Math.max(1, Math.round((Date.now() - rangeStart()) / DAY));
+  const activeDays = new Set(data.hours.filter(inRange).filter(x => x.a || Object.keys(x.m).length).map(x => dayKey(x.h * H))).size;
+  /* [number, label, short note, tooltip] */
+  const tiles = [
+    [money(T.cost), 'API-equivalent cost', money(T.cost / Math.max(1, activeDays)) + ' per active day', 'What the same work would cost at pay-as-you-go API prices. On a subscription you are not billed this.'],
+    [toks(T.tokens), 'Tokens', toks(T.t[2]) + ' written', toks(T.t[2]) + ' written by Claude, the rest read (mostly from the cache)'],
+    [count(T.req), 'Requests', count(T.prompts) + ' prompts', count(T.prompts) + ' prompts and ' + count(T.tools) + ' tool calls'],
+    [dur(T.activeMs), 'Active time', activeDays + ' of ' + days + ' days', 'Time with Claude at work, added up over conversations: two at once count twice'],
+    [count(T.sessions), 'Conversations', pct(T.subCost, T.cost) + ' by helpers', pct(T.subCost, T.cost) + ' of the cost was spent by helper agents'],
+    [money(T.saved), 'Saved by the cache', pct(T.t[3], T.t[1] + T.t[3] + T.t[4] + T.t[5]) + ' read from cache', 'What the cache reads would have cost as plain input, minus what they cost'],
+  ];
+  $('tiles').innerHTML = tiles.map(t => '<section class="fr tile" title="' + esc(t[3]) + '"><div class="n">' + esc(t[0]) + '</div><div class="t">' + esc(t[1]) + '</div><div class="s">' + esc(t[2]) + '</div></section>').join('');
+}
+
+/* ---------- activity grid: the last 53 weeks, a column per week, Monday on top ---------- */
+function dayTotals(m) {
+  const map = new Map();
+  for (const hr of data.hours) { const k = dayKey(hr.h * H), v = hourVals(hr, m).tot; map.set(k, (map.get(k) || 0) + v); }
+  return map;
+}
+function drawHeat() {
+  const m = view.measure, days = dayTotals(m), el = $('hm');
+  const w = el.clientWidth || 800, end = startOfDay(Date.now()), start = startOfWeek(end - 52 * 7 * DAY);
+  const cols = Math.round((startOfWeek(end) - start) / (7 * DAY)) + 1, lw = 30, cs = Math.max(6, Math.min(16, Math.floor((w - lw) / cols) - 2)), gap = 2, top = 18;
+  const vals = [...days.values()].filter(v => v > 0).sort((a, b) => a - b);
+  const q = p => vals.length ? vals[Math.min(vals.length - 1, Math.floor(p * vals.length))] : 0;
+  const cuts = [q(.25), q(.5), q(.75), q(.93)];
+  const lvl = v => !v ? 0 : v <= cuts[0] ? 1 : v <= cuts[1] ? 2 : v <= cuts[2] ? 3 : v <= cuts[3] ? 4 : 5;
+  let s = '', lastMonth = -1, activeDays = 0, sum = 0;
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < 7; r++) {
+      const d = new Date(start); d.setDate(d.getDate() + c * 7 + r); const ms = d.getTime(); /* calendar steps, so a daylight saving change never shifts a day */
+      if (ms > end) continue;
+      if (r === 0 && d.getMonth() !== lastMonth && d.getDate() <= 7) { s += '<text x="' + (lw + c * (cs + gap)) + '" y="11">' + MON[d.getMonth()] + '</text>'; lastMonth = d.getMonth(); }
+      const v = days.get(dayKey(ms)) || 0; if (v) { activeDays++; sum += v; }
+      s += '<rect x="' + (lw + c * (cs + gap)) + '" y="' + (top + r * (cs + gap)) + '" width="' + cs + '" height="' + cs + '" fill="' + HEAT[lvl(v)] + '" data-tip="' + esc(tipRows(new Date(ms).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }), [[MNAME[m], fmtM(m, v)]])) + '"/>';
+    }
+  }
+  [0, 2, 4].forEach(r => { s += '<text x="0" y="' + (top + r * (cs + gap) + cs - 1) + '">' + WD[r] + '</text>'; });
+  const h = top + 7 * (cs + gap);
+  el.innerHTML = '<svg class="chart" viewBox="0 0 ' + (lw + cols * (cs + gap)) + ' ' + h + '" style="max-width:' + (lw + cols * (cs + gap)) + 'px" role="img" aria-label="Activity over the last year">' + s + '</svg>' +
+    '<div class="hm-key"><span>Less</span>' + HEAT.map(c => '<i style="background:' + c + '"></i>').join('') + '<span>More</span></div>';
+  $('hmCnt').textContent = activeDays + ' active days in the last year // ' + fmtM(m, sum);
+}
+
+/* ---------- records ---------- */
+function drawRecords() {
+  const days = dayTotals('time'), cost = dayTotals('cost');
+  /* calendar steps (setDate), so a daylight saving change never skips or repeats a day; today without activity yet does not end the streak */
+  const dayN = n => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n); return dayKey(d.getTime()); };
+  const on = k => (days.get(k) || 0) > 0;
+  let cur = 0; for (let n = on(dayN(0)) ? 0 : -1; n > -1000 && on(dayN(n)); n--) cur++;
+  let best = 0, run = 0; for (let n = -371; n <= 0; n++) { if (on(dayN(n))) { run++; best = Math.max(best, run); } else run = 0; }
+  const inR = k => new Date(k + 'T12:00:00').getTime() >= rangeStart();
+  const topDay = [...cost.entries()].filter(e => inR(e[0])).sort((a, b) => b[1] - a[1])[0];
+  const longDay = [...days.entries()].filter(e => inR(e[0])).sort((a, b) => b[1] - a[1])[0];
+  const byHour = new Array(24).fill(0); data.hours.filter(inRange).forEach(hr => { byHour[new Date(hr.h * H).getHours()] += hr.a || 0; });
+  const bh = byHour.indexOf(Math.max(...byHour));
+  const c0 = data.conversations[0], cl = data.conversations.slice().sort((a, b) => b.activeMs - a.activeMs)[0];
+  const T = data.total;
+  const rows = [
+    ['Streak now', cur ? cur + (cur === 1 ? ' day' : ' days') : 'none', ''],
+    ['Longest streak', best + ' days', 'last year'],
+    ['Busiest day', topDay ? money(topDay[1]) : 'none', topDay ? dateText(new Date(topDay[0] + 'T12:00:00').getTime()) : ''],
+    ['Most active day', longDay ? dur(longDay[1]) : 'none', longDay ? dateText(new Date(longDay[0] + 'T12:00:00').getTime()) : ''],
+    ['Busiest hour', byHour[bh] ? String(bh).padStart(2, '0') + ':00' : 'none', byHour[bh] ? dur(byHour[bh]) + ' in this range' : ''],
+    ['Top conversation', c0 ? (c0.title || 'Deleted conversation') : 'none', c0 ? money(c0.cost) : ''],
+    ['Longest conversation', cl ? (cl.title || 'Deleted conversation') : 'none', cl ? dur(cl.activeMs) : ''],
+    ['Cost per prompt', T.prompts ? money(T.cost / T.prompts) : 'none', T.prompts ? count(T.prompts) + ' prompts' : ''],
+  ];
+  $('records').innerHTML = rows.map(r => '<dt>' + esc(r[0]) + '</dt><dd title="' + esc(r[1] + (r[2] ? ' (' + r[2] + ')' : '')) + '">' + esc(r[1]) + (r[2] ? '<small>' + esc(r[2]) + '</small>' : '') + '</dd>').join('');
+}
+
+/* ---------- over time: stacked bars by model family ---------- */
+function bucketsOf(stp) {
+  const start = rangeStart(), end = Date.now(), out = [];
+  const next = stp === 'day' ? (t => t + DAY) : stp === 'week' ? (t => t + 7 * DAY) : (t => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime(); });
+  let t = stp === 'day' ? startOfDay(start) : stp === 'week' ? startOfWeek(start) : startOfMonth(start);
+  while (t <= end && out.length < 2000) { const n = next(t); out.push({ t, n: startOfDay(n + H), f: {}, tot: 0 }); t = startOfDay(n + H); }
+  return out;
+}
+function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))), r = v / p; return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * p; }
+function drawSeries() {
+  setPick('pStep', step());
+  const m = view.measure, stp = step(), bs = bucketsOf(stp), el = $('ts');
+  let bi = 0;
+  for (const hr of data.hours) {
+    const ms = hr.h * H; if (ms < bs[0].t) continue;
+    while (bi < bs.length - 1 && ms >= bs[bi].n) bi++;
+    const v = hourVals(hr, m); bs[bi].tot += v.tot;
+    if (m === 'time') { /* the hour's active time split by the models' shares; an hour with no answer in it goes to Other */
+      const ft = Object.values(v.f).reduce((a, b) => a + b, 0);
+      if (ft) for (const f in v.f) bs[bi].f[f] = (bs[bi].f[f] || 0) + v.f[f] / ft * v.tot;
+      else if (v.tot) bs[bi].f.other = (bs[bi].f.other || 0) + v.tot;
+    }
+    else for (const f in v.f) bs[bi].f[f] = (bs[bi].f[f] || 0) + v.f[f];
+  }
+  const used = FAM.filter(f => bs.some(b => b.f[f] > 0));
+  $('legend').innerHTML = used.map(f => '<span><i style="background:' + FCOL[f] + '"></i>' + FNAME[f] + '</span>').join('');
+  const W = Math.max(320, el.clientWidth || 900), Hh = 230, L = 58, R = 8, T = 10, B = 26, pw = W - L - R, ph = Hh - T - B;
+  const max = niceMax(Math.max(...bs.map(b => b.tot), 0)), bw = pw / bs.length, w = Math.max(2, Math.min(42, bw * 0.72));
+  let s = '';
+  for (let i = 0; i <= 4; i++) { const y = T + ph - ph * i / 4; s += '<line class="' + (i ? 'grid' : 'base') + '" x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '"/><text x="' + (L - 8) + '" y="' + (y + 4) + '" text-anchor="end">' + esc(fmtM(m, max * i / 4)) + '</text>'; }
+  const every = Math.ceil(bs.length / Math.max(1, Math.floor(pw / 70)));
+  bs.forEach((b, i) => {
+    const x = L + i * bw + (bw - w) / 2; let y = T + ph;
+    used.forEach(f => {
+      const v = b.f[f] || 0; if (!v) return;
+      const hgt = v / max * ph; if (hgt < 0.5) return;
+      y -= hgt; s += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + Math.max(0.5, hgt - 1.5).toFixed(1) + '" fill="' + FCOL[f] + '"/>';
+    });
+    if (i % every === 0) s += '<text x="' + (L + i * bw + bw / 2).toFixed(1) + '" y="' + (Hh - 8) + '" text-anchor="middle">' + esc(stp === 'month' ? MON[new Date(b.t).getMonth()] + (new Date(b.t).getMonth() === 0 ? ' ' + new Date(b.t).getFullYear() : '') : dateText(b.t)) + '</text>';
+    const label = stp === 'day' ? new Date(b.t).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : stp === 'week' ? 'Week of ' + dateText(b.t, true) : MON[new Date(b.t).getMonth()] + ' ' + new Date(b.t).getFullYear();
+    const rows = used.filter(f => b.f[f] > 0).map(f => [FNAME[f], fmtM(m, b.f[f]), FCOL[f]]); rows.push(['Total', fmtM(m, b.tot)]);
+    s += '<rect class="hit" x="' + (L + i * bw).toFixed(1) + '" y="' + T + '" width="' + bw.toFixed(1) + '" height="' + ph + '" data-tip="' + esc(tipRows(label, rows)) + '"/>';
+  });
+  el.innerHTML = bs.length ? '<svg class="chart" viewBox="0 0 ' + W + ' ' + Hh + '" role="img" aria-label="' + esc(MNAME[m]) + ' over time by model">' + s + '</svg>' : '<div class="empty">Nothing in this range.</div>';
+}
+
+/* ---------- models ---------- */
+function drawModels() {
+  const fam = {}; FAM.forEach(f => fam[f] = { req: 0, tokens: 0, cost: 0, time: 0, models: [] });
+  for (const [model, x] of Object.entries(data.byModel)) { const f = fam[x.family] || fam.other; f.req += x.t[0]; f.tokens += tokOf(x.t); f.cost += x.cost; f.time += x.t[6]; f.models.push(model); }
+  const used = FAM.filter(f => fam[f].req > 0);
+  const ms = [['req', 'Requests'], ['tokens', 'Tokens'], ['cost', 'Cost'], ['time', 'Time']];
+  $('share').innerHTML = used.length ? ms.map(([k, name]) => {
+    const tot = used.reduce((a, f) => a + fam[f][k], 0);
+    return '<span class="k">' + name + '</span><span class="sb">' + used.map(f => { const v = fam[f][k]; if (!v) return ''; return '<i style="flex:' + v + ';background:' + FCOL[f] + '" tabindex="0" data-tip="' + esc(tipRows(FNAME[f] + ', ' + name.toLowerCase(), [[fmtM(k, v), pct(v, tot)]])) + '"></i>'; }).join('') + '</span>';
+  }).join('') : '<div class="empty" style="grid-column:1/-1">Nothing in this range.</div>';
+  const totCost = used.reduce((a, f) => a + fam[f].cost, 0);
+  $('modelTbl').innerHTML = used.length ? '<tr><th>Model</th><th class="r">Requests</th><th class="r">Tokens</th><th class="r">Time</th><th class="r">Cost</th></tr>' + used.map(f => '<tr><td title="' + esc(fam[f].models.join(', ')) + '"><span class="sw" style="background:' + FCOL[f] + '"></span>' + FNAME[f] + '</td><td class="m r">' + count(fam[f].req) + '</td><td class="m r">' + toks(fam[f].tokens) + '</td><td class="m r">' + dur(fam[f].time) + '</td><td class="m r">' + money(fam[f].cost) + ' <span style="color:var(--w3)">' + pct(fam[f].cost, totCost) + '</span></td></tr>').join('') : '';
+}
+
+/* ---------- plan usage: the two windows over time, one percent axis ---------- */
+function drawPlan() {
+  const el = $('plan'), pts = (data.plan || []).filter(p => p.t >= rangeStart());
+  $('planLegend').innerHTML = '<span><i class="ln" style="background:var(--s1)"></i>5-hour session</span><span><i class="ln" style="background:var(--s2)"></i>Weekly</span>';
+  if (pts.length < 2) { el.innerHTML = '<div class="empty">Recorded from now on: each time the plan usage is read, a point is added here.</div>'; return; }
+  const W = Math.max(300, el.clientWidth || 600), Hh = 200, L = 40, R = 46, T = 10, B = 24, pw = W - L - R, ph = Hh - T - B;
+  const t0 = Math.min(pts[0].t, rangeStart()), t1 = Date.now(), X = t => L + (t - t0) / (t1 - t0) * pw, Y = v => T + ph - Math.min(100, v) / 100 * ph;
+  let s = '';
+  [0, 25, 50, 75, 100].forEach(v => { s += '<line class="' + (v ? 'grid' : 'base') + '" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v) + '" y2="' + Y(v) + '"/><text x="' + (L - 6) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + v + '%</text>'; });
+  const line = (k, col, name) => {
+    const p = pts.filter(x => x[k] != null); if (!p.length) return '';
+    /* a window that resets drops to zero: the step is drawn as it happened, not as a slope */
+    let d = ''; p.forEach((x, i) => { d += (i ? 'L' : 'M') + X(x.t).toFixed(1) + ' ' + Y(x[k]).toFixed(1); });
+    const last = p[p.length - 1];
+    return '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round"/>' + p.map(x => '<circle cx="' + X(x.t).toFixed(1) + '" cy="' + Y(x[k]).toFixed(1) + '" r="5" fill="transparent" data-tip="' + esc(tipRows(name + ', ' + new Date(x.t).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }), [['Used', Math.round(x[k]) + '%']])) + '"/>').join('') +
+      '<text class="val" x="' + (X(last.t) + 6) + '" y="' + (Y(last[k]) + 4) + '">' + Math.round(last[k]) + '%</text>';
+  };
+  s += line('five', '#3987e5', '5-hour session') + line('seven', '#d95926', 'Weekly');
+  const days = (t1 - t0) / DAY, ticks = Math.min(6, Math.max(2, Math.floor(pw / 90)));
+  for (let i = 0; i <= ticks; i++) { const t = t0 + (t1 - t0) * i / ticks; s += '<text x="' + X(t) + '" y="' + (Hh - 6) + '" text-anchor="middle">' + esc(days <= 2 ? new Date(t).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : dateText(t)) + '</text>'; }
+  el.innerHTML = '<svg class="chart" viewBox="0 0 ' + W + ' ' + Hh + '" role="img" aria-label="Plan usage over time">' + s + '</svg>';
+}
+
+/* ---------- when I work: weekday by hour, a dot sized by the measure ---------- */
+function drawPunch() {
+  const m = view.measure, g = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  data.hours.filter(inRange).forEach(hr => { const d = new Date(hr.h * H); g[(d.getDay() + 6) % 7][d.getHours()] += hourVals(hr, m).tot; });
+  const max = Math.max(...g.flat()), el = $('punch');
+  if (!max) { el.innerHTML = '<div class="empty">Nothing in this range.</div>'; $('pcCnt').textContent = ''; return; }
+  const W = Math.max(300, el.clientWidth || 600), L = 36, T = 6, cw = (W - L) / 24, rh = 24, Hh = T + 7 * rh + 18, rmax = Math.min(cw, rh) / 2 - 1;
+  let s = '';
+  g.forEach((row, r) => {
+    s += '<text x="0" y="' + (T + r * rh + rh / 2 + 4) + '">' + WD[r] + '</text>';
+    row.forEach((v, c) => {
+      const cx = L + c * cw + cw / 2, cy = T + r * rh + rh / 2;
+      s += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy + '" r="1.2" fill="rgba(220,231,243,.18)"/>';
+      if (v) s += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy + '" r="' + Math.max(2, Math.sqrt(v / max) * rmax).toFixed(1) + '" fill="#3987e5"/>';
+      s += '<rect class="hit" x="' + (cx - cw / 2).toFixed(1) + '" y="' + (cy - rh / 2) + '" width="' + cw.toFixed(1) + '" height="' + rh + '" data-tip="' + esc(tipRows(WD[r] + ' ' + String(c).padStart(2, '0') + ':00', [[MNAME[m], fmtM(m, v)]])) + '"/>';
+    });
+  });
+  for (let c = 0; c < 24; c += 3) s += '<text x="' + (L + c * cw + cw / 2).toFixed(1) + '" y="' + (Hh - 2) + '" text-anchor="middle">' + String(c).padStart(2, '0') + '</text>';
+  el.innerHTML = '<svg class="chart" viewBox="0 0 ' + W + ' ' + Hh + '" role="img" aria-label="' + esc(MNAME[m]) + ' by weekday and hour">' + s + '</svg>';
+  let bw = 0, bh = 0; g.forEach((row, r) => row.forEach((v, c) => { if (v > g[bw][bh]) { bw = r; bh = c; } }));
+  $('pcCnt').textContent = 'peak ' + WD[bw] + ' ' + String(bh).padStart(2, '0') + ':00';
+}
+
+/* ---------- token mix: where the tokens go, and what each part costs ---------- */
+function drawMix() {
+  const T = data.total.t, parts = [['Cache read', T[3], 'Reused context, the cheap part'], ['Cache write', T[4] + T[5], 'Context stored for reuse (' + toks(T[5]) + ' for 1h)'], ['Input', T[1], 'New input not cached'], ['Output', T[2], 'Written by Claude']];
+  const P = data.total.parts || {}, cost = { 'Cache read': P.read || 0, 'Cache write': P.write || 0, Input: P.input || 0, Output: P.output || 0 }; /* priced by the server, per model */
+  const tot = T[1] + T[2] + T[3] + T[4] + T[5], el = $('mix');
+  if (!tot) { el.innerHTML = '<div class="empty">Nothing in this range.</div>'; return; }
+  const cols = ['#b7d3f6', '#6da7ec', '#256abf', '#d95926'];
+  el.innerHTML = '<div class="share" style="grid-template-columns:76px 1fr"><span class="k">Tokens</span><span class="sb">' + parts.map((p, i) => p[1] ? '<i style="flex:' + p[1] + ';background:' + cols[i] + '" tabindex="0" data-tip="' + esc(tipRows(p[0], [[toks(p[1]), pct(p[1], tot)]])) + '"></i>' : '').join('') + '</span>' +
+    '<span class="k">Cost</span><span class="sb">' + parts.map((p, i) => cost[p[0]] ? '<i style="flex:' + cost[p[0]] + ';background:' + cols[i] + '" tabindex="0" data-tip="' + esc(tipRows(p[0], [[money(cost[p[0]]), pct(cost[p[0]], data.total.cost)]])) + '"></i>' : '').join('') + '</span></div>' +
+    '<table class="tbl" style="margin-top:12px"><tr><th>Part</th><th class="r">Tokens</th><th class="r">Cost</th></tr>' + parts.map((p, i) => '<tr><td title="' + esc(p[2]) + '"><span class="sw" style="background:' + cols[i] + '"></span>' + esc(p[0]) + '</td><td class="m r">' + toks(p[1]) + ' <span style="color:var(--w3)">' + pct(p[1], tot) + '</span></td><td class="m r">' + money(cost[p[0]]) + ' <span style="color:var(--w3)">' + pct(cost[p[0]], data.total.cost) + '</span></td></tr>').join('') + '</table>';
+  $('mixCnt').textContent = 'cache hit ' + pct(T[3], T[1] + T[3] + T[4] + T[5]);
+}
+
+/* ---------- projects and conversations ---------- */
+function drawProjects() {
+  const m = view.measure, key = m === 'time' ? 'activeMs' : m, list = data.projects.filter(p => p[key] > 0 || p.cost > 0).sort((a, b) => b[key] - a[key]);
+  const max = Math.max(...list.map(p => p[key]), 1);
+  $('prCnt').textContent = list.length + ' projects';
+  /* the measure first (the bar shows it), then cost, or time when the measure is cost */
+  const k2 = m === 'cost' ? 'activeMs' : 'cost', n2 = m === 'cost' ? 'Time' : 'Cost';
+  $('projTbl').innerHTML = list.length ? '<tr><th>Project</th><th class="r">' + esc(MNAME[m]) + ' &#9662;</th><th class="r hide-s">' + n2 + '</th><th class="r hide-s">Chats</th></tr>' + list.map(p =>
+    '<tr' + (p.id ? ' class="click" tabindex="0" data-proj="' + esc(p.id) + '"' : '') + '><td>' + esc(p.name || 'No project') + '<span class="pb"><i style="width:' + (p[key] / max * 100).toFixed(1) + '%"></i></span></td><td class="m r">' + esc(fmtM(m, p[key])) + '</td><td class="m r hide-s">' + esc(k2 === 'cost' ? money(p.cost) : dur(p.activeMs)) + '</td><td class="m r hide-s">' + count(p.sessions) + '</td></tr>').join('') : '<tr><td class="m">Nothing in this range.</td></tr>';
+}
+function drawConvs() {
+  const m = view.measure, key = m === 'time' ? 'activeMs' : m === 'req' ? 'req' : m, list = data.conversations.slice().sort((a, b) => b[key] - a[key]);
+  $('cvCnt').textContent = data.conversationCount + ' with activity';
+  const shown = list.slice(0, convShown);
+  const mark = k => (k === key ? ' &#9662;' : ''); /* the column the list is sorted by (requests sort by the hidden count) */
+  $('convTbl').innerHTML = shown.length ? '<tr><th>Conversation' + (m === 'req' ? ' (by requests &#9662;)' : '') + '</th><th class="r">Cost' + mark('cost') + '</th><th class="r">Tokens' + mark('tokens') + '</th><th class="r hide-s">Time' + mark('activeMs') + '</th><th class="r hide-s">Last</th></tr>' + shown.map(c => {
+    const proj = c.projects.map(id => (data.projects.find(p => p.id === id) || {}).name || id).join(', ');
+    return '<tr' + (c.gone ? '' : ' class="click" tabindex="0" data-conv="' + esc(c.id) + '"') + '><td class="ttlc" title="' + esc((c.title || 'Deleted conversation') + (c.model ? ' // mostly ' + c.model : '')) + '">' + esc(c.title || 'Deleted conversation') + '<small>' + esc(proj || 'No project') + (c.subCost > 0.01 ? ' // helpers ' + pct(c.subCost, c.cost) : '') + '</small></td><td class="m r">' + money(c.cost) + '</td><td class="m r">' + toks(c.tokens) + '</td><td class="m r hide-s">' + dur(c.activeMs) + '</td><td class="m r hide-s">' + esc(dateText(new Date(c.last).getTime())) + '</td></tr>';
+  }).join('') : '<tr><td class="m">Nothing in this range.</td></tr>';
+  const more = $('convMore'); more.hidden = list.length <= convShown && convShown <= 15;
+  more.textContent = list.length > convShown ? 'Show ' + Math.min(30, list.length - convShown) + ' more' : 'Show fewer';
+}
+$('convMore').addEventListener('click', () => { const n = data ? data.conversations.length : 0; convShown = convShown < n ? convShown + 30 : 15; drawConvs(); MC.drawFrames(); });
+function openRow(e) {
+  const r = e.target.closest('tr[data-conv],tr[data-proj]'); if (!r) return;
+  if (e.type === 'keydown' && e.key !== 'Enter') return;
+  location.href = r.dataset.conv ? 'chat.html?session=' + encodeURIComponent(r.dataset.conv) : 'project.html?id=' + encodeURIComponent(r.dataset.proj);
+}
+['click', 'keydown'].forEach(t => { $('convTbl').addEventListener(t, openRow); $('projTbl').addEventListener(t, openRow); });
+
+let rz = 0;
+window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (data) draw(); }, 150); });
+MC.events.on('usage', () => { clearTimeout(rz); rz = setTimeout(load, 1500); }); /* a new plan usage reading adds a point */
+setPicks();
+load();
+</script>
+</body>
+</html>

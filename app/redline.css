@@ -1,0 +1,405 @@
+/* Mission Control, Redline Soft. Calmer colors, legible body text, less on screen. */
+@import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Montserrat:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+:root{
+  --bg:#0a1019; --bg-2:#0e1622;
+  --panel:rgba(200,214,230,.02); --panel-hi:rgba(200,214,230,.04);
+  --frame:rgba(220,231,243,.16); --frame-hi:rgba(220,231,243,.55);
+  --line:rgba(220,231,243,.3); --line-2:rgba(220,231,243,.12); --line-3:rgba(220,231,243,.07);
+  --white:#e2e9f0; --w2:#95a5b7; --w3:#627488;
+  --red:#d6473c; --red-2:#ef6a5c; --red-dk:#5c1a16;
+  /* the red buttons: a lighter red under the pointer, a deeper red while pressed (and while on, like Talk while it listens) */
+  --red-hi:#e45a4c; --red-lo:#7d1a13;
+  /* floating panels (drop-down lists, menus, popups) and text boxes share one soft frame */
+  --float-bg:#0e1724; --float-line:rgba(220,231,243,.2); --float-shadow:0 10px 28px rgba(0,0,0,.55);
+  --field-bg:rgba(0,0,0,.18); --field-line:rgba(220,231,243,.2); --field-focus:rgba(220,231,243,.45);
+  --head:"Rajdhani",system-ui,sans-serif; --sans:"Montserrat",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace; --c:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--white);font-family:var(--sans);font-size:14px}
+body{min-height:100vh;overflow-x:hidden;position:relative;font-variant-numeric:tabular-nums;background:radial-gradient(70% 55% at 55% 28%,rgba(40,92,145,.24),transparent 70%),radial-gradient(45% 45% at 95% 0%,rgba(105,88,200,.10),transparent 70%),radial-gradient(60% 60% at 0% 100%,rgba(0,0,0,.35),transparent 70%),var(--bg);background-attachment:fixed}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit}
+
+/* backdrop: one faint grid, nothing else */
+.bgfx{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.6;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M60 56v8M56 60h8' stroke='%23e9e2d6' stroke-opacity='.12' stroke-width='1'/%3E%3C/svg%3E")}
+
+/* layout */
+.app{position:relative;z-index:1;display:grid;grid-template-columns:64px 1fr;gap:22px;padding:22px 28px 64px 0;min-height:100vh}
+.app.with-voice{grid-template-columns:64px 300px 1fr}
+.main{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:22px;min-width:0;align-content:start}
+.main > *{min-width:0}
+.span-2{grid-column:span 2}.span-3{grid-column:span 3}.span-4{grid-column:span 4}.span-5{grid-column:span 5}.span-6{grid-column:span 6}.span-7{grid-column:span 7}.span-8{grid-column:span 8}.span-9{grid-column:span 9}.span-10{grid-column:span 10}.span-12{grid-column:1/-1}
+
+/* frames: faint until you point at them (see redline.js) */
+.fr{position:relative;min-width:0;background:var(--panel);transition:background .2s;
+  clip-path:polygon(var(--c) 0,100% 0,100% calc(100% - var(--c)),calc(100% - var(--c)) 100%,0 100%,0 var(--c))}
+.fr:hover,.fr:focus-within{background:var(--panel-hi);--frame:var(--frame-hi)}
+.fr > svg.edge{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:3}
+.fr > svg.edge .e{stroke:var(--frame);transition:stroke .2s}
+.fr > *:not(svg.edge){position:relative}
+.ttl{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 14px 0 calc(var(--c) + 8px)}
+.ttl h3{font-family:var(--head);font-weight:700;font-size:17px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.ttl .id,.foot,.ruler,.barcode,.rail .vt{display:none !important}
+.ttl .cnt{margin-left:auto;font-size:12px;font-weight:500;color:var(--w2);white-space:nowrap}
+a.cnt:hover{color:var(--white)}
+.ttl .right{margin-left:auto;display:flex;gap:6px;align-items:center}
+.body{padding:4px 18px 16px}
+
+/* rail */
+.rail{display:flex;flex-direction:column;align-items:flex-end;gap:10px;padding-top:2px;position:sticky;top:22px;align-self:start;height:calc(100vh - 44px)}
+.rail-eye{width:44px;height:44px;display:block}
+.rail-home{display:block;margin-bottom:18px;position:relative;transition:background .15s}
+.rail-home:hover{background:var(--panel-hi)}
+.rail-home:focus-visible{outline:2px solid var(--white);outline-offset:2px}
+.tab{width:44px;height:44px;display:grid;place-items:center;color:var(--w3);position:relative;clip-path:polygon(10px 0,100% 0,100% 100%,0 100%,0 10px);transition:color .15s,background .15s}
+.tab svg{width:19px;height:19px}
+.tab:hover{color:var(--white);background:var(--panel-hi)}
+.tab.on{background:var(--red);color:#fff}
+.tab-wrap{position:relative}
+.tab-wrap .tip{position:absolute;left:54px;top:12px;font-size:12px;font-weight:600;background:var(--white);color:var(--bg);padding:3px 9px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;z-index:20}
+.tab-wrap:hover .tip{opacity:1}
+
+/* header */
+header.page{grid-column:1/-1;min-width:0}
+.hd{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
+.hd h1{font-family:var(--head);font-weight:700;font-size:42px;line-height:.95;letter-spacing:.05em;text-transform:uppercase}
+.hd h1 em{font-style:normal;color:var(--red)}
+.hd .sub{font-size:13px;color:var(--w2);margin-top:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.clock{text-align:right}
+.clock b{font-family:var(--head);font-weight:600;font-size:36px;letter-spacing:.04em;display:block;line-height:1}
+.clock span{font-size:12px;color:var(--w2)}
+
+/* status chips: fill, outline and icon carry the meaning, never hue alone */
+.chip{display:inline-flex;align-items:center;gap:6px;font:600 11.5px var(--sans);letter-spacing:.02em;padding:2px 9px;white-space:nowrap;line-height:1.5;border-radius:1px}
+.chip svg{width:10px;height:10px;flex:none}
+.c-ok{color:var(--white);border:1px solid var(--line)}
+.c-bad{background:var(--red);color:#fff}
+.c-warn{color:#0a1019;background:var(--white)}
+.c-idle{color:var(--w3);border:1px dashed var(--line-2)}
+.c-live{color:#0a1019;background:var(--white)}
+/* the server button: state and action in one. Online is a light forest green outline with a check mark; offline is a
+   deep dark red outline. Lightness differs as well as hue, and the word always says it. Hover swaps in the action. */
+.srvb{display:inline-grid;align-items:center;font:600 11.5px var(--sans);letter-spacing:.02em;padding:2px 9px;line-height:1.5;border-radius:1px;background:none;cursor:pointer;white-space:nowrap}
+.srvb svg{width:10px;height:10px;flex:none}
+/* both labels sit in the same cell, so the button keeps one width when hover swaps them */
+.srvb .sa,.srvb .sb{grid-area:1/1;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.srvb .sb{visibility:hidden}
+.srvb:hover .sa,.srvb:focus-visible .sa{visibility:hidden}
+.srvb:hover .sb,.srvb:focus-visible .sb{visibility:visible}
+.srvb.on{color:#8fd08a;border:1px solid #5fa85a}
+.srvb.on:hover,.srvb.on:focus-visible{color:var(--white);border-color:var(--white)}
+.srvb.off{color:#f0b3ad;border:1px solid #9b2018;background:rgba(92,26,22,.35)}
+.srvb.off:hover,.srvb.off:focus-visible{color:#fff;background:#9b2018}
+
+/* buttons */
+/* small buttons are plain squares (the big red ones keep their cut corner) */
+.act{position:relative;font:600 12px var(--sans);letter-spacing:.02em;background:transparent;color:var(--white);border:1px solid var(--line);padding:5px 11px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;transition:background .15s,color .15s}
+/* the connection logos keep their cut corner and draw a line along it */
+.card .logo{position:relative}
+.card .logo::before{content:"";position:absolute;left:-1px;top:7px;width:11.31px;height:1px;background:var(--line);transform-origin:0 0;transform:translate(.35px,.35px) rotate(-45deg);pointer-events:none}
+.act svg{width:11px;height:11px}
+.act:hover{background:var(--white);color:var(--bg)}
+.act.red{background:var(--red);border-color:var(--red);color:#fff}
+.act.ghost{border-color:transparent;color:var(--w2)}
+.act.ghost:hover{background:transparent;color:var(--white)}
+.act.big{font-size:13px;padding:8px 15px}
+/* every big red button (Talk, Send, Send later, New conversation, red actions) lights up under the pointer and deepens while pressed */
+:is(.act.red,.voice .vmic,.linkbar .micbtn,.tbbar .sendbtn,.tbbar .timebtn){transition:background .12s}
+:is(.act.red,.voice .vmic,.linkbar .micbtn,.tbbar .sendbtn,.tbbar .timebtn):not(:disabled):not([aria-disabled="true"]):hover{background:var(--red-hi)}
+:is(.act.red,.voice .vmic,.linkbar .micbtn,.tbbar .sendbtn,.tbbar .timebtn):not(:disabled):not([aria-disabled="true"]):active,
+:is(.voice .vmic,.linkbar .micbtn).on,.tbbar .timebtn[aria-expanded="true"]{background:var(--red-lo)}
+:is(.voice .vmic,.linkbar .micbtn).on:not([aria-disabled="true"]):not(:active):hover,.tbbar .timebtn.timebtn[aria-expanded="true"]:not(:active):hover{background:#a3261c}
+/* an outlined red button's border follows its fill, so a pressed one has no lighter edge */
+.act.red:not(:disabled):not([aria-disabled="true"]):hover{border-color:var(--red-hi)}
+.act.red:not(:disabled):not([aria-disabled="true"]):active{border-color:var(--red-lo)}
+
+/* floating menus (the three dot menus, project menus) and popups: the drop-down list look */
+.menu{background:var(--float-bg) !important;border:1px solid var(--float-line) !important;box-shadow:var(--float-shadow) !important;border-radius:0}
+.menu button:not(:disabled):hover,.menu button:focus-visible{background:var(--red) !important;color:#fff !important;outline:none}
+.info .pop{background:var(--float-bg);border-color:var(--float-line);box-shadow:var(--float-shadow)}
+
+/* text boxes: one soft frame everywhere, a little brighter while typing */
+.in:not(select),.wk-in,.ren,.dpop input,.st-mem,.off input,.off textarea{background:var(--field-bg) !important;border:1px solid var(--field-line) !important;border-radius:0;outline:none}
+.in:not(select):focus,.wk-in:focus,.ren:focus,.dpop input:focus,.st-mem:focus{border-color:var(--field-focus) !important}
+.in.bad,.wk-in.bad{border-color:var(--red-2) !important}
+select.in{border-color:var(--field-line)}
+
+/* number boxes: the system spin box is replaced by two small triangles (MC.numberArrows in redline.js) */
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.numw{position:relative;display:inline-flex;align-items:stretch;min-width:0}
+.numw > input{padding-right:22px !important}
+.numw .numa{position:absolute;right:4px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;gap:1px}
+.numw .numa button{display:grid;place-items:center;width:14px;height:11px;padding:0;background:none;border:0;color:var(--w3);cursor:pointer}
+.numw .numa button:hover{color:var(--white)}
+.numw .numa svg{width:8px;height:5px}
+
+/* drop-down lists: one look on every page. Chrome draws the list itself (base-select), so it is dark with the pointed item in red.
+   The button is a plain square that lightens a little under the pointer; open or focused, its frame gets only a little brighter.
+   The open list has the soft frame of a text field. */
+@supports (appearance:base-select){
+  select{appearance:base-select;display:inline-flex;align-items:center;gap:6px;cursor:pointer;border-radius:0;transition:background-color .12s,border-color .12s}
+  select:not(:disabled):hover{background-color:#18212d !important}
+  select::picker-icon{color:var(--w2);font-size:10px}
+  select::picker(select){appearance:base-select;background:#0e1724;border:1px solid rgba(220,231,243,.2);border-radius:0;padding:4px 0;margin-top:2px;box-shadow:0 10px 28px rgba(0,0,0,.55);max-height:min(420px,60vh);
+    scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--w2) 38%,transparent) rgba(255,255,255,.03)} /* the list is drawn by Chrome, so it takes the standard scrollbar properties, in the dashboard's colors */
+  select option{display:flex;align-items:center;gap:8px;padding:6px 12px 6px 10px;background:transparent;color:var(--white);font:500 13px var(--sans);letter-spacing:.01em;min-width:0}
+  select option::checkmark{color:var(--white);font-size:11px}
+  select option:hover,select option:focus-visible{background:var(--red);color:#fff;outline:none}
+  select option:hover::checkmark,select option:focus-visible::checkmark{color:#fff}
+  select option:checked{font-weight:700}
+  select option:disabled{color:var(--w3)}
+}
+select:focus-visible{outline:none}
+select{border-radius:0}
+select:not(.bad):focus-visible,select:not(.bad):open{border-color:rgba(220,231,243,.45) !important} /* a field marked wrong keeps its red frame */
+/* number boxes: focus is a lighter frame, selected text is red rather than the system blue */
+input[type=number]:focus-visible{outline:none;border-color:var(--frame-hi) !important}
+input::selection,textarea::selection{background:var(--red);color:#fff}
+
+/* meters */
+.blocks{display:flex;gap:2px;height:14px}
+.blocks i{flex:1;background:rgba(220,231,243,.08)}
+.mini{display:flex;gap:1px;height:6px}
+.mini i{flex:1;background:rgba(220,231,243,.1)}
+.mini i.on{background:var(--white)}
+.mini.hot i.on{background:var(--red)}
+.bar{height:4px;background:rgba(220,231,243,.08);position:relative}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--white)}
+.bar i.hot{background:var(--red)}
+
+/* tables */
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{font-weight:500;font-size:11.5px;color:var(--w3);text-align:left;padding:8px 10px 6px;white-space:nowrap}
+.tbl td{padding:8px 10px;border-top:1px solid var(--line-3);white-space:nowrap}
+.tbl td:first-child,.tbl th:first-child{padding-left:20px}
+.tbl td:last-child,.tbl th:last-child{padding-right:18px}
+.tbl td.m{font-family:var(--mono);font-size:12px;color:var(--w2)}
+.tbl td.wrap{white-space:normal}
+.tbl tr.hot td{background:rgba(214,71,60,.16);border-color:rgba(214,71,60,.3)}
+.tbl .i{width:28px;color:var(--w3);font-size:12px}
+.tbl tr.click{cursor:pointer}
+.tbl tr:hover td{background:rgba(220,231,243,.03)}
+
+/* key values */
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 18px;font-size:14px}
+.kv dt{font-size:12px;color:var(--w3);padding-top:1px;white-space:nowrap}
+.kv dd{font-weight:500}
+
+/* stat tiles */
+.stat{--c:12px;padding:16px 18px 16px 22px;display:flex;align-items:center;gap:16px;cursor:default}
+.stat .n{font-family:var(--head);font-weight:700;font-size:50px;line-height:.8}
+.stat .t{font-size:13px;font-weight:600;color:var(--w2);line-height:1.3}
+.stat .s{display:none}
+.stat.alert .n{color:var(--red-2)}
+
+/* skills */
+.sk{position:relative;display:flex;align-items:center;gap:10px;text-align:left;background:rgba(220,231,243,.04);border:1px solid var(--line-2);color:var(--white);padding:10px 12px;cursor:pointer;min-width:0;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,0 100%);transition:background .15s,color .15s}
+.sk::after{content:"";position:absolute;right:0;top:0;width:10px;height:10px;background:var(--red);clip-path:polygon(0 0,100% 0,100% 100%)}
+.sk svg{width:16px;height:16px;flex:none;color:var(--w2)}
+.sk span{min-width:0;overflow:hidden}
+.sk b{font-weight:600;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sk small{display:none}
+.sk:hover{background:var(--white);color:var(--bg)}
+.sk:hover svg{color:var(--bg)}
+.sk.primary{border-color:rgba(214,71,60,.6)}
+
+/* page grid: title bar on top, rail on the left, then the left column and the main area */
+.app{grid-template-rows:auto 1fr}
+.app > .rail{grid-row:1/span 2}
+.app > header.page{grid-row:1;grid-column:2/-1}
+.app > .leftcol,.app > .main{grid-row:2}
+.app > header.page .hd{align-items:center}
+.hstat{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.hstat .clock{margin-left:10px}
+.leftcol{display:flex;flex-direction:column;gap:22px;align-self:start;position:sticky;top:22px;min-width:0}
+
+/* voice panel: the same on every page that has one. Small on purpose: the eye, one word, the mic. */
+.app.with-voice{grid-template-columns:64px 300px 1fr}
+.voice{display:flex;flex-direction:column}
+.voice .vbody{display:flex;flex-direction:column;padding:0 16px 12px}
+.voice canvas[data-eye]{width:100%;height:96px;display:block;margin-top:0}
+/* the Com Link eye is one size on Home, the project pages and the Talk page (90% of what the Talk page had), smaller on short windows */
+:root{--eye-h:clamp(170px,27vh,252px)}
+@media (min-width:1101px){.voice canvas[data-eye]{height:var(--eye-h)}}
+.voice .vsay{text-align:center;font-family:var(--head);font-weight:600;font-size:17px;letter-spacing:.12em;text-transform:uppercase;color:var(--w2);margin-top:4px;min-height:22px}
+.voice .vctx{text-align:center;font-size:12.5px;color:var(--w3);margin-top:2px}
+
+
+/* background variants (switch in the corner) */
+#bgfx2{position:fixed;inset:0;pointer-events:none;z-index:0;width:100%;height:100%}
+.spot{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:0;transition:opacity .4s;
+  background-image:linear-gradient(rgba(220,231,243,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(220,231,243,.07) 1px,transparent 1px);background-size:30px 30px;
+  -webkit-mask-image:radial-gradient(360px circle at var(--mx,50%) var(--my,50%),#000 0%,rgba(0,0,0,.45) 50%,transparent 100%);mask-image:radial-gradient(360px circle at var(--mx,50%) var(--my,50%),#000 0%,rgba(0,0,0,.45) 50%,transparent 100%)}
+.spot.on{opacity:1}
+.grain{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:0;transition:opacity .4s}
+.grain.on{opacity:1}
+.bgswitch{position:fixed;right:14px;bottom:10px;z-index:60;display:flex;opacity:.55;transition:opacity .15s;font-size:10.5px;align-items:center;gap:2px;background:rgba(12,19,29,.88);border:1px solid var(--line-2);padding:4px;font-size:11.5px}
+.bgswitch:hover,.bgswitch:focus-within{opacity:1}
+.bgswitch span{color:var(--w3);padding:0 6px;font-weight:600}
+.bgswitch button{background:transparent;border:0;color:var(--w2);font:600 10.5px var(--sans);padding:2px 6px;cursor:pointer}
+.bgswitch button.on{background:var(--white);color:var(--bg)}
+.bgswitch button.bgview{margin-left:6px;border-left:1px solid var(--line-2);padding-left:8px}
+/* on a phone a fixed switch would cover the end of the page, so it sits after the content instead */
+@media (max-width:760px){.bgswitch{position:static;width:max-content;margin:16px 16px 16px auto;opacity:.8}}
+
+/* talk box */
+.talkbox{display:flex;align-items:stretch;border:1px solid var(--field-line)}
+.talkbox:focus-within{border-color:var(--field-focus)}
+.talkbox input,.talkbox textarea{flex:1;min-width:0;background:rgba(0,0,0,.18);border:0;color:var(--white);font:400 14.5px var(--sans);padding:12px 14px;outline:none;resize:none}
+.talkbox input::placeholder,.talkbox textarea::placeholder{color:var(--w3)}
+.talkbox button{width:50px;background:var(--red);border:0;display:grid;place-items:center;cursor:pointer}
+.talkbox button svg{width:17px;height:17px}
+
+/* toggle */
+.tog{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500;color:var(--w2);cursor:pointer;user-select:none}
+.tog i{width:32px;height:16px;border:1px solid var(--line);position:relative;display:block}
+.tog i::after{content:"";position:absolute;top:2px;left:2px;width:10px;height:10px;background:var(--w3);transition:left .15s}
+.tog.on{color:var(--white)}
+.tog.on i{background:var(--red);border-color:var(--red)}
+.tog.on i::after{left:18px;background:#fff}
+
+/* fold: show more */
+.more{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:9px;background:transparent;border:0;border-top:1px solid var(--line-3);color:var(--w2);font:600 12px var(--sans);cursor:pointer}
+.more:hover{color:var(--white)}
+.more svg{width:10px;height:10px;transition:transform .2s}
+.more.open svg{transform:rotate(180deg)}
+.fold{display:none}
+.fold.open{display:block}
+tr.fold.open{display:table-row}
+
+/* tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line-2);overflow-x:auto}
+.tabs button{background:transparent;border:0;color:var(--w2);font:700 15.5px var(--head);letter-spacing:.04em;padding:12px 16px 11px;cursor:pointer;position:relative;white-space:nowrap}
+.tabs button:hover{color:var(--white)}
+.tabs button.on{color:var(--white)}
+.tabs button.on::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2px;background:var(--red)}
+.tabs button .n{font:500 11px var(--sans);letter-spacing:0;color:var(--w3);margin-left:6px}
+.pane{display:none}
+.pane.on{display:grid}
+
+/* info popover */
+.info{position:relative;display:inline-grid;place-items:center;width:20px;height:20px;border:1px solid var(--line);border-radius:50%;font:700 11px var(--sans);color:var(--w2);cursor:help}
+.info .pop{position:absolute;right:0;top:26px;width:260px;background:#172638;border:1px solid var(--line);padding:10px 12px;font-weight:500;font-size:12.5px;line-height:1.5;color:var(--white);opacity:0;pointer-events:none;transition:opacity .12s;z-index:30;text-align:left}
+.info:hover .pop{opacity:1}
+
+/* hover card */
+.hcard{position:fixed;z-index:40;width:290px;pointer-events:none;opacity:0;transition:opacity .12s;--c:12px}
+.hcard.show{opacity:1}
+.hcard .fr{background:rgba(20,32,48,.96);--frame:var(--frame-hi)}
+
+.muted{color:var(--w3)}
+.mono{font-family:var(--mono)}
+.redt{color:var(--red-2)}
+
+@media (max-width:1100px){
+  /* the tab row stays at the top of the screen on a phone: --railh is its height (eight slots share the width) */
+  :root{--railh:calc((100vw - 28px - 42px) / 8 + 22px)}
+  .app,.app.with-voice{grid-template-columns:1fr;padding:calc(var(--railh) + 12px) 14px 64px}
+  /* one equal slot per item shown (the eye plus the tabs that are not hidden on phone), sharing the full width of the screen */
+  .rail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;align-items:center;position:fixed;top:0;left:0;right:0;z-index:90;height:var(--railh);box-sizing:border-box;padding:14px 14px 8px;background:#0a1019;border-bottom:1px solid var(--line-3)}
+  .tab-wrap{width:100%;min-width:0}
+  .tab-wrap .tip{display:none}
+  .tab-wrap.tw-home{display:none}
+  .rail-home{margin:0;width:100%;min-width:0}
+  .rail-eye,.tab{width:100%;height:auto;aspect-ratio:1/1}
+  /* the eye stands in for the Home tab: on Home a short red bar sits above it */
+  .rail-home.on::after{content:"";position:absolute;left:50%;top:-8px;width:18px;height:3px;margin-left:-9px;background:var(--red)}
+  .rail-home:focus-visible{outline-offset:-2px}
+  .main{grid-template-columns:1fr}
+  .app > *{grid-row:auto !important;grid-column:auto !important}
+  .leftcol{position:relative;top:0}
+  .main > *{grid-column:1/-1 !important;grid-row:auto !important}
+  .main > div[style*="repeat(4"]{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+}
+@media (max-width:560px){
+  :root{--railh:calc((100vw - 28px - 28px) / 8 + 22px)}
+  .rail{gap:4px}
+  .hd{flex-wrap:wrap}
+  .hd h1{font-size:32px}
+  .stat .n{font-size:40px}
+  .tbl .hide-s{display:none}
+  .tbl{display:block;overflow-x:auto}
+  .main > div[style*="repeat(4"]{grid-template-columns:minmax(0,1fr) !important}
+}
+
+/* Com Link status word */
+.voice .vstat{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:4px;min-height:22px}
+.voice .vstat .vsay{margin-top:0}
+
+/* scrollbars: one quiet style for the page and every inner panel or list.
+   Firefox gets the standard properties. Chromium and Safari support selector(::-webkit-scrollbar),
+   so the guard keeps the Firefox rule out of their way and the -webkit- pseudo-elements apply.
+   The thumb uses the light blue-gray (--w2) so it reads on the dark blue background. */
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--w2) 38%,transparent) rgba(255,255,255,.03)}
+}
+::-webkit-scrollbar{width:8px;height:8px;background:transparent}
+::-webkit-scrollbar-track{background:rgba(255,255,255,.03)}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--w2) 38%,transparent);border-radius:0}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--w2) 60%,transparent)}
+::-webkit-scrollbar-thumb:active{background:color-mix(in srgb,var(--red) 70%,transparent)}
+::-webkit-scrollbar-button{display:none}
+::-webkit-scrollbar-corner{background:transparent}
+
+/* scroll fades (see MC.fades in redline.js): a soft mask at the top when scrolled down and at the bottom when more is below.
+   --fx-in keeps the top fade below a sticky header. The sizes are registered so they ease in and out. */
+@property --fx-t{syntax:"<length>";inherits:false;initial-value:0px}
+@property --fx-b{syntax:"<length>";inherits:false;initial-value:0px}
+.mc-fx{
+  --fx-in:0px;
+  transition:--fx-t .2s ease,--fx-b .2s ease;
+  -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 var(--fx-in),transparent var(--fx-in),#000 calc(var(--fx-in) + var(--fx-t)),#000 calc(100% - var(--fx-b)),transparent 100%);
+  mask-image:linear-gradient(to bottom,#000 0,#000 var(--fx-in),transparent var(--fx-in),#000 calc(var(--fx-in) + var(--fx-t)),#000 calc(100% - var(--fx-b)),transparent 100%);
+}
+.mc-fx-t{--fx-t:24px}
+.mc-fx-b{--fx-b:24px}
+@media (prefers-reduced-motion:reduce){.mc-fx{transition:none}}
+
+/* project strip in the title bar: a sun and one dot per project, nearest first */
+/* the padding keeps the sun's glow inside the clipped box; the line runs from the sun's center to the last dot's center
+   (the last dot sits 14px from the right end: EDGE in MC.projectStrip) */
+.pstrip{flex:1 1 0;min-width:0;margin:0 66px 0 50px;padding-left:16px;display:flex;align-items:center;gap:12px;align-self:center;height:28px;overflow:hidden;
+  background:linear-gradient(90deg,rgba(226,233,240,.16),rgba(226,233,240,.06)) 20px center/calc(100% - 34px) 1px no-repeat}
+.hd > .idb{flex-grow:0 !important}
+.mc-s{display:none}
+.hd.mc-t1 .chip[title="Not wired yet"]{display:none}
+.hd.mc-t2 .mc-l,.hd.mc-t2 .rtxt{display:none}
+.hd.mc-t2 .mc-s{display:inline}
+.pstrip[hidden]{display:none}
+.pstrip.off{display:none}
+.psun{flex:none;position:relative;width:8px;height:8px;border-radius:50%;background:var(--white);box-shadow:0 0 0 3px rgba(226,233,240,.12),0 0 12px 2px rgba(226,233,240,.3)}
+.pdots{flex:1 1 0;min-width:0;position:relative;height:28px}
+.pd{position:absolute;top:0;left:0;width:22px;height:28px;margin-left:-11px;display:grid;place-items:center;outline:none}
+.pd i{display:block;width:6px;height:6px;border-radius:50%;background:#c9d3de;transition:transform .15s}
+.pd.is-need i{background:var(--red)}
+.pplanet{display:block;width:22px;height:22px;transition:transform .15s}
+.pd:hover .pplanet,.pd:focus-visible .pplanet{transform:scale(1.2)}
+.pd.is-cur:focus-visible .pplanet{outline:2px solid var(--white);outline-offset:1px;border-radius:50%}
+.pd:hover i,.pd:focus-visible i{transform:scale(1.35)}
+.pd:focus-visible i{outline:2px solid var(--white);outline-offset:4px}
+.pcard .bodyc{padding:2px 16px 14px}
+.pcard .desc{color:var(--w2);font-size:13px;line-height:1.45;margin-bottom:12px}
+.pcard .kv{font-size:13px;gap:5px 14px}
+.pcard .kv dd div+div{margin-top:2px}
+.pcard .alsoold{margin-top:3px;font-size:11px;color:var(--w3)}
+/* the card stays where it opened, so it takes the pointer: Run dev, Open app and Open sit along its bottom */
+.hcard.pcard.show{pointer-events:auto}
+.pcard .pacts{display:flex;flex-wrap:wrap;gap:6px;padding:2px 16px 14px}
+.pcard .pacts:empty{display:none}
+.pacts .act{min-width:56px;justify-content:center}
+.pcard .pnote{padding:0 16px 12px;margin-top:-4px;font-size:12px;color:var(--w2)}
+.pcard .pnote:empty{display:none}
+.pcard .lw{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* the sun in the title bar is Mission Control: a link like the dots, a ring when it is the page you are on, red when it needs you */
+a.psun{display:block;outline:none}
+a.psun:hover,a.psun:focus-visible{transform:scale(1.3)}
+a.psun:focus-visible{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--white)}
+.psun.is-need{background:var(--red);box-shadow:0 0 0 3px rgba(214,71,60,.18),0 0 12px 2px rgba(214,71,60,.45)}
+.psun.is-cur{box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--white),0 0 12px 2px rgba(226,233,240,.3)}
+.psun{transition:transform .15s}
+@media (max-width:900px){.pstrip,.pcard{display:none}}
+
+/* controls that only make sense at the PC: hidden once api.js sets data-remote on <html> (a phone) */
+[data-remote] .pc-only{display:none !important}

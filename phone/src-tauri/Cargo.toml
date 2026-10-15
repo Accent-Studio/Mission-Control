@@ -1,0 +1,33 @@
+[package]
+name = "mission-control-phone"
+version = "0.1.4"
+edition = "2021"
+description = "Mission Control on your phone: pairs with your PC and shows its pages"
+publish = false
+
+[lib]
+name = "mission_control_phone_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.5", features = [] }
+# Opens links that lead away from Mission Control in the system browser (called from Rust only).
+tauri-plugin-opener = "2"
+# The phone side of the bridge: device key, pairing and the local proxy. No server code.
+mc-bridge = { path = "../../bridge", default-features = false, features = ["client"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync", "time"] }
+log = "0.4"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+# Scanning the PC's pairing QR code. Phones only: computers paste the pairing text.
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2.5.1"

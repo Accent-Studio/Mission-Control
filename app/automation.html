@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automation // Mission Control</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="redline.css">
+<style>
+.day{position:relative;height:120px;margin:12px 16px 0;overflow:hidden}
+.day .axis{position:absolute;left:0;right:0;top:56px;border-top:1px solid var(--line)}
+.day .tick{position:absolute;top:50px;height:12px;border-left:1px solid var(--line);font-family:var(--mono);font-size:10px;color:var(--w3)}
+.day .tick span{position:absolute;top:16px;left:-12px}
+.ttl .cnt#schedCnt{margin-left:0}
+.day .now{position:absolute;top:0;bottom:16px;border-left:2px solid var(--red)}
+.day .now span{position:absolute;top:0;left:6px;font-family:var(--mono);font-size:10px;color:var(--red-2);white-space:nowrap}
+.day .ev{position:absolute;top:36px;transform:translateX(-50%);text-align:center}
+.day .ev i{display:block;width:12px;height:12px;margin:0 auto;transform:rotate(45deg);background:var(--white)}
+.day .ev b{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;margin-top:-34px;margin-bottom:24px}
+.day .ev.low b{margin-top:30px;margin-bottom:0}
+.lib{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:12px 14px}
+.libh{grid-column:1/-1;font-family:var(--mono);font-size:10px;color:var(--w3);letter-spacing:.12em;margin-top:6px;display:flex;justify-content:space-between}
+.dim{font-family:var(--mono);font-size:11px;color:var(--w3);padding:14px 16px;line-height:1.5}
+.conf{display:inline-flex;gap:6px;align-items:center;font-family:var(--mono);font-size:10.5px;color:var(--w2)}
+.conf svg{width:11px;height:11px}
+.sm td{font-size:12px;color:var(--w2)}
+.act .soon{color:#fff;border-color:rgba(255,255,255,.5)}
+.soon{font:600 9.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;border:1px dashed var(--line-2);color:var(--w3);padding:1px 5px;margin-left:6px}
+.off{opacity:.5;pointer-events:none}
+.off input,.off select,.off textarea{background:#0f0f12;color:var(--w3);border:1px solid var(--line);padding:7px 9px;width:100%;font:500 13px var(--sans)}
+.days{display:flex;gap:4px}
+.days span{width:30px;height:28px;display:grid;place-items:center;border:1px solid var(--line-2);font-family:var(--mono);font-size:11px;color:var(--w2)}
+.days span.on{background:var(--white);color:#0b0b0d;border-color:var(--white)}
+.note{font-family:var(--mono);font-size:10.5px;color:var(--w2);border:1px dashed var(--line-2);padding:8px 10px;line-height:1.5}
+.form{display:grid;gap:10px;padding:12px 16px}
+.form label{font-family:var(--mono);font-size:10px;color:var(--w3);letter-spacing:.1em;display:block;margin-bottom:4px}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+</style>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="bgfx" aria-hidden="true"></div>
+<div class="app">
+  <nav class="rail" aria-label="Main"></nav>
+    <header class="page">
+      <div class="ruler" aria-hidden="true"></div>
+      <div class="hd">
+        <div><h1>Skills <em>&amp; schedules</em></h1><div class="sub" id="sub">Loading</div></div>
+        <svg class="barcode" aria-hidden="true"></svg>
+        <div class="clock"><b data-clock>00:00</b></div>
+      </div>
+    </header>
+
+  <main class="main">
+
+    <section class="fr span-12" aria-label="Today">
+      <div class="ttl"><h3>Today</h3><span class="id">24 H TIMELINE</span><span class="cnt" id="dayCnt"></span></div>
+      <div class="day" id="day"></div>
+    </section>
+
+    <section class="fr span-12" aria-label="Schedules">
+      <div class="ttl"><h3>Schedules</h3><span class="cnt" id="schedCnt"></span><span class="right"><button class="act red" disabled style="opacity:.5;cursor:default" title="Not wired yet">New schedule<span class="soon">Soon</span></button></span></div>
+      <div id="schedBox"><div class="dim">Loading schedules</div></div>
+      <div id="otherBox"></div>
+    </section>
+
+    <section class="fr span-12 off" aria-label="New schedule" title="Not wired yet" style="max-width:720px">
+      <div class="ttl"><h3>New schedule</h3><span class="soon">Soon</span></div>
+      <div class="form">
+        <div><label>WHAT SHOULD CLAUDE DO</label><textarea disabled rows="2"></textarea></div>
+        <div class="two"><div><label>PROJECT</label><select disabled><option>All projects</option></select></div><div><label>TIME</label><input disabled value="07:30"></div></div>
+        <div><label>DAYS</label><div class="days"><span class="on">M</span><span class="on">T</span><span class="on">W</span><span class="on">T</span><span class="on">F</span><span class="">S</span><span class="">S</span></div></div>
+        <div class="two"><div><label>SKILL</label><select disabled><option>None, plain prompt</option></select></div><div><label>THEN</label><select disabled><option>Just save it</option></select></div></div>
+        <div class="note">Runs the real claude program on this PC with your login. It cannot push, send messages, or delete files unless the task says so and you approved it here.</div>
+        <button class="act big red" disabled style="justify-self:start">Save schedule</button>
+      </div>
+    </section>
+
+    <section class="fr span-8" aria-label="Skill library">
+      <div class="ttl"><h3>Skill library</h3><span class="id">SKILLS</span><span class="cnt" id="skCnt"></span></div>
+      <div class="dim" style="padding-bottom:0">Click a skill to fill the Com Link box. Nothing is sent until you press Enter there.</div>
+      <div class="lib" id="lib"><div class="dim" style="grid-column:1/-1">Loading skills</div></div>
+    </section>
+    <section class="fr span-4" aria-label="Run history">
+      <div class="ttl"><h3>Run history</h3><span class="soon">Soon</span></div>
+      <div class="dim">No data source yet. Run history will show here once runs are recorded.</div>
+    </section>
+  </main>
+</div>
+
+<script src="api.js"></script>
+<script src="phrases.js"></script>
+<script src="redline.js"></script>
+<script>
+MC.init('auto');
+const $ = id => document.getElementById(id);
+const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+function pd(v){ if(!v) return null; const d = new Date(String(v).replace(/(\.\d{3})\d+/, '$1')); return isNaN(d) ? null : d; }
+function fmt(v){
+  const d = pd(v); if(!d) return '';
+  const t = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  const day0 = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day0(d) - day0(new Date())) / 86400000);
+  if(diff === 0) return 'Today ' + t;
+  if(diff === 1) return 'Tomorrow ' + t;
+  if(diff === -1) return 'Yesterday ' + t;
+  return d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' ' + t;
+}
+function result(t){
+  if(t.neverRan) return MC.chip('idle', 'Never ran');
+  if(t.lastResult === 0) return MC.chip('ok', 'OK');
+  if(t.lastResult === 267009) return MC.chip('live', 'Running');
+  return MC.chip('bad', 'Failed (' + esc(t.lastResult) + ')');
+}
+
+/* ---------- schedules ---------- */
+let sched = null;
+function drawSched(){
+  const box = $('schedBox');
+  if(!sched){ box.innerHTML = '<div class="dim">Server offline. Schedules cannot be read right now.</div>'; $('otherBox').innerHTML = ''; $('sub').textContent = 'Server offline'; drawDay(); return; }
+  const tasks = sched.tasks || [], other = sched.other || [];
+  $('schedCnt').textContent = tasks.length;
+  $('sub').textContent = tasks.length + ' Mission Control task' + (tasks.length === 1 ? '' : 's') + ', ' + other.length + ' other on this PC';
+  const err = sched.error ? '<div class="dim">' + esc(sched.error) + '</div>' : '';
+  if(!tasks.length){
+    box.innerHTML = err + '<div class="dim">No Mission Control tasks yet. Tasks in the \\MissionControl\\ folder of Windows Task Scheduler show here.</div>';
+  } else {
+    box.innerHTML = '<table class="tbl"><thead><tr><th class="i">#</th><th>TASK</th><th>WHEN</th><th>LAST RUN</th><th>LAST RESULT</th><th>NEXT</th><th></th></tr></thead><tbody>' +
+      tasks.map((t, i) => '<tr class="' + (!t.neverRan && t.lastResult !== 0 && t.lastResult !== 267009 ? 'hot' : '') + '"><td class="i">' + pad(i + 1) + '</td><td>' + esc(t.name) + '</td><td class="m">' + esc(t.when || 'No trigger') + '</td><td class="m">' + (t.neverRan ? 'Never' : esc(fmt(t.lastRun) || 'Unknown')) + '</td><td>' + result(t) + '</td><td class="m">' + esc(fmt(t.nextRun) || 'Not scheduled') + '</td><td style="text-align:right" data-run="' + i + '"><button class="act" data-do="ask">Run now</button></td></tr>').join('') + '</tbody></table>';
+  }
+  $('otherBox').innerHTML = other.length ? '<div class="libh" style="padding:12px 16px 4px"><span>OTHER TASKS ON THIS PC</span><span>' + other.length + ' // READ ONLY</span></div><table class="tbl sm"><thead><tr><th>TASK</th><th>STATE</th><th>NEXT</th></tr></thead><tbody>' +
+    other.map(t => '<tr><td>' + esc(t.name) + '</td><td class="m">' + esc(t.state || '') + '</td><td class="m">' + esc(fmt(t.nextRun) || 'Not scheduled') + '</td></tr>').join('') + '</tbody></table>' : '';
+  drawDay();
+}
+$('schedBox').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-do]'); if(!b) return;
+  const cell = b.closest('td'), t = sched.tasks[+cell.dataset.run];
+  if(b.dataset.do === 'ask') cell.innerHTML = '<span class="conf">Run ' + esc(t.name) + ' now? <button class="act red" data-do="yes">Run</button><button class="act ghost" data-do="no">Cancel</button></span>';
+  else if(b.dataset.do === 'no') cell.innerHTML = '<button class="act" data-do="ask">Run now</button>';
+  else if(b.dataset.do === 'yes'){
+    cell.innerHTML = '<span class="conf">Starting</span>';
+    try { await MC.api.post('/api/schedules/' + encodeURIComponent(t.name) + '/run', {}); cell.innerHTML = '<span class="conf">' + MC.ic.ok + 'Started</span>'; setTimeout(load, 4000); }
+    catch(err){ cell.innerHTML = '<span class="conf">' + MC.ic.bad + esc(err.message) + '</span> <button class="act" data-do="ask">Retry</button>'; }
+  }
+});
+
+/* ---------- timeline: next runs today, both lists ---------- */
+function drawDay(){
+  const now = new Date();
+  const same = d => d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  const all = (sched ? (sched.tasks || []).concat(sched.other || []) : []).map(t => ({n: t.name, d: pd(t.nextRun)})).filter(x => x.d && same(x.d)).sort((a, b) => a.d - b.d);
+  $('dayCnt').textContent = now.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}).toUpperCase() + ' // ' + all.length + ' STILL TO RUN';
+  const nowH = now.getHours() + now.getMinutes() / 60;
+  let h = '<div class="axis"></div>';
+  for(let t = 0; t <= 24; t += 3) h += '<div class="tick" style="left:' + (t / 24 * 100) + '%"><span' + (t === 0 ? ' style="left:3px"' : t === 24 ? ' style="left:-34px"' : '') + '>' + pad(t) + ':00</span></div>';
+  all.forEach((e, i) => {
+    const hr = e.d.getHours() + e.d.getMinutes() / 60, nm = e.n.length > 22 ? e.n.slice(0, 21) + '...' : e.n;
+    h += '<div class="ev ' + (i % 2 ? 'low' : '') + '" style="left:' + Math.min(Math.max(hr / 24 * 100, 3), 96) + '%" title="' + esc(e.n) + ' ' + pad(e.d.getHours()) + ':' + pad(e.d.getMinutes()) + '"><b>' + esc(nm) + '</b><i></i></div>';
+  });
+  h += '<div class="now" style="left:' + (nowH / 24 * 100) + '%"><span>NOW ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + '</span></div>';
+  if(!all.length) h += '<div class="dim" style="position:absolute;left:0;top:76px;padding-left:0">' + (sched ? 'No scheduled task has a run left today.' : 'Server offline') + '</div>';
+  $('day').innerHTML = h;
+}
+
+/* ---------- skills ---------- */
+function drawSkills(list){
+  const lib = $('lib');
+  if(!list){ lib.innerHTML = '<div class="dim" style="grid-column:1/-1">Server offline. Skills cannot be read right now.</div>'; return; }
+  if(!list.length){ lib.innerHTML = '<div class="dim" style="grid-column:1/-1">No skills found.</div>'; return; }
+  $('skCnt').textContent = list.length;
+  const groups = [['GLOBAL', list.filter(s => s.scope === 'global')], ['PLUGINS', list.filter(s => s.scope === 'plugin')], ['OTHER', list.filter(s => s.scope !== 'global' && s.scope !== 'plugin')]];
+  lib.innerHTML = groups.filter(g => g[1].length).map(g => '<div class="libh"><span>' + g[0] + '</span><span>' + g[1].length + '</span></div>' + g[1].map(s => '<button class="sk" data-sk="' + esc(s.name) + '" title="' + esc(s.description || '') + '">' + MC.ic.skill + '<span><b>' + esc(s.name) + '</b><small>' + esc(s.plugin ? s.plugin + ': ' : '') + esc(String(s.description || '').slice(0, 110)) + '</small></span></button>').join('')).join('');
+}
+$('lib').addEventListener('click', e => {
+  const b = e.target.closest('button[data-sk]'); if(!b) return;
+  if(MC.comlink && MC.comlink.prefill) MC.comlink.prefill('/' + b.dataset.sk + ' ', {oneOff: true});
+});
+
+async function load(){
+  try { sched = await MC.api.get('/api/schedules'); } catch(e){ sched = null; }
+  drawSched();
+}
+load();
+MC.api.get('/api/skills').then(drawSkills).catch(() => drawSkills(null));
+</script>
+</body>
+</html>

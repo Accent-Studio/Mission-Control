@@ -1,0 +1,20 @@
+{
+  "discoveryRoots": ["D:\\Dev", "D:\\Games"],
+  "defaultCwd": "D:\\Dev",
+  "openDrives": [],
+  "extraProjects": [
+    { "id": "my-plugin", "name": "My Plugin", "folder": "D:\\Unreal\\MyPluginHost" }
+  ],
+  "projectAliases": {
+    "my-app": ["D:\\Dev\\MyAppOldName"]
+  },
+  "projectAbout": {
+    "my-app": "One line about the project, shown under its name."
+  },
+  "notesRoot": "D:\\Notes",
+  "notesProjectDir": "Projects",
+  "notesFolders": {
+    "my-app": ["Projects/MyApp", "Projects/MyApp/Website"]
+  },
+  "wakeTrainerDir": ""
+}
