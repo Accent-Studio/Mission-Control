@@ -403,3 +403,29 @@ a.psun:focus-visible{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--white)}
 
 /* controls that only make sense at the PC: hidden once api.js sets data-remote on <html> (a phone) */
 [data-remote] .pc-only{display:none !important}
+
+/* ---------- local paths in Claude's text, and the viewer they open (redline.js MC.viewer) ---------- */
+a.md-path{cursor:pointer}
+.mcv-back{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;padding:4vh 4vw;background:rgba(4,8,14,.55)}
+.mcv-back[hidden]{display:none}
+html.mcv-open,html.mcv-open body{overflow:hidden}
+.mcv{display:flex;flex-direction:column;width:min(980px,100%);height:min(86vh,1100px);background:rgba(9,16,27,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.mcv.fr:hover,.mcv.fr:focus-within{background:rgba(9,16,27,.94)}
+.mcv > .ttl{flex:none;gap:12px;min-width:0}
+.mcv > .ttl h3{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mcv-kind{flex:none;font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--w3)}
+.mcv-acts{margin-left:auto;display:flex;gap:8px;flex:none}
+.mcv-sub{flex:none;padding:0 22px 8px;font:11px/1.5 var(--mono);color:var(--w3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mcv-sub:empty{display:none}
+.mcv-body{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:6px 28px 26px;outline:none}
+.mcv-in{--md-base-size:15px;max-width:880px;margin:0 auto;min-width:0}
+.mcv-raw{font:13px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word;margin:0;padding:10px 12px;background:rgba(220,231,243,.05)}
+.mcv .mut{color:var(--w2)}
+.mcv .err{color:var(--red-2)}
+@media (max-width:700px){.mcv-back{padding:0}.mcv{height:100%}.mcv-body{padding:6px 16px 20px}}
+.mcv-pick{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:10px}
+.mcv-pick li{display:grid;gap:2px}
+.mcv-pick a{font:600 15px var(--sans)}
+.mcv-pick small{font:11px/1.4 var(--mono);color:var(--w3);overflow-wrap:anywhere}
+.mcv-pick a{color:var(--white);text-decoration:underline;text-underline-offset:3px}
+.mcv-pick a:hover{color:var(--red-2)}

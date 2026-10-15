@@ -1,6 +1,7 @@
 // One shared, safe markdown renderer: MC.md(src) returns HTML. Used by the Talk page, the project Sessions tab and the Docs tab.
 // Safety: every character of the source is HTML-escaped before any tag is added, so injected markup shows as text.
-// Only http, https and mailto addresses become links, and images are never loaded (the alt text becomes a link).
+// Only http, https and mailto addresses become web links, and images are never loaded (the alt text becomes a link).
+// Local paths become links with class md-path and the path in data-path; the page decides what a click opens.
 // GitHub style: headings, paragraphs (soft line breaks kept), emphasis, inline code, fenced code, nested lists,
 // task lists, quotes, rules, tables and bare links. It never throws: any trouble falls back to escaped plain text.
 window.MC = window.MC || {};
@@ -81,7 +82,8 @@ window.MC.md = (function () {
   /* ---------- inline ---------- */
   var ESCAPABLE = '\\`*_{}[]()#+-.!~|<>&"\'';
   var SAFE_URL = /^(?:https?:\/\/|mailto:)/i;
-  var RE_SPECIAL = /[\\`]/g;
+  // a backslash, a backtick, or the start of an absolute Windows path (C:\ or C:/) that is not inside a word or an address
+  var RE_SPECIAL = /[\\`]|(?<![\w\/\\:.])[A-Za-z]:[\\\/](?!\s)/g;
   // [text](url "title") and ![alt](url), run on already escaped text, so quotes in a title arrive as &quot;
   // The text may hold one badge image: [![alt](img)](url). Every run is length-bounded so a long line cannot make it slow.
   var RE_LINK = /(!?)\[((?:[^\[\]\n]|!\[[^\[\]\n]{0,300}\]\([^\s()]{0,300}\)){0,500})\]\(\s{0,40}([^\s()]{0,2000}(?:\([^\s()]{0,2000}\)[^\s()]{0,2000}){0,20})(?:\s{1,40}&quot;[^\n]{0,300}?&quot;)?\s{0,40}\)/g;
@@ -90,6 +92,27 @@ window.MC.md = (function () {
   var RE_BARE = /(?<![\w\/@=.])https?:\/\/(?:(?!&lt;|&gt;|&quot;|&#39;)[^\s\u0000])+/g;
 
   function anchor(url, inner) { return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + inner + '</a>'; }
+
+  // Local paths: an absolute Windows path anywhere in the text, and in a code span or a [text](target) link also a relative
+  // path ("server/config.js:12", "app/") or a lone file name with a known extension. A ":12" or ":12:5" line may follow.
+  var RE_ABS_RUN = /[A-Za-z]:[\\\/][^\s<>"|?*`]{0,1000}/y;
+  var RE_ABS_WHOLE = /^[A-Za-z]:[\\\/][^<>"|?*\n]{0,1000}$/;
+  var RE_REL = /^(?:\.{1,2}[\\\/])?[\w@.+-]{1,200}(?:[\\\/][\w@.+-]{1,200}){1,40}[\\\/]?(?::\d{1,7}(?::\d{1,7})?)?$/;
+  var RE_FILE = /^[\w@.+-]{1,200}\.(?:md|markdown|txt|log|json|jsonc|js|mjs|cjs|ts|tsx|jsx|rs|py|ps1|psm1|bat|cmd|sh|html|htm|css|scss|toml|yaml|yml|ini|cfg|conf|xml|csv|sql|go|java|kt|kts|c|h|cpp|hpp|cs|gd|tscn|lua|gradle)(?::\d{1,7}(?::\d{1,7})?)?$/i;
+  function pathLike(p) {
+    if (!p || p.length > 1000) return false;
+    if (RE_ABS_WHOLE.test(p)) return true;
+    if (/^[a-z][\w+.-]*:(?!\d)/i.test(p) || p.indexOf('//') >= 0) return false; // an address or a scheme ("x.js:12" is a line)
+    if (/^(?:\.{1,2}[\\\/])?[\w@.+-]{1,200}[\\\/]$/.test(p)) return true; // one folder: "app/"
+    if (RE_REL.test(p)) {
+      if (/[\\\/]$/.test(p)) return true; // a folder
+      var last = p.replace(/:\d+(?::\d+)?$/, '').split(/[\\\/]/).pop();
+      return /\.[A-Za-z0-9]{1,10}$/.test(last); // a file with an extension, so "and/or" and "1/2" stay text
+    }
+    return RE_FILE.test(p);
+  }
+  // attr: the path already HTML-escaped
+  function pathAnchor(attr, inner) { return '<a class="md-path" href="#" data-path="' + attr + '" title="Open ' + attr + '">' + inner + '</a>'; }
 
   // Strikethrough, bold and italic on escaped text. Spans are length-bounded so a stray marker cannot make this slow.
   function emph(t) {
@@ -115,6 +138,17 @@ window.MC.md = (function () {
       re.lastIndex = i; m = re.exec(s);
       if (!m) { buf += s.slice(i); break; }
       buf += s.slice(i, m.index); i = m.index;
+      if (s.charAt(i) !== '\\' && s.charAt(i) !== '`') {
+        // an absolute path in the text, unless it is the target of a [text](path) link (RE_LINK takes those)
+        RE_ABS_RUN.lastIndex = i;
+        var pm = RE_ABS_RUN.exec(s), pth = pm ? pm[0] : '';
+        var trail = /[.,;:!?)\]'*_~]+$/.exec(pth);
+        if (trail) pth = pth.slice(0, pth.length - trail[0].length);
+        if (pth.length < 4 || s.slice(Math.max(0, i - 2), i) === '](') { buf += s.charAt(i); i++; continue; }
+        buf += hold(pathAnchor(esc(pth), esc(pth)));
+        i += pth.length;
+        continue;
+      }
       if (s.charAt(i) === '\\') {
         var nx = s.charAt(i + 1);
         if (nx && ESCAPABLE.indexOf(nx) >= 0) { buf += hold(esc(nx)); i += 2; } else { buf += '\\'; i++; }
@@ -129,7 +163,8 @@ window.MC.md = (function () {
       if (found < 0) { buf += ticks; i += k; continue; }
       var code = s.slice(i + k, found).replace(/\n/g, ' ');
       if (code.length > 2 && code.charAt(0) === ' ' && code.charAt(code.length - 1) === ' ' && code.trim()) code = code.slice(1, -1);
-      buf += hold('<code class="md-ic">' + esc(code) + '</code>');
+      var ci = '<code class="md-ic">' + esc(code) + '</code>', cp = code.trim();
+      buf += hold(pathLike(cp) ? pathAnchor(esc(cp), ci) : ci);
       i = found + k;
     }
     var t = esc(buf);
@@ -139,6 +174,7 @@ window.MC.md = (function () {
       var ok = SAFE_URL.test(url) && url.indexOf('\u0000') < 0;
       var flat = text.replace(RE_BADGE, '$1'); // a badge [![alt](img)](url) becomes a link whose text is the alt text
       if (bang) return ok ? hold(anchor(url, flat || url)) : flat; // images are never loaded: the alt text stands in
+      if (!ok && !bang && url.indexOf('\u0000') < 0 && pathLike(url)) return hold(pathAnchor(url, emph(flat) || url));
       if (!ok) return flat !== text ? flat : all;
       return hold(anchor(url, emph(flat) || url));
     });

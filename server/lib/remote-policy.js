@@ -60,6 +60,8 @@ export const PC_ONLY = new Set([
   'PUT /api/projects/:id/settings',
   // Opens a window on the PC
   'POST /api/projects/:id/checks/:key/launch',
+  // Opens Windows Explorer on the PC (a path from a conversation)
+  'POST /api/path/reveal',
   // They drive the PC's microphone and speakers through BlitzVoice
   'POST /api/voice/start',
   'POST /api/voice/stop',

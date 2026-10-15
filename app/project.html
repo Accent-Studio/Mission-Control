@@ -560,6 +560,7 @@ if(!OFFICE){
 }
 
 let P = null, tabsBuilt = false, curTab = (location.hash.match(/tab=(\w+)/) || [])[1] || 'git', sessions = [];
+MC.pathBase = () => (P && P.folder) || ''; /* a relative path in a conversation or a doc opens from the project folder */
 
 const WIDE_TABS = ['settings']; /* slides the right panel wider; the other tabs are lists, read in the middle */
 /* On a phone (a paired device) html has data-remote, set by api.js once /api/whoami has answered, possibly after first paint. */

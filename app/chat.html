@@ -669,6 +669,8 @@ MC.init('chat');
   }
   /* st.extra holds the open conversation when it is in neither list (an archived one that is hidden) */
   function byId(id) { return (st.sessions || []).concat(st.archived || []).filter(function (x) { return x.id === id; })[0] || (st.extra && st.extra[id]) || null; }
+  /* a relative path in Claude's text opens from the open conversation's folder (redline.js MC.openPath) */
+  MC.pathBase = function () { var s = st.sel ? byId(st.sel) : null; return (s && s.cwd) || ''; };
 
   /* ---------- new conversation options (model, mode, effort) ---------- */
   var OPT_KEYS = [['model', 'models', 'MODEL'], ['mode', 'modes', 'MODE'], ['effort', 'efforts', 'EFFORT']];

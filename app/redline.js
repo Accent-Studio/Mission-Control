@@ -2117,3 +2117,93 @@ MC.init = function(page){
   MC.fades.start();
   MC.numberArrows.start();
 };
+
+/* ---------- local paths in Claude's text (md.js marks them as a.md-path) ----------
+   A text file opens in the viewer below, the same reader look as the project page; a folder, or any other file, opens in
+   Windows Explorer on the PC. A relative path is taken from the conversation's folder: the nearest [data-cwd], else
+   MC.pathBase() (the Talk page sets it to the open conversation's folder, the project page to the project folder). */
+MC.pathBase = MC.pathBase || (() => '');
+MC.viewer = (function(){
+  let el = null, from = null, cur = null, seq = 0;
+  const q = s => el.querySelector(s);
+  function build(){
+    if(el) return el;
+    el = document.createElement('div'); el.className = 'mcv-back'; el.hidden = true;
+    el.innerHTML = '<section class="fr mcv" role="dialog" aria-modal="true" aria-label="Viewer">' +
+      '<div class="ttl"><h3 data-mcv-title></h3><span class="mcv-kind" data-mcv-kind></span><span class="mcv-acts">' +
+      '<button type="button" class="act ghost" data-mcv-reveal>Show in Explorer</button></span>' +
+      '<button type="button" class="act ghost" data-mcv-close aria-label="Close the viewer">Close</button></div>' +
+      '<div class="mcv-sub" data-mcv-sub></div><div class="mcv-body" data-mcv-body tabindex="0"></div></section>';
+    document.body.appendChild(el);
+    q('[data-mcv-close]').onclick = close;
+    q('[data-mcv-reveal]').onclick = () => { if(cur) MC.revealPath(cur.path); };
+    el.addEventListener('mousedown', e => { if(e.target === el) close(); });
+    addEventListener('keydown', e => { if(e.key === 'Escape' && el && !el.hidden && !e.defaultPrevented){ e.preventDefault(); close(); } });
+    return el;
+  }
+  function show(title, kind, sub){
+    build(); from = document.activeElement;
+    q('[data-mcv-title]').textContent = title; q('[data-mcv-title]').title = title;
+    q('[data-mcv-kind]').textContent = kind; q('[data-mcv-sub]').textContent = sub || '';
+    q('[data-mcv-reveal]').hidden = document.documentElement.hasAttribute('data-remote') || MC.remote === true; /* Explorer opens on the PC only */
+    q('[data-mcv-body]').innerHTML = '<div class="mcv-in"><div class="mut">Loading...</div></div>';
+    el.hidden = false; document.documentElement.classList.add('mcv-open');
+    MC.drawFrames(); q('[data-mcv-close]').focus();
+    return ++seq;
+  }
+  function fill(my, html){
+    if(my !== seq || !el || el.hidden) return;
+    const b = q('[data-mcv-body]'); b.innerHTML = '<div class="mcv-in">' + html + '</div>'; b.scrollTop = 0;
+  }
+  function close(){
+    if(!el || el.hidden) return;
+    el.hidden = true; seq++; cur = null; document.documentElement.classList.remove('mcv-open');
+    q('[data-mcv-body]').innerHTML = '';
+    if(from && from.focus && document.contains(from)) from.focus();
+    from = null;
+  }
+  /* info: what /api/path/info answered for a readable text file */
+  async function open(info){
+    cur = info;
+    const my = show(info.name, info.view === 'markdown' ? 'Doc' : 'File', info.path);
+    try {
+      const r = await MC.api.get('/api/path/text?p=' + encodeURIComponent(info.path));
+      let txt = r.text || '', cut = '';
+      if(txt.length > 200000){ txt = txt.slice(0, 200000); cut = '<div class="mut">Shown up to the first 200,000 characters.</div>'; }
+      fill(my, (info.view === 'markdown' ? '<div class="md">' + MC.md(txt) + '</div>' : '<pre class="mcv-raw">' + MC.esc(txt) + '</pre>') + cut);
+    } catch(e){ fill(my, '<div class="err">Could not open this file: ' + MC.esc((e && e.message) || 'error') + '</div>'); }
+  }
+  /* a short message in the viewer, for a path that cannot be opened here */
+  function note(title, msg){ const my = show(title, 'Path', ''); fill(my, '<div class="mut">' + MC.esc(msg) + '</div>'); }
+  /* several projects hold the same relative path: each one is a link, so a click opens it in place of the list */
+  function pick(title, msg, choices){
+    const my = show(title, 'Pick', '');
+    fill(my, '<div class="mut">' + MC.esc(msg) + '</div><ul class="mcv-pick">' + choices.map(c =>
+      '<li><a class="md-path" href="#" data-path="' + MC.esc(c.path) + '">' + MC.esc(c.project || c.path) + '</a><small>' + MC.esc(c.path) + '</small></li>').join('') + '</ul>');
+  }
+  return { open, note, pick, close };
+})();
+MC.revealPath = async (p) => {
+  try { await MC.api.post('/api/path/reveal', { path: p }); }
+  catch(e){ MC.viewer.note('Show in Explorer', 'Could not open Explorer: ' + ((e && e.message) || 'error')); }
+};
+MC.openPath = async (raw, base) => {
+  let info;
+  try { info = await MC.api.get('/api/path/info?p=' + encodeURIComponent(raw) + '&base=' + encodeURIComponent(base || '')); }
+  catch(e){ MC.viewer.note(String(raw), 'This path cannot be opened: ' + ((e && e.message) || 'error')); return; }
+  const remote = document.documentElement.hasAttribute('data-remote') || MC.remote === true;
+  if(info.kind === 'missing') return MC.viewer.note(info.name, 'Not found: ' + info.path);
+  if(info.kind === 'choice') return MC.viewer.pick(info.name, 'Several projects have ' + info.path + '. Which one?', info.choices || []);
+  if(info.kind === 'file' && info.view) return MC.viewer.open(info);
+  if(remote) return MC.viewer.note(info.name, (info.kind === 'folder' ? 'Folders' : 'Files like this one') + ' open in Explorer on the PC: ' + info.path);
+  if(info.kind === 'file' && !info.readable && /\.(md|markdown|txt|log|json|js|ts|css|html)$/i.test(info.path)) {
+    return MC.viewer.note(info.name, 'Mission Control only shows files inside your project folders. It is here: ' + info.path);
+  }
+  MC.revealPath(info.path);
+};
+document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('a.md-path'); if(!a) return;
+  e.preventDefault();
+  const c = a.closest('[data-cwd]');
+  MC.openPath(a.dataset.path, (c && c.dataset.cwd) || MC.pathBase());
+});
