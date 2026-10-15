@@ -24,6 +24,7 @@ while ($hwnd -eq [IntPtr]::Zero -and (Get-Date) -lt $deadline) {
   if ($hwnd -eq [IntPtr]::Zero) { Start-Sleep -Milliseconds 150 }
 }
 if ($hwnd -eq [IntPtr]::Zero) { exit 0 }
+Start-Sleep -Milliseconds 500 # let the click in the browser finish taking the focus first
 if ([MC.Win]::IsIconic($hwnd)) { [void][MC.Win]::ShowWindow($hwnd, 9) }   # SW_RESTORE
 $flags = 0x0001 -bor 0x0002 -bor 0x0040                                     # NOSIZE, NOMOVE, SHOWWINDOW
 [void][MC.Win]::SetWindowPos($hwnd, [IntPtr](-1), 0, 0, 0, 0, $flags)       # topmost

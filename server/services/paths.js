@@ -193,8 +193,9 @@ export function revealPath(raw, base) {
     child.unref();
     // Explorer opens behind the browser, because the server is a background program: a helper brings it to the front.
     const dir = info.kind === 'folder' ? info.path : path.dirname(info.path);
+    // Not detached: a detached PowerShell exits at once without running its script.
     const raise = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', RAISE_SCRIPT], {
-      detached: true, stdio: 'ignore', windowsHide: true, env: { ...process.env, MC_REVEAL_DIR: dir },
+      stdio: 'ignore', windowsHide: true, env: { ...process.env, MC_REVEAL_DIR: dir },
     });
     raise.on('error', () => {});
     raise.unref();
