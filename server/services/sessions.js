@@ -27,7 +27,7 @@ const TITLE_SCAN_CHUNK = 4 * 1024 * 1024;
 const MAX_LINE = 8 * 1024 * 1024;
 const HEAD_LINE_MAX = 48 * 1024 * 1024; // a first message can carry up to 30MB of files, base64 in the transcript
 const TITLE_MAX = 120;
-const MESSAGE_TEXT_MAX = 4000;
+const MESSAGE_TEXT_MAX = 100000; // same as the page's CAP_OPEN: the page folds a long message itself
 const CUSTOM_MARK = Buffer.from('"custom-title"');
 const AI_MARK = Buffer.from('"ai-title"');
 
@@ -944,7 +944,7 @@ export async function getSessionMessages(id, limit = 40, before = null, { upTo =
       }
     }
     if (r.shows && !isTail) {
-      // A notice keeps up to 20 KB (the page offers it behind a disclosure), other messages 4000 characters.
+      // A notice keeps up to 20 KB (the page offers it behind a disclosure), other messages 100,000 characters.
       const textMax = r.notice ? NOTICE_TEXT_MAX : MESSAGE_TEXT_MAX;
       const msg = { role: r.role, text: r.text.length > textMax ? r.text.slice(0, textMax) + '...' : r.text, at: r.at, pos: r.off, rawImgs: r.kind === 'prompt' || (r.kind === 'queued' && r.role === 'user') ? r.imgs.filter((i) => i.from === 'you') : [] };
       if (r.role === 'user' && r.uuids && r.uuids.length) msg.uuids = r.uuids;
