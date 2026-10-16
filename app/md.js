@@ -227,7 +227,8 @@ window.MC.md = (function () {
 
   function codeHtml(lines, lang) {
     lang = String(lang || '').replace(/[^\w+#.\-]/g, '').slice(0, 24);
-    return '<div class="md-code">' + (lang ? '<span class="md-lang">' + esc(lang) + '</span>' : '') + '<pre><code>' + esc(lines.join('\n')) + '</code></pre></div>';
+    // the button's label comes from md.css (::after), so it is not part of the text when someone selects and copies by hand
+    return '<div class="md-code">' + (lang ? '<span class="md-lang">' + esc(lang) + '</span>' : '') + '<button type="button" class="md-copy" title="Copy" aria-label="Copy code"></button><pre><code>' + esc(lines.join('\n')) + '</code></pre></div>';
   }
 
   // Splits a table row on pipes that are not escaped and not inside a code span.
@@ -386,4 +387,67 @@ window.MC.md = (function () {
   }
   md.esc = esc;
   return md;
+})();
+
+// Copy buttons for code. A fenced block carries its own button (codeHtml above). Inline code gets one floating button,
+// shown while the pointer is on the code (a tap on a phone), so the rendered HTML of inline code stays unchanged.
+// One click handler on the document serves every page that renders markdown, including content added later.
+window.MC.mdCopy = (function () {
+  if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return null;
+  var fly = null, cur = null, hideT = 0;
+
+  function copyText(t) {
+    function old() {
+      var ta = document.createElement('textarea');
+      ta.value = t; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      ta.remove();
+      return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+    }
+    // the clipboard API needs a secure page; a phone on the local network over http has only the old way
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(t).catch(old);
+    return old();
+  }
+  function flash(b, state) {
+    b.setAttribute('data-state', state);
+    clearTimeout(b._mcT);
+    b._mcT = setTimeout(function () { b.removeAttribute('data-state'); }, 1400);
+  }
+  function hide() { clearTimeout(hideT); if (fly) fly.hidden = true; cur = null; }
+  function later() { clearTimeout(hideT); hideT = setTimeout(hide, 250); }
+  function show(code) {
+    clearTimeout(hideT);
+    if (!fly) {
+      fly = document.createElement('button');
+      fly.type = 'button'; fly.className = 'md-copy md-copy-fly'; fly.title = 'Copy'; fly.setAttribute('aria-label', 'Copy code');
+      fly.addEventListener('pointerenter', function () { clearTimeout(hideT); });
+      fly.addEventListener('pointerleave', later);
+      document.body.appendChild(fly);
+    }
+    if (cur !== code) fly.removeAttribute('data-state');
+    cur = code;
+    var r = code.getBoundingClientRect();
+    fly.hidden = false;
+    var w = fly.offsetWidth, h = fly.offsetHeight;
+    var x = Math.max(4, Math.min(r.right - w, window.innerWidth - w - 4));
+    var y = r.top - h - 2; if (y < 4) y = r.bottom + 2;
+    fly.style.left = x + 'px'; fly.style.top = y + 'px';
+  }
+
+  document.addEventListener('pointerover', function (e) {
+    var c = e.target && e.target.closest ? e.target.closest('.md code.md-ic') : null;
+    if (c) show(c); else if (cur && e.target !== fly) later();
+  });
+  document.addEventListener('scroll', function () { if (cur) hide(); }, true);
+  // capture: the copy runs before a page's own click handlers (a path link would open its file otherwise)
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('.md-copy') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    var code = b === fly ? cur : (b.parentNode && b.parentNode.querySelector('pre code'));
+    if (!code) return;
+    copyText(code.textContent).then(function () { flash(b, 'ok'); }, function () { flash(b, 'fail'); });
+  }, true);
+  return { copy: copyText };
 })();

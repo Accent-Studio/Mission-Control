@@ -115,6 +115,17 @@
 .md .md-code{position:relative;border:1px solid var(--md-frame);background:var(--md-pre-bg)}
 .md .md-code pre{margin:0;padding:.7em .9em;overflow-x:auto;max-width:100%;tab-size:4}
 .md .md-code pre code{display:block;padding:0;background:none;color:var(--md-pre-text);white-space:pre;overflow-wrap:normal;font-size:var(--md-code-size);line-height:1.5}
+/* copy buttons (md.js): one in the corner of each fenced block, one floating over inline code. The label is CSS content, not text. */
+.md-copy{font:600 10px/1 var(--md-code-font,ui-monospace,monospace);letter-spacing:.06em;text-transform:uppercase;color:var(--md-muted,#95a5b7);background:var(--md-pre-bg,rgba(6,11,18,.92));border:1px solid var(--md-frame,rgba(220,231,243,.2));padding:.4em .65em;cursor:pointer;user-select:none;-webkit-user-select:none}
+.md-copy::after{content:"Copy"}
+.md-copy[data-state="ok"]::after{content:"\2713  Copied"}
+.md-copy[data-state="fail"]::after{content:"\2715  Copy failed"}
+.md-copy:hover,.md-copy:focus-visible{color:var(--md-text,#dce7f3);border-color:var(--md-muted,#95a5b7)}
+.md-copy[data-state="ok"]{color:var(--md-text,#dce7f3)}
+.md .md-code .md-copy{position:absolute;top:.3em;right:.3em;z-index:1;opacity:.55}
+.md .md-code:hover .md-copy,.md .md-code .md-copy:focus-visible,.md .md-code .md-copy[data-state]{opacity:1}
+.md-copy-fly{position:fixed;z-index:9999;padding:.3em .55em}
+.md-copy-fly[hidden]{display:none}
 .md .md-lang{display:block;padding:.25em .9em;font-family:var(--md-code-font);font-size:var(--md-lang-size);letter-spacing:var(--md-lang-spacing);text-transform:var(--md-lang-case);color:var(--md-muted);border-bottom:1px solid var(--md-frame)}
 
 /* tables scroll sideways inside their own box, never the page */
