@@ -76,6 +76,7 @@ By default Mission Control shows every project folder next to its own folder. To
 - `openDrives`: drives on which Claude may work in any folder, not only inside your projects
 - `projectAliases`, `projectAbout`: old folder names of renamed projects, and one-line descriptions
 - `wakeTrainerDir`: where the wake word trainer lives, if not in `waketrainer`
+- `mcpStarterServers`: the `servers.json` of a lazy MCP starter, if you use one; Connections then lists every server in it and marks the ones Claude Code no longer starts as "not registered"
 
 Restart Mission Control after a change. Everything Mission Control saves (your settings, keys, logs, drafts) stays in `.data`, which is never in git.
 

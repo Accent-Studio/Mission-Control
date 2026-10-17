@@ -16,5 +16,6 @@
   "notesFolders": {
     "my-app": ["Projects/MyApp", "Projects/MyApp/Website"]
   },
-  "wakeTrainerDir": ""
+  "wakeTrainerDir": "",
+  "mcpStarterServers": ""
 }

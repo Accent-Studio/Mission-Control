@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { DATA_DIR, CLAUDE_HOME } from '../config.js';
+import { DATA_DIR, CLAUDE_HOME, MCP_STARTER_FILE } from '../config.js';
 import { run } from '../lib/run.js';
 import { cached } from '../lib/cache.js';
 import { getServers } from './servers.js';
@@ -110,7 +110,33 @@ export function listMcp() {
   }
   const settings = readJsonFile(path.join(CLAUDE_HOME, 'settings.json'));
   if (settings && typeof settings === 'object') collect(list, settings.mcpServers, 'settings');
+  addStarterServers(list, claudeJson);
   return list;
+}
+
+// Servers in the starter's servers.json that no Claude Code entry starts are listed with scope "not registered",
+// so a server that dropped out of .claude.json shows up instead of quietly vanishing.
+function addStarterServers(list, claudeJson) {
+  if (!MCP_STARTER_FILE) return;
+  const starter = readJsonFile(MCP_STARTER_FILE);
+  const servers = starter && typeof starter.servers === 'object' && !Array.isArray(starter.servers) ? starter.servers : null;
+  if (!servers) return;
+  const started = new Set();
+  const scan = (defs) => {
+    if (!defs || typeof defs !== 'object') return;
+    for (const def of Object.values(defs)) {
+      if (!def || typeof def.command !== 'string' || !/mcp-starter(\.exe)?$/i.test(def.command)) continue;
+      if (Array.isArray(def.args) && typeof def.args[0] === 'string') started.add(def.args[0]);
+    }
+  };
+  if (claudeJson && typeof claudeJson === 'object') {
+    scan(claudeJson.mcpServers);
+    for (const v of Object.values(claudeJson.projects || {})) if (v && typeof v === 'object') scan(v.mcpServers);
+  }
+  for (const name of Object.keys(servers)) {
+    if (started.has(name)) continue;
+    list.push({ name: scrub(name, 80) || '(unnamed)', type: 'stdio', scope: 'not registered', command: 'mcp-starter.exe', varCount: 0 });
+  }
 }
 
 // Target names from `cmdkey /list`. Only names are read, never values (cmdkey does not print them).

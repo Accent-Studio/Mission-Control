@@ -61,6 +61,10 @@ export const NOTES_PROJECT_DIR = typeof local.notesProjectDir === 'string' ? loc
 // The wake word trainer (waketrainer/ in this repository unless .data/config.json says otherwise).
 export const WAKETRAINER_DIR = typeof local.wakeTrainerDir === 'string' && local.wakeTrainerDir.trim()
   ? local.wakeTrainerDir.trim() : path.join(ROOT, 'waketrainer');
+// The servers.json of a lazy MCP starter, if you use one. The Connections page lists every server in it, and says
+// which ones Claude Code no longer knows about.
+export const MCP_STARTER_FILE = typeof local.mcpStarterServers === 'string' && local.mcpStarterServers.trim()
+  ? local.mcpStarterServers.trim() : null;
 // Default jobs per project. Applied only to projects that have no `jobs` key in the catalog yet. Your own seed file in
 // .data/jobs-seed.json wins over the empty one in git.
 export const JOBS_SEED_FILE = fs.existsSync(path.join(DATA_DIR, 'jobs-seed.json'))

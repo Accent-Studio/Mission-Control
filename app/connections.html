@@ -213,7 +213,8 @@ function card(s){
 function draw(){
   const mcp = data.mcp || [], svc = data.services || [];
   const keys = svc.filter(s => s.keyStored).length;
-  $('sub').textContent = (mcp.length + keys) + ' connected (' + mcp.length + ' MCP server' + (mcp.length === 1 ? '' : 's') + ', ' + keys + ' key' + (keys === 1 ? '' : 's') + '). Keys stay in the Windows vault.';
+  const live = mcp.filter(m => m.scope !== 'not registered').length;
+  $('sub').textContent = (live + keys) + ' connected (' + live + ' MCP server' + (live === 1 ? '' : 's') + ', ' + keys + ' key' + (keys === 1 ? '' : 's') + '). Keys stay in the Windows vault.';
   $('mcpCnt').textContent = mcp.length;
   $('services').innerHTML = svc.length ? svc.map(card).join('') : '<div class="dim">No services are listed.</div>';
   $('mcp').innerHTML = mcp.length ? '<table class="tbl"><thead><tr><th class="i">#</th><th>NAME</th><th>TYPE</th><th>COMMAND OR HOST</th><th>SCOPE</th><th>PROJECT</th></tr></thead><tbody>' +
