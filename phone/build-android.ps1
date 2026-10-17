@@ -15,7 +15,11 @@ $env:ANDROID_HOME = $sdk
 $env:ANDROID_SDK_ROOT = $sdk
 $env:NDK_HOME = Join-Path $sdk 'ndk\25.1.8937393'
 if (-not $env:JAVA_HOME) { $env:JAVA_HOME = Join-Path $env:ProgramFiles 'Android\Android Studio\jbr' }
-# A short build folder (\mcp on this drive), because the Android build is deep enough to hit Windows' path limit.
+# The build folder: builds\mc-phone in the temp folder (tempRoot in .data\config.json), else \mcp on this drive.
+# Keep it short: the Android build is deep enough to hit Windows' path limit with a long one.
+if (-not $env:CARGO_TARGET_DIR) {
+  try { $c = Get-Content -Raw (Join-Path $here '..\.data\config.json') | ConvertFrom-Json; if ($c.tempRoot) { $env:CARGO_TARGET_DIR = Join-Path $c.tempRoot 'builds\mc-phone' } } catch {}
+}
 if (-not $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = (Split-Path -Qualifier $here) + '\mcp' }
 
 if (-not $DebugOnly -and -not $ReleaseOnly) { $DebugOnly = $true; $ReleaseOnly = $true }

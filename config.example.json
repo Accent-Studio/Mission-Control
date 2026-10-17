@@ -17,5 +17,6 @@
     "my-app": ["Projects/MyApp", "Projects/MyApp/Website"]
   },
   "wakeTrainerDir": "",
-  "mcpStarterServers": ""
+  "mcpStarterServers": "",
+  "tempRoot": "D:\\Dev\\Temp"
 }

@@ -78,6 +78,13 @@ tbody.g:hover .act.quiet,tbody.g:focus-within .act.quiet,.act.quiet:focus-visibl
 .vcard .pp{display:flex;justify-content:space-between;gap:12px;color:var(--w2)}
 .vcard .pp span:last-child{font-family:var(--mono);font-size:11.5px}
 @media (prefers-reduced-motion:reduce){.vcard{transition:none}}
+/* Temp folder */
+.tbl.temp tr.grp td{padding-top:14px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--w2);border-top:1px solid var(--line-2)}
+.tbl.temp tr.grp td b{color:var(--white);font-weight:700;margin-right:8px}
+.tbl.temp tr.grp td span.m{float:right;font-family:var(--mono);letter-spacing:0;text-transform:none;color:var(--white)}
+.tbl.temp td.nm{max-width:420px}
+.tbl.temp td.nm small{display:block;font-size:11.5px;color:var(--w3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbl.temp .age-old{color:var(--white);font-weight:600}
 </style>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
@@ -144,6 +151,12 @@ tbody.g:hover .act.quiet,tbody.g:focus-within .act.quiet,.act.quiet:focus-visibl
         <div class="gauge"><canvas id="gM"></canvas><b id="gMv">--</b><small>VRAM</small></div>
       </div>
       <div class="body" style="padding-top:4px"><dl class="kv"><dt>GPU</dt><dd id="kG">--</dd><dt>DRIVER</dt><dd id="kD">--</dd><dt>CUDA</dt><dd id="kC">--</dd></dl></div>
+    </section>
+
+    <section class="fr span-12" aria-label="Temp folder">
+      <div class="ttl"><h3>Temp folder</h3><span class="id" id="tSub">BUILD CACHES AND SCRATCH, SAFE TO DELETE</span><span class="cnt" id="tc"></span>
+        <span class="acts" style="margin-left:auto"><button class="act ghost pc-only" id="tOpen" type="button">Show in Explorer</button><button class="act" id="tRe" type="button">Measure again</button></span></div>
+      <table class="tbl temp"><thead><tr><th>ITEM</th><th>SIZE</th><th class="hide-s">FILES</th><th class="hide-s">LAST CHANGE</th><th></th></tr></thead><tbody id="ttab"></tbody></table>
     </section>
   </main>
 </div>
@@ -357,12 +370,62 @@ async function runPlan(){
   await loadAll();
 }
 
+/* ---------- Temp folder ---------- */
+const T = {data:null, err:null, busy:false};
+const GROUP_NOTE = {builds:'Rebuilt by itself, the next build after a delete is slower', scratch:'Test runs and leftovers, nothing needs them'};
+function fmtBytes(b){ b = num(b); return b >= 1073741824 ? (b/1073741824).toFixed(1) + 'GB' : b >= 1048576 ? Math.round(b/1048576) + 'MB' : b >= 1024 ? Math.round(b/1024) + 'KB' : b + 'B'; }
+function ageText(iso){
+  if(!iso) return {t:'n/a', old:false};
+  const days = (Date.now() - new Date(iso).getTime()) / 86400000;
+  const t = days < 1/24 ? 'just now' : days < 1 ? Math.round(days*24) + 'h ago' : Math.round(days) + 'd ago';
+  return {t: days >= 7 ? t + ' (old)' : t, old: days >= 7};
+}
+function tempCell(it){
+  const key = 't:' + it.path;
+  if(S.pending && S.pending.key === key){
+    const wait = !S.busy && Date.now() - S.pending.at < OPEN_GUARD_MS;
+    return `<span class="confirm"><span class="q">Delete ${esc(it.name)} (${fmtBytes(it.bytes)})? It cannot be undone.</span><button class="act red" data-yes="1"${S.busy || wait ? ' disabled' : ''}>${S.busy ? 'Deleting' : 'Yes, delete'}</button><button class="act ghost" data-no="1"${S.busy ? ' disabled' : ''}>Cancel</button></span>`;
+  }
+  return `<button class="act pc-only" data-tdel="${esc(it.path)}" data-name="${esc(it.name)}" data-bytes="${num(it.bytes)}">Delete</button>`;
+}
+function renderTemp(){
+  const tb = $('ttab'), d = T.data;
+  if(!d){ tb.innerHTML = `<tr><td colspan="5" class="dim">${T.err ? 'Could not read the temp folder' : 'Measuring, a large build folder takes a few seconds'}</td></tr>`; $('tc').textContent = ''; return; }
+  if(!d.configured){ tb.innerHTML = `<tr><td colspan="5" class="dim">No temp folder is set. Add "tempRoot" to .data/config.json.</td></tr>`; $('tc').textContent = ''; return; }
+  $('tSub').textContent = d.root;
+  $('tc').textContent = fmtBytes(d.bytes);
+  if(!d.exists){ tb.innerHTML = `<tr><td colspan="5" class="dim">The folder does not exist yet. It is made the first time something is put in it.</td></tr>`; return; }
+  const rows = [];
+  for(const g of d.groups){
+    rows.push(`<tr class="grp"><td colspan="5"><b>${esc(g.name)}</b>${esc(GROUP_NOTE[g.name] || '')}<span class="m">${fmtBytes(g.bytes)}</span></td></tr>`);
+    if(!g.items.length) rows.push(`<tr><td colspan="5" class="dim">Empty</td></tr>`);
+    for(const it of g.items){
+      const a = ageText(it.newest), kind = it.isLink ? 'link' : it.isDir ? 'folder' : 'file';
+      rows.push(`<tr><td class="nm" title="${esc(it.path)}">${esc(it.name)}<small>${kind}</small></td><td class="m" style="color:#fff">${fmtBytes(it.bytes)}</td><td class="m hide-s">${it.isDir ? num(it.files).toLocaleString('en-US') : ''}</td><td class="m hide-s${a.old ? ' age-old' : ''}">${esc(a.t)}</td><td class="act-c">${tempCell(it)}</td></tr>`);
+    }
+  }
+  tb.innerHTML = rows.join('') || `<tr><td colspan="5" class="dim">The temp folder is empty</td></tr>`;
+}
+async function loadTemp(fresh){
+  if(T.busy) return;
+  T.busy = true; $('tRe').disabled = true;
+  if(fresh){ T.data = null; renderTemp(); }
+  try { T.data = await MC.api.get('/api/temp' + (fresh ? '?fresh=1' : '')); T.err = null; } catch(e){ T.err = e; }
+  T.busy = false; $('tRe').disabled = false;
+  renderTemp(); dropStalePending(); MC.drawFrames();
+}
+$('tRe').onclick = () => loadTemp(true);
+$('tOpen').onclick = async () => {
+  if(!T.data || !T.data.root) return;
+  try { await MC.api.post('/api/path/reveal', {path: T.data.root}); } catch(e){ showMsg(false, e.message || 'Could not open Explorer'); }
+};
+
 function dropStalePending(){
   // A confirm whose row has disappeared (process gone, list changed) must not wait invisibly.
   if(S.pending && !S.busy && !document.querySelector('[data-yes]')){ S.pending = null; return true; }
   return false;
 }
-function renderAll(){ renderStats(); renderGpu(); renderRam(); renderServers(); renderRoom(); dropStalePending(); MC.drawFrames(); }
+function renderAll(){ renderStats(); renderGpu(); renderRam(); renderServers(); renderRoom(); renderTemp(); dropStalePending(); MC.drawFrames(); }
 function openConfirm(p){
   S.pending = Object.assign({at: Date.now()}, p); renderAll();
   clearTimeout(S.openTimer); S.openTimer = setTimeout(() => { if(S.pending && !S.busy) renderAll(); }, OPEN_GUARD_MS + 50);
@@ -474,12 +537,22 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('button'); if(!b) return;
   if(b.disabled) return;
   if(b.dataset.stop){ if(S.busy) return; openConfirm({kind:'kill', key:b.dataset.stop, pid:+b.dataset.pid, name:b.dataset.name, port:b.dataset.port}); return; }
+  if(b.dataset.tdel){ if(S.busy) return; openConfirm({kind:'temp', key:'t:' + b.dataset.tdel, path:b.dataset.tdel, name:b.dataset.name, bytes:+b.dataset.bytes}); return; }
   if(b.dataset.unl){ const k = keyM(b.dataset.eng, b.dataset.model); if(S.unl.has(k) || S.planBusy) return; await runItem({kind:'unload', key:k, engine:b.dataset.eng, id:b.dataset.model}); await loadAll(); return; }
   if(b.dataset.free){ if(S.unl.has(KEY_COMFY) || S.planBusy) return; await runItem({kind:'free', key:KEY_COMFY}); await loadAll(); return; }
   if(b.id === 'rGo'){ runPlan(); return; }
   if(b.dataset.no){ if(S.busy) return; S.pending = null; renderAll(); return; }
   if(b.dataset.yes && S.pending && !S.busy && ev.detail <= 1 && Date.now() - S.pending.at >= OPEN_GUARD_MS){
     const p = S.pending; S.busy = true; renderAll();
+    if(p.kind === 'temp'){
+      try {
+        await MC.api.post('/api/temp/delete', {path:p.path, confirm:true});
+        showMsg(true, `Deleted ${p.name}, ${fmtBytes(p.bytes)} freed.`);
+      } catch(e){ showMsg(false, e.message || 'The server refused.'); }
+      S.pending = null; S.busy = false;
+      await loadTemp(false);
+      return;
+    }
     try {
       await MC.api.post('/api/processes/' + p.pid + '/kill', {confirm:true});
       showMsg(true, `Stopped ${p.name}${p.port ? ' on port ' + p.port : ''} (pid ${p.pid}).`);
@@ -502,6 +575,7 @@ addEventListener('resize', () => { renderStats(); });
 loadNames().then(() => renderServers());
 loadAll();
 loadHist();
+loadTemp(false);
 </script>
 </body>
 </html>

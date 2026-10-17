@@ -62,6 +62,8 @@ export const PC_ONLY = new Set([
   'POST /api/projects/:id/checks/:key/launch',
   // Opens Windows Explorer on the PC (a path from a conversation)
   'POST /api/path/reveal',
+  // Deletes files on the PC (an item in the temp folder)
+  'POST /api/temp/delete',
   // They drive the PC's microphone and speakers through BlitzVoice
   'POST /api/voice/start',
   'POST /api/voice/stop',

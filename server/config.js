@@ -65,6 +65,10 @@ export const WAKETRAINER_DIR = typeof local.wakeTrainerDir === 'string' && local
 // which ones Claude Code no longer knows about.
 export const MCP_STARTER_FILE = typeof local.mcpStarterServers === 'string' && local.mcpStarterServers.trim()
   ? local.mcpStarterServers.trim() : null;
+// One folder for everything that can be thrown away: build caches, test runs, scratch files. Each subfolder is a group
+// (builds, scratch, ...) and each item in a group can be deleted from the System page. MC_TEMP_ROOT overrides it (tests).
+export const TEMP_ROOT = process.env.MC_TEMP_ROOT ? path.resolve(process.env.MC_TEMP_ROOT)
+  : typeof local.tempRoot === 'string' && local.tempRoot.trim() ? path.resolve(local.tempRoot.trim()) : null;
 // Default jobs per project. Applied only to projects that have no `jobs` key in the catalog yet. Your own seed file in
 // .data/jobs-seed.json wins over the empty one in git.
 export const JOBS_SEED_FILE = fs.existsSync(path.join(DATA_DIR, 'jobs-seed.json'))
