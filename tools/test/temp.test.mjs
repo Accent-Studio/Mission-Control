@@ -77,6 +77,14 @@ describe('Temp folder', () => {
     assert.equal(fs.readFileSync(path.join(outside, 'keep.txt'), 'utf8'), 'keep');
   });
 
+  test('the list without fresh comes back at once from the saved result, without the deleted items', async () => {
+    const r = await localReq(s, { path: '/api/temp' });
+    assert.equal(r.status, 200);
+    const names = r.json.groups.flatMap((g) => g.items.map((i) => i.name));
+    assert.ok(names.includes('2026-10-17-test'));
+    for (const gone of ['app', 'note.txt', 'loose.txt', 'link']) assert.equal(names.includes(gone), false, `${gone} is still listed`);
+  });
+
   test('a phone may read the list but not delete', async () => {
     const policy = await import('../../server/lib/remote-policy.js');
     assert.ok(policy.PC_ONLY.has('POST /api/temp/delete'));

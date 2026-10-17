@@ -392,7 +392,7 @@ function renderTemp(){
   const tb = $('ttab'), d = T.data;
   if(!d){ tb.innerHTML = `<tr><td colspan="5" class="dim">${T.err ? 'Could not read the temp folder' : 'Measuring, a large build folder takes a few seconds'}</td></tr>`; $('tc').textContent = ''; return; }
   if(!d.configured){ tb.innerHTML = `<tr><td colspan="5" class="dim">No temp folder is set. Add "tempRoot" to .data/config.json.</td></tr>`; $('tc').textContent = ''; return; }
-  $('tSub').textContent = d.root;
+  $('tSub').textContent = d.root + (d.refreshing ? ' // MEASURING AGAIN' : '');
   $('tc').textContent = fmtBytes(d.bytes);
   if(!d.exists){ tb.innerHTML = `<tr><td colspan="5" class="dim">The folder does not exist yet. It is made the first time something is put in it.</td></tr>`; return; }
   const rows = [];
@@ -413,6 +413,9 @@ async function loadTemp(fresh){
   try { T.data = await MC.api.get('/api/temp' + (fresh ? '?fresh=1' : '')); T.err = null; } catch(e){ T.err = e; }
   T.busy = false; $('tRe').disabled = false;
   renderTemp(); dropStalePending(); MC.drawFrames();
+  // The server showed its last result and is measuring again: ask once more in a moment.
+  clearTimeout(T.again);
+  if(T.data && T.data.refreshing) T.again = setTimeout(() => loadTemp(false), 4000);
 }
 $('tRe').onclick = () => loadTemp(true);
 $('tOpen').onclick = async () => {
