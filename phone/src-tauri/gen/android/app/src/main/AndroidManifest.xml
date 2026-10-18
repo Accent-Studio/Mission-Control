@@ -7,6 +7,8 @@
     <!-- Voice on the Talk page, later. Android asks the person the first time a page records. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Keeps Wi-Fi out of its power saving while the app is on screen (see MainActivity). -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- No backup: the device key and the pairing stay on this phone. -->
     <application

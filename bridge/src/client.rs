@@ -71,8 +71,10 @@ const CLOSE_GRACE: Duration = Duration::from_millis(250);
 const TOKEN_TTL: Duration = Duration::from_secs(60);
 /// Most link log lines kept for the PC while it cannot be reached.
 const JOURNAL_MAX: usize = 600;
-/// The link is given up after this long without a packet from the PC.
-const LINK_IDLE: Duration = Duration::from_secs(8);
+/// The link is given up after this long without a packet from the PC. Phone Wi-Fi often goes quiet for 5 to 13
+/// seconds and then recovers; a link that outlasts that resumes at once, while a dropped one fails the requests in
+/// flight and must dial again.
+const LINK_IDLE: Duration = Duration::from_secs(15);
 /// How often the phone sends a keep-alive when nothing else is going out.
 const LINK_KEEP_ALIVE: Duration = Duration::from_secs(2);
 /// Most `/__mc/enter` tokens held at once; when full, the oldest one is dropped.
