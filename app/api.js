@@ -1,6 +1,21 @@
 // Front end client for the Mission Control server.
 window.MC = window.MC || {};
 
+// The phone app opens on the Talk page's conversation list rather than Home. Only the first page of a run of the app moves:
+// Home picked later from the menu stays Home. The PC's pages open in an Android browser only through the phone app.
+(function () {
+  if (!/Android/i.test(navigator.userAgent)) return;
+  try {
+    if (sessionStorage.getItem('mc-opened')) return;
+    sessionStorage.setItem('mc-opened', '1');
+  } catch (e) { return; }
+  if (/^\/(index\.html)?$/.test(location.pathname)) location.replace('chat.html');
+})();
+
+// A phone page brought back from the browser's page cache (Back after visiting another page) has lost its live link to the PC
+// and may hold calls that will never answer, so it loads again instead.
+addEventListener('pageshow', function (e) { if (e.persisted && /Android/i.test(navigator.userAgent)) location.reload(); });
+
 // On a phone, the PC can remove the phone while a page is open. The phone's proxy then answers every call with
 // 403 not_paired. Reload once so the page the proxy shows next explains it (on the PC this answer never happens).
 MC.removed = (function () {
@@ -15,13 +30,30 @@ MC.removed = (function () {
 })();
 
 MC.api = (function () {
+  const GET_MAX = 25000;
   async function request(method, path, body) {
     const opts = { method: method, headers: { 'X-MC': '1' } };
     if (body !== undefined) {
       opts.headers['Content-Type'] = 'application/json';
       opts.body = JSON.stringify(body);
     }
-    const res = await fetch(path, opts);
+    // A read gives up after GET_MAX: when the link to the PC drops, a phone's call can otherwise wait for ever and the page
+    // never finishes loading. Writes keep waiting, since giving up on one would not undo it.
+    let timer = 0;
+    if (method === 'GET' && window.AbortController) {
+      const ac = new AbortController();
+      opts.signal = ac.signal;
+      timer = setTimeout(function () { ac.abort(); }, GET_MAX);
+    }
+    let res;
+    try { res = await fetch(path, opts); }
+    catch (e) {
+      clearTimeout(timer);
+      const err = new Error(opts.signal && opts.signal.aborted ? 'timeout' : 'offline');
+      err.status = 0;
+      throw err;
+    }
+    clearTimeout(timer);
     let data = null;
     try { data = await res.json(); } catch (e) { data = null; }
     if (res.status === 403 && data && data.error === 'not_paired') MC.removed();
@@ -93,10 +125,13 @@ MC.whoami = (function () {
   try { if (sessionStorage.getItem(KEY) === '1') guess = true; } catch (e) { /* storage may be blocked */ }
   if (guess) mark(true);
   function ask(tries) {
-    return fetch('/api/whoami').then(function (res) {
+    var ac = window.AbortController ? new AbortController() : null, t = ac ? setTimeout(function () { ac.abort(); }, 8000) : 0;
+    return fetch('/api/whoami', ac ? { signal: ac.signal } : undefined).then(function (res) {
+      clearTimeout(t);
       if (!res.ok && res.status !== 403 && tries > 0) throw new Error('retry');
       return res;
     }).catch(function (e) {
+      clearTimeout(t);
       if (tries > 0) return new Promise(function (r) { setTimeout(r, 1500); }).then(function () { return ask(tries - 1); });
       throw e;
     });

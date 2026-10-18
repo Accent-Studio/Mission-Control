@@ -472,12 +472,12 @@ button:focus-visible,textarea:focus-visible,.sess:focus-visible,.runrow:focus-vi
   .eyecol canvas[data-eye]{height:0;flex:1 1 0}
   .wrap[data-ptab=conv],.wrap[data-ptab=sess]{margin:-8px -14px 0;height:calc(100dvh - var(--railh) - 60px - env(safe-area-inset-bottom))}
   .wrap[data-ptab=conv] .composer{padding:0}
-  /* pull to refresh: the room the content moved by, and the label in it */
-  .pullgap{flex:none}
+  /* pull to refresh: the room the content moved by, and the spinner in it while it loads */
+  .pullgap{flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
   .pullgap[hidden]{display:none}
-  .pulltag{position:fixed;left:50%;z-index:90;transform:translateX(-50%);padding:5px 12px;background:#0a1019;border:1px solid var(--line-2);color:var(--w2);font:600 12px var(--sans);letter-spacing:.02em;white-space:nowrap;pointer-events:none}
-  .pulltag.go{color:var(--white);border-color:var(--white)}
-  .pulltag[hidden]{display:none}
+  .pullspin{display:none;width:22px;height:22px;border-radius:50%;border:3px solid rgba(226,233,240,.14);border-top-color:var(--red);animation:pullspin .8s linear infinite}
+  .pullgap.on .pullspin{display:block}
+  @keyframes pullspin{to{transform:rotate(360deg)}}
   .wrap[data-ptab=conv] .msgs,.wrap[data-ptab=sess] .sesspanel .body{overscroll-behavior-y:contain}
   /* the keyboard is open: no tab bar, its room goes to the conversation and the box */
   html.kb .ctabs{display:none}
@@ -3235,27 +3235,27 @@ MC.init('chat');
   setInterval(function () { loadRuns(); }, 15000);
 
   /* ---------- phone: pull the conversation list down from its top, or the conversation up from its bottom, to load it again ----------
-     The content follows the finger by half the distance, and a label says what letting go will do. */
+     The content follows the finger by half the distance. Let go past AT and a small spinner turns while it loads, for at most
+     PULL_MAX: a link to the PC that dropped never leaves it turning. */
   function pullRefresh(box, edge, run) {
     if (!box) return;
-    var AT = 64, y0 = null, d = 0, busy = false;
-    var tag = document.createElement('div'); tag.className = 'pulltag'; tag.setAttribute('role', 'status'); tag.hidden = true; document.body.appendChild(tag);
+    var AT = 64, HOLD = 44, PULL_MAX = 12000, y0 = null, d = 0, busy = 0;
     var gap = document.createElement('div'); gap.className = 'pullgap'; gap.hidden = true;
+    gap.innerHTML = '<i class="pullspin" role="status" aria-label="Refreshing"></i>';
     function atEdge() { return edge === 'top' ? box.scrollTop <= 0 : box.scrollTop + box.clientHeight >= box.scrollHeight - 2; }
-    function show(px, word) {
-      if (edge === 'top') box.insertBefore(gap, box.firstChild); else box.appendChild(gap);
-      gap.hidden = !px; gap.style.height = px + 'px';
+    function show(px, spin) {
+      if (edge === 'top') { if (box.firstChild !== gap) box.insertBefore(gap, box.firstChild); } else if (box.lastChild !== gap) box.appendChild(gap);
+      gap.hidden = !px; gap.style.height = px + 'px'; gap.classList.toggle('on', !!spin);
       if (px && edge === 'bottom') box.scrollTop = box.scrollHeight;
-      tag.hidden = !word; tag.textContent = word || '';
-      tag.classList.toggle('go', px >= AT);
-      if (word) { var r = box.getBoundingClientRect(), h = tag.offsetHeight, mid = Math.max(h / 2 + 4, px / 2); tag.style.top = (edge === 'top' ? r.top + mid - h / 2 : r.bottom - mid - h / 2) + 'px'; }
     }
     function end() {
       if (y0 == null) return;
       y0 = null;
       if (d < AT) { d = 0; show(0); return; }
-      busy = true; d = 0; show(AT, 'Refreshing');
-      Promise.resolve().then(run).catch(function () {}).then(function () { busy = false; show(0); });
+      d = 0; show(HOLD, true);
+      var me = ++busy, stop = function () { if (busy === me) { busy = 0; show(0); } };
+      setTimeout(stop, PULL_MAX);
+      Promise.resolve().then(run).catch(function () {}).then(stop);
     }
     box.addEventListener('touchstart', function (e) {
       y0 = !busy && phoneMQ.matches && e.touches.length === 1 && atEdge() ? e.touches[0].clientY : null; d = 0;
@@ -3266,7 +3266,7 @@ MC.init('chat');
       if (dy <= 0) { if (d) { d = 0; show(0); } else y0 = null; return; } /* the usual direction: it just scrolls */
       if (e.cancelable) e.preventDefault();
       d = Math.min(130, dy / 2);
-      show(d, d >= AT ? 'Let go to refresh' : 'Pull to refresh');
+      show(d);
     }, { passive: false });
     box.addEventListener('touchend', end);
     box.addEventListener('touchcancel', function () { y0 = null; d = 0; if (!busy) show(0); });
