@@ -472,7 +472,14 @@ button:focus-visible,textarea:focus-visible,.sess:focus-visible,.runrow:focus-vi
   .eyecol canvas[data-eye]{height:0;flex:1 1 0}
   .wrap[data-ptab=conv],.wrap[data-ptab=sess]{margin:-8px -14px 0;height:calc(100dvh - var(--railh) - 60px - env(safe-area-inset-bottom))}
   .wrap[data-ptab=conv] .composer{padding:0}
-  /* the keyboard is open (the message box has focus): no tab bar, its room goes to the conversation and the box */
+  /* pull to refresh: the room the content moved by, and the label in it */
+  .pullgap{flex:none}
+  .pullgap[hidden]{display:none}
+  .pulltag{position:fixed;left:50%;z-index:90;transform:translateX(-50%);padding:5px 12px;background:#0a1019;border:1px solid var(--line-2);color:var(--w2);font:600 12px var(--sans);letter-spacing:.02em;white-space:nowrap;pointer-events:none}
+  .pulltag.go{color:var(--white);border-color:var(--white)}
+  .pulltag[hidden]{display:none}
+  .wrap[data-ptab=conv] .msgs,.wrap[data-ptab=sess] .sesspanel .body{overscroll-behavior-y:contain}
+  /* the keyboard is open: no tab bar, its room goes to the conversation and the box */
   html.kb .ctabs{display:none}
   html.kb .wrap[data-ptab=conv]{height:calc(100dvh - var(--railh) - 8px)}
   .wrap[data-ptab=conv] .thread,.wrap[data-ptab=sess] .sesspanel{background:transparent}
@@ -1624,7 +1631,7 @@ MC.init('chat');
         st.loadErr = e.status === 404 ? 'That session was not found.' : 'Server offline. Could not load this session.';
         if (e.status === 404 && lastConv() === id) {
           rememberConv(null); /* a deleted conversation is not opened again next time */
-          if (st.bootLast === id) { st.bootLast = null; select(null); setTab('conv'); return; } /* opened only because it was the last one: start a new one instead */
+          if (st.bootLast === id) { st.bootLast = null; select(null, null, true); return; } /* opened only because it was the last one: start a new one instead */
         }
       }
       renderThread();
@@ -1663,22 +1670,55 @@ MC.init('chat');
     MC.drawFrames();
     if (k === 'conv') { var mb = $('msgs'); if (mb) mb.scrollTop = mb.scrollHeight; }
   }
-  $('ctabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-ptab]'); if (b) setTab(b.dataset.ptab); });
+  function curTab() { var w = document.querySelector('.wrap'); return w ? w.getAttribute('data-ptab') : ''; }
+  /* phone: opening a conversation from another page adds a step to the history, so Back goes to the conversation list first.
+     Leaving it by the tab bar takes that step back out, so Back never stops twice on the same page. */
+  var convStep = function () { return !!(history.state && history.state.ptab === 'conv'); };
+  window.addEventListener('popstate', function () {
+    if (convStep()) { setTab('conv'); return; }
+    var want = st.wantTab || 'sess'; st.wantTab = null;
+    if (curTab() === 'conv' || want !== 'sess') setTab(want);
+    try { history.replaceState(null, '', st.sel ? 'chat.html?session=' + encodeURIComponent(st.sel) : 'chat.html'); } catch (e) {}
+  });
+  $('ctabs').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-ptab]'); if (!b) return;
+    var k = b.dataset.ptab;
+    if (k !== 'conv' && curTab() === 'conv' && convStep()) { st.wantTab = k; history.back(); return; }
+    if (k === 'conv' && curTab() !== 'conv' && phoneMQ.matches) { try { history.pushState({ ptab: 'conv' }, '', location.href); } catch (e) {} }
+    setTab(k);
+  });
   document.querySelector('.wrap').setAttribute('data-ptab', 'link');
-  /* phone keyboard: while the message box has focus the tab bar steps aside (the CSS only acts at phone width).
+  /* phone keyboard: while it is open the tab bar steps aside (the CSS only acts at phone width).
+     A touch screen follows the keyboard itself: the app shrinks the page while the keyboard is up, so a page much shorter than the
+     tallest seen at this width means the keyboard is open. Back closes the keyboard but leaves the box focused, and the bar still
+     comes back. Without a touch screen the box's focus decides.
      The buttons under the box, and Send anyway and Cancel above it, keep the focus when pressed, so the bar does not come back and shove them away mid-tap. */
   (function () {
     var pm = $('prompt'), box = pm && pm.closest('.talkbox'), note = $('elNote'), root = document.documentElement;
     if (!pm) return;
-    pm.addEventListener('focus', function () { root.classList.add('kb'); });
-    pm.addEventListener('blur', function () { root.classList.remove('kb'); });
+    var touch = window.matchMedia('(pointer:coarse)'), tallest = {};
+    function kbOpen() {
+      var h = window.visualViewport ? window.visualViewport.height : window.innerHeight, w = window.innerWidth;
+      if (!(h <= (tallest[w] || 0))) tallest[w] = h;
+      return h < tallest[w] * 0.8;
+    }
+    function paintKb() {
+      var focused = document.activeElement === pm;
+      root.classList.toggle('kb', touch.matches ? focused && kbOpen() : focused);
+    }
+    kbOpen();
+    pm.addEventListener('focus', function () { paintKb(); setTimeout(paintKb, 400); });
+    pm.addEventListener('blur', paintKb);
+    window.addEventListener('resize', paintKb);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', paintKb);
     if (box) box.addEventListener('mousedown', function (e) { if (root.classList.contains('kb') && e.target.closest('.tbbar button')) e.preventDefault(); });
     if (note) note.addEventListener('mousedown', function (e) { if (root.classList.contains('kb') && e.target.closest('button')) e.preventDefault(); });
   })();
 
-  /* newKey: open this new conversation draft (when id is null) */
-  function select(id, newKey) {
-    setTab('conv'); /* a phone shows the conversation, a new one included */
+  /* newKey: open this new conversation draft (when id is null). quiet: the phone stays on the page it shows. */
+  function select(id, newKey, quiet) {
+    var step = !quiet && !st.booting && phoneMQ.matches && curTab() !== 'conv' && !convStep();
+    if (!quiet) setTab('conv'); /* a phone shows the conversation, a new one included */
     if (st.editing) { st.editing = null; }
     saveDraftNow(); /* the draft stays with the conversation it was typed for */
     st.pendCompact = false;
@@ -1692,7 +1732,10 @@ MC.init('chat');
     var cur = st.view ? st.store[st.view] : null;
     if (cur && (cur.sessionId || null) !== st.sel) st.view = null;
     if (st.sel && !st.view) attachLive(st.sel);
-    try { history.replaceState(null, '', st.sel ? 'chat.html?session=' + encodeURIComponent(st.sel) : 'chat.html'); } catch (e) {}
+    try {
+      var url = st.sel ? 'chat.html?session=' + encodeURIComponent(st.sel) : 'chat.html';
+      if (step) history.pushState({ ptab: 'conv' }, '', url); else history.replaceState(history.state, '', url);
+    } catch (e) {}
     renderSessions(true);
     if (st.sel) { loadSession(st.sel); loadWarm(st.sel); } else { st.pages = null; renderThread(); }
     renderDelayed();
@@ -2550,6 +2593,121 @@ MC.init('chat');
   if (!voiceOK) { var cm0 = $('cmic'); cm0.innerHTML = MC.ic.mic + '<span class="ml">Talk</span>'; }
   else { $('cmic').removeAttribute('title'); paintMic(); }
 
+  /* ---- a phone: Talk records with the phone's own microphone, Send has BlitzVoice on the PC write it out, and the words go into
+     the message box on the Conversation page. The send phrase at the end sends them at once, the cancel phrase drops them.
+     P.step: idle, starting (waiting for the microphone), recording, sending (uploading and transcribing). ---- */
+  (function () {
+    if (!V || !MC.audio) return;
+    var P = { step: 'idle', rec: null, ac: null, job: null, tok: 0, lv: 0 };
+    var sendIc = '<svg viewBox="0 0 20 20"><path d="M3 10 L17 3 L13 17 L10 11.5 Z" fill="#fff"/></svg>';
+    function sound(k) { if (MC.sound) MC.sound.play(k); }
+    function step(k) {
+      P.step = k; P.lv = 0;
+      if (V.setPhoneLink) V.setPhoneLink(k === 'recording' ? 'recording' : k === 'sending' ? 'transcribing' : 'idle');
+      V.paintPhone();
+    }
+    V.paintPhone = function (b) {
+      b = b || $('cmic'); if (!b) return;
+      var k = P.step, rec = k === 'recording', wait = k === 'starting' || k === 'sending';
+      var word = rec ? 'Send' : k === 'sending' ? 'Writing' : 'Talk';
+      var title = rec ? 'Put what you said in the message box' : k === 'sending' ? 'Writing out what you said' : k === 'starting' ? 'Waiting for the microphone' : 'Dictate with this phone\'s microphone';
+      b.disabled = false; b.setAttribute('aria-disabled', wait ? 'true' : 'false'); b.style.opacity = wait ? '.4' : ''; b.style.cursor = wait ? 'default' : '';
+      b.title = title; b.setAttribute('aria-label', title);
+      if (b.dataset.word !== 'p' + word || !b.querySelector('.lv')) {
+        b.dataset.word = 'p' + word; b.dataset.icon = rec ? 'send' : 'mic';
+        b.innerHTML = (rec ? sendIc : MC.ic.mic) + '<span class="ml">' + word + '</span><span class="lv" aria-hidden="true"><i></i></span>';
+      }
+      b.classList.toggle('on', rec);
+      var lv = b.querySelector('.lv i'); if (lv) lv.style.width = rec ? Math.round(Math.sqrt(P.lv) * 100) + '%' : '0';
+      var c = document.querySelector('[data-cl-cancel]');
+      if (c) { c.hidden = !(rec || wait); c.onclick = function () { if (P.step !== 'idle') { drop(); sound('cancel'); } }; }
+    };
+    function micText(e) {
+      var n = e && e.name;
+      return n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError' ? 'Microphone is blocked. In Android settings, open Apps, this app, Permissions, and allow Microphone.'
+        : n === 'NotFoundError' || n === 'OverconstrainedError' ? 'No microphone was found on this phone.'
+        : n === 'TimeoutError' ? 'The microphone did not start. Try again.' : 'Recording does not work here.';
+    }
+    function failText(code, j) {
+      return code === 409 && j && j.error === 'no_link_model' ? 'Choose a "Model for Mission Control" in BlitzVoice on the PC.'
+        : code === 409 ? 'BlitzVoice is busy. Try again in a moment.'
+        : code === 503 ? ((j && j.reason) || 'BlitzVoice is not running on the PC.')
+        : code === 413 ? 'That recording is too long.'
+        : 'Could not write that out, so nothing was added.';
+    }
+    async function start() {
+      if (P.step !== 'idle') return;
+      var tok = ++P.tok, ac = new AbortController(); P.ac = ac;
+      step('starting');
+      var rec;
+      try {
+        rec = await MC.audio.record({ signal: ac.signal, openMs: 12000, maxSec: 120, skipMs: 260,
+          onLevel: function (v) {
+            if (tok !== P.tok || P.step !== 'recording') return;
+            P.lv = Math.min(1, v * 2.5); V.live = P.lv; V.liveAt = performance.now();
+            var lv = document.querySelector('#cmic .lv i'); if (lv) lv.style.width = Math.round(Math.sqrt(P.lv) * 100) + '%';
+          },
+          onLimit: function () { if (tok === P.tok && P.step === 'recording') { voiceNote('That is the two minute limit, so it was sent.'); send(); } } });
+      } catch (e) {
+        if (tok === P.tok) { P.ac = null; step('idle'); if (!e || e.name !== 'AbortError') { voiceNote(micText(e)); sound('cancel'); } }
+        return;
+      }
+      if (tok !== P.tok) { rec.cancel().catch(function () {}); return; } /* dropped while the microphone was starting */
+      P.ac = null; P.rec = rec;
+      step('recording');
+      sound('listen');
+    }
+    /* drops a start, a recording or an upload: nothing is added */
+    function drop() {
+      P.tok++;
+      if (P.ac) { P.ac.abort(); P.ac = null; }
+      if (P.job) { P.job.abort(); P.job = null; }
+      var r = P.rec; P.rec = null; if (r) r.cancel().catch(function () {});
+      if (P.step !== 'idle') step('idle');
+    }
+    async function send() {
+      var rec = P.rec; if (!rec || P.step !== 'recording') return;
+      P.rec = null;
+      var tok = P.tok, ac = new AbortController(), late = false; P.job = ac;
+      var timer = setTimeout(function () { late = true; ac.abort(); }, 70000);
+      step('sending'); sound('send');
+      var text = '', fail = '';
+      try {
+        var out = null; try { out = await rec.stop(); } catch (e) { out = null; }
+        if (!out || out.seconds < .25 || out.peak < .001) fail = 'Heard nothing.';
+        else {
+          var res = await fetch('/api/voice/transcribe', { method: 'POST', headers: { 'X-MC': '1', 'Content-Type': 'audio/wav' }, body: out.wav, signal: ac.signal });
+          var j = null; try { j = await res.json(); } catch (e) { j = null; }
+          if (res.ok) text = String((j && j.text) || '').replace(/\s+/g, ' ').trim();
+          else { if (res.status === 403 && j && j.error === 'not_paired') MC.removed(); fail = failText(res.status, j); }
+          if (!fail && !text) fail = 'Heard nothing.';
+        }
+      } catch (e) { fail = late ? 'The PC took too long, so nothing was added.' : 'Could not reach the PC, so nothing was added.'; }
+      clearTimeout(timer); if (P.job === ac) P.job = null;
+      if (tok !== P.tok) return; /* Cancel was pressed meanwhile */
+      step('idle');
+      if (fail) { voiceNote(fail); sound('cancel'); return; }
+      var ph = phraseIn(text);
+      if (ph && (ph.cancel || !ph.send.trim())) { sound('cancel'); return; }
+      setTab('conv');
+      if (ph) { wakeQ.push(ph.send.trim()); drainWake(); return; } /* "send it" at the end: it goes to the conversation */
+      var inp = $('prompt'), v = inp.value;
+      inp.value = v + (v.trim() && !/\s$/.test(v) ? ' ' : '') + text;
+      fitPrompt();
+    }
+    V.micAction = function () {
+      if (!V.remote || !V.remote()) return false; /* the PC: BlitzVoice's own dictation */
+      if (P.step === 'idle') start(); else if (P.step === 'recording') send();
+      return true;
+    };
+    /* leaving the page ends the microphone, so a recording does not carry on in the background */
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && (P.step === 'starting' || P.step === 'recording')) { drop(); voiceNote('Recording stopped when you left the page.'); }
+    });
+    addEventListener('pagehide', function () { if (P.step !== 'idle') drop(); });
+    if (V.remote && V.remote()) V.paintPhone();
+  })();
+
   /* ---------- the two voice switches (saved on the server, so every tab and later a phone agree) ---------- */
   (function () {
     var P = window.MC && MC.voicePrefs, sw = document.querySelectorAll('.tog[data-pref]');
@@ -3076,18 +3234,63 @@ MC.init('chat');
   document.addEventListener('visibilitychange', function () { if (!document.hidden) { tickCache(); if (st.usage && !st.usageBusy) renderUsage(); } });
   setInterval(function () { loadRuns(); }, 15000);
 
+  /* ---------- phone: pull the conversation list down from its top, or the conversation up from its bottom, to load it again ----------
+     The content follows the finger by half the distance, and a label says what letting go will do. */
+  function pullRefresh(box, edge, run) {
+    if (!box) return;
+    var AT = 64, y0 = null, d = 0, busy = false;
+    var tag = document.createElement('div'); tag.className = 'pulltag'; tag.setAttribute('role', 'status'); tag.hidden = true; document.body.appendChild(tag);
+    var gap = document.createElement('div'); gap.className = 'pullgap'; gap.hidden = true;
+    function atEdge() { return edge === 'top' ? box.scrollTop <= 0 : box.scrollTop + box.clientHeight >= box.scrollHeight - 2; }
+    function show(px, word) {
+      if (edge === 'top') box.insertBefore(gap, box.firstChild); else box.appendChild(gap);
+      gap.hidden = !px; gap.style.height = px + 'px';
+      if (px && edge === 'bottom') box.scrollTop = box.scrollHeight;
+      tag.hidden = !word; tag.textContent = word || '';
+      tag.classList.toggle('go', px >= AT);
+      if (word) { var r = box.getBoundingClientRect(), h = tag.offsetHeight, mid = Math.max(h / 2 + 4, px / 2); tag.style.top = (edge === 'top' ? r.top + mid - h / 2 : r.bottom - mid - h / 2) + 'px'; }
+    }
+    function end() {
+      if (y0 == null) return;
+      y0 = null;
+      if (d < AT) { d = 0; show(0); return; }
+      busy = true; d = 0; show(AT, 'Refreshing');
+      Promise.resolve().then(run).catch(function () {}).then(function () { busy = false; show(0); });
+    }
+    box.addEventListener('touchstart', function (e) {
+      y0 = !busy && phoneMQ.matches && e.touches.length === 1 && atEdge() ? e.touches[0].clientY : null; d = 0;
+    }, { passive: true });
+    box.addEventListener('touchmove', function (e) {
+      if (y0 == null) return;
+      var dy = (e.touches[0].clientY - y0) * (edge === 'top' ? 1 : -1);
+      if (dy <= 0) { if (d) { d = 0; show(0); } else y0 = null; return; } /* the usual direction: it just scrolls */
+      if (e.cancelable) e.preventDefault();
+      d = Math.min(130, dy / 2);
+      show(d, d >= AT ? 'Let go to refresh' : 'Pull to refresh');
+    }, { passive: false });
+    box.addEventListener('touchend', end);
+    box.addEventListener('touchcancel', function () { y0 = null; d = 0; if (!busy) show(0); });
+  }
+  pullRefresh($('sess').parentNode, 'top', function () { return Promise.all([loadSessions(), loadRuns(), loadNewDrafts()]); });
+  pullRefresh($('msgs'), 'bottom', function () { if (st.sel) return Promise.all([loadSession(st.sel), loadRuns()]); });
+
   (async function boot() {
     st.sessions = null; renderSessions(); renderThread(); renderUsage(); fitPrompt();
-    /* the page opens on the conversation in its address, else the last one used in this browser (a new one when there is none),
-       and on a phone straight on the Conversation tab */
+    /* the page opens on the conversation in its address, else the last one used in this browser (a new one when there is none).
+       A phone shows the conversation list, or the conversation when the address names one (with the list one Back away). */
     var inUrl = new URLSearchParams(location.search).get('session'), q = inUrl || lastConv();
+    st.booting = true;
     if (/^n-/.test(q)) select(null, q); /* the last thing open was a new conversation draft */
     else {
       if (!inUrl && q) st.bootLast = q;
       if (q) select(q);
     }
+    st.booting = false;
     if (!draftReady) loadDraft();
-    setTab('conv');
+    if (inUrl && phoneMQ.matches && !convStep()) {
+      try { var here = location.href; history.replaceState(null, '', 'chat.html'); history.pushState({ ptab: 'conv' }, '', here); } catch (e) {}
+    }
+    setTab(inUrl || convStep() ? 'conv' : 'sess');
     loadNewDrafts();
     loadProjects().then(function () { renderComposer(); renderSessions(); renderHeader(); });
     loadSessions().then(function () { renderHeader(); renderComposer(); });

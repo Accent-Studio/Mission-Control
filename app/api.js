@@ -88,17 +88,29 @@ MC.whoami = (function () {
     if (remote) document.documentElement.setAttribute('data-remote', '');
     else document.documentElement.removeAttribute('data-remote');
   }
-  try { if (sessionStorage.getItem(KEY) === '1') mark(true); } catch (e) { /* storage may be blocked */ }
-  return fetch('/api/whoami').then(function (res) {
+  // The PC's pages never open in an Android browser except through the phone app, so Android is a phone until told otherwise.
+  var guess = /Android/i.test(navigator.userAgent);
+  try { if (sessionStorage.getItem(KEY) === '1') guess = true; } catch (e) { /* storage may be blocked */ }
+  if (guess) mark(true);
+  function ask(tries) {
+    return fetch('/api/whoami').then(function (res) {
+      if (!res.ok && res.status !== 403 && tries > 0) throw new Error('retry');
+      return res;
+    }).catch(function (e) {
+      if (tries > 0) return new Promise(function (r) { setTimeout(r, 1500); }).then(function () { return ask(tries - 1); });
+      throw e;
+    });
+  }
+  return ask(3).then(function (res) {
     if (res.status === 403) res.clone().json().then(function (d) { if (d && d.error === 'not_paired') MC.removed(); }).catch(function () {});
     return res.ok ? res.json() : null;
   }).then(function (who) {
-    var remote = !!(who && who.remote);
+    var remote = who ? !!who.remote : guess;
     MC.remote = remote;
     mark(remote);
     try { sessionStorage.setItem(KEY, remote ? '1' : '0'); } catch (e) { /* ignore */ }
     return who;
-  }).catch(function () { MC.remote = false; mark(false); return null; }); // no answer: the PC view
+  }).catch(function () { MC.remote = guess; mark(guess); return null; }); // no answer after a few tries: the best guess
 })();
 
 // Space or office view. Office drops the 3D scenes (the solar system on Home, the crew ship on project pages) for
