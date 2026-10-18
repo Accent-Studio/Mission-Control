@@ -5,6 +5,7 @@
 //! forwarder in front of its local proxy.
 
 pub mod forward;
+pub mod linkwatch;
 pub mod wire;
 
 #[cfg(feature = "bridge")]

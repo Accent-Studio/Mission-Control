@@ -28,6 +28,8 @@ export const REMOTE_OK = new Set([
   'POST /api/delayed/:id/now',
   // the unsent message box, shared by the phone and the PC
   'PUT /api/drafts',
+  // the phone app's own link log, written to a file of its own
+  'POST /api/phone-log',
   // Projects: the settings and outward jobs stay at the PC (see PC_ONLY and startJob)
   'POST /api/projects/refresh',
   'POST /api/projects/:id/git/commit',

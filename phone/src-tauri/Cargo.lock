@@ -2795,6 +2795,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "iroh",
+ "n0-future",
  "serde",
  "serde_json",
  "tokio",
@@ -2854,7 +2855,7 @@ dependencies = [
 
 [[package]]
 name = "mission-control-phone"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "log",
  "mc-bridge",

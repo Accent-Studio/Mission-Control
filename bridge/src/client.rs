@@ -31,7 +31,8 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+use std::collections::VecDeque;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty, Full};
@@ -42,7 +43,7 @@ use hyper::server::conn::http1 as server_http1;
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode, Uri, Version};
 use hyper_util::rt::{TokioIo, TokioTimer};
-use iroh::endpoint::{presets, Connection, ConnectionError};
+use iroh::endpoint::{presets, Connection, ConnectionError, QuicTransportConfig};
 use iroh::{Endpoint, EndpointAddr, EndpointId, SecretKey, TransportAddr};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
@@ -68,6 +69,12 @@ const TURN_AWAY_WAIT: Duration = Duration::from_millis(200);
 const CLOSE_GRACE: Duration = Duration::from_millis(250);
 /// An unused `/__mc/enter` token stops working after this long.
 const TOKEN_TTL: Duration = Duration::from_secs(60);
+/// Most link log lines kept for the PC while it cannot be reached.
+const JOURNAL_MAX: usize = 600;
+/// The link is given up after this long without a packet from the PC.
+const LINK_IDLE: Duration = Duration::from_secs(8);
+/// How often the phone sends a keep-alive when nothing else is going out.
+const LINK_KEEP_ALIVE: Duration = Duration::from_secs(2);
 /// Most `/__mc/enter` tokens held at once; when full, the oldest one is dropped.
 const MAX_TOKENS: usize = 32;
 /// Header read limit of the loopback server once a connection has proven itself (a browser keeps idle connections open).
@@ -355,6 +362,8 @@ struct Inner {
     dial: AsyncMutex<()>,
     last_fail: Mutex<Option<(Instant, Fail)>>,
     link: watch::Sender<Link>,
+    /// The link log since it last reached the PC: (unix ms, line). Sent after each connect (see `send_journal`).
+    journal: Arc<Mutex<VecDeque<(u64, String)>>>,
 }
 
 /// The phone's identity and its link to the PC. Cheap to clone.
@@ -365,10 +374,35 @@ pub struct Client {
 
 impl Client {
     /// Loads or makes the device key and starts the network endpoint.
-    pub async fn start(cfg: ClientConfig) -> Result<Client, String> {
+    pub async fn start(mut cfg: ClientConfig) -> Result<Client, String> {
+        // Every log line is also kept for the PC, so a stall the phone saw can be read there next to the bridge's log.
+        let journal: Arc<Mutex<VecDeque<(u64, String)>>> = Arc::new(Mutex::new(VecDeque::new()));
+        {
+            let own = cfg.log.take();
+            let j = journal.clone();
+            cfg.log = Some(Arc::new(move |line: &str| {
+                let ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+                let mut q = lock(&j);
+                if q.len() >= JOURNAL_MAX {
+                    q.pop_front();
+                }
+                q.push_back((ms, line.to_owned()));
+                drop(q);
+                if let Some(f) = &own {
+                    f(line);
+                }
+            }));
+        }
         let key = load_or_create_key(&cfg.key_file, cfg.log.as_ref())?;
         let builder = if cfg.relay { Endpoint::builder(presets::N0) } else { Endpoint::builder(presets::Minimal) };
-        let mut builder = builder.secret_key(key);
+        // A link that went silent is given up after LINK_IDLE rather than QUIC's usual 30 seconds, so a stall
+        // costs a few seconds before the phone dials again. Keep-alives every LINK_KEEP_ALIVE keep a healthy
+        // link well clear of that limit. The shorter of the two sides' limits applies to both.
+        let transport = QuicTransportConfig::builder()
+            .keep_alive_interval(LINK_KEEP_ALIVE)
+            .max_idle_timeout(Some(LINK_IDLE.try_into().map_err(|e| format!("bad idle timeout: {e:?}"))?))
+            .build();
+        let mut builder = builder.secret_key(key).transport_config(transport);
         if let Some(addr) = cfg.bind {
             builder = builder.bind_addr(addr).map_err(|e| format!("cannot use bind address {addr}: {e}"))?;
         }
@@ -389,6 +423,7 @@ impl Client {
                 dial: AsyncMutex::new(()),
                 last_fail: Mutex::new(None),
                 link,
+                journal,
             }),
         })
     }
@@ -595,7 +630,10 @@ impl Inner {
                 *lock(&self.last_fail) = None;
                 self.clear_revoked_mark();
                 self.set_link(Link::Online);
-                self.log("connected");
+                self.log(&format!("connected {}", crate::linkwatch::conn_tag(&conn)));
+                if let Some(f) = self.cfg.log.clone() {
+                    crate::linkwatch::watch(conn.clone(), "pc".to_owned(), Arc::new(move |l: String| f(&l)));
+                }
                 self.watch_connection(conn.clone());
                 Ok(conn)
             }
@@ -723,6 +761,35 @@ impl Inner {
     }
 }
 
+/// Sends the link log to the PC (`POST /api/phone-log`) shortly after the link comes up (from `reconnect_loop`). Lines that do not arrive are kept
+/// for the next connect.
+async fn send_journal(inner: Arc<Inner>) {
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    let lines: Vec<(u64, String)> = lock(&inner.journal).drain(..).collect();
+    if lines.is_empty() {
+        return;
+    }
+    let body = serde_json::json!({ "lines": lines.iter().map(|(ms, t)| serde_json::json!([ms, t])).collect::<Vec<_>>() }).to_string();
+    let mut req = Request::new(Full::new(Bytes::from(body)).map_err(|never| match never {}).boxed());
+    *req.method_mut() = Method::POST;
+    *req.uri_mut() = Uri::from_static("/api/phone-log");
+    let h = req.headers_mut();
+    h.insert(HOST, HeaderValue::from_static("127.0.0.1"));
+    h.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    h.insert("x-mc", HeaderValue::from_static("1"));
+    let lane = Lane::default();
+    let sent = matches!(tokio::time::timeout(Duration::from_secs(10), inner.send(&lane, req, None)).await, Ok(Ok(r)) if r.status().is_success());
+    if !sent {
+        let mut q = lock(&inner.journal);
+        for l in lines.into_iter().rev() {
+            if q.len() >= JOURNAL_MAX {
+                break;
+            }
+            q.push_front(l);
+        }
+    }
+}
+
 /// While the link is down, dials again in the background: at once, then every few seconds.
 async fn reconnect_loop(inner: Arc<Inner>) {
     let mut rx = inner.link.subscribe();
@@ -745,6 +812,9 @@ async fn reconnect_loop(inner: Arc<Inner>) {
             // a request or the app starts it again when it wants to.
             Link::Online | Link::Revoked | Link::Unpaired => {
                 wait = Duration::from_secs(2);
+                if link == Link::Online {
+                    tokio::spawn(send_journal(inner.clone()));
+                }
                 if rx.changed().await.is_err() {
                     return;
                 }

@@ -284,7 +284,9 @@ impl Shared {
             self.report_presence(id, true);
         }
         drop(conns);
-        self.log.line(&format!("conn accepted dev={} via={}", short(&id), via(conn)));
+        self.log.line(&format!("conn accepted dev={} {} via={}", short(&id), crate::linkwatch::conn_tag(conn), via(conn)));
+        let log = self.log.clone();
+        crate::linkwatch::watch(conn.clone(), format!("dev={}", short(&id)), std::sync::Arc::new(move |l: String| log.line(&l)));
         true
     }
 
@@ -443,7 +445,7 @@ impl ProtocolHandler for HttpHandler {
             }
         };
         shared.unregister(&conn);
-        shared.log.line(&format!("conn closed dev={} reason={}", short(&conn.remote_id()), close_code(&reason)));
+        shared.log.line(&format!("conn closed dev={} {} reason={}", short(&conn.remote_id()), crate::linkwatch::conn_tag(&conn), close_code(&reason)));
         Ok(())
     }
 }
