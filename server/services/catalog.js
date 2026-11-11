@@ -120,6 +120,11 @@ function loadSeed() {
 const DISCOVER_TTL_MS = 60 * 1000;
 let discovered = { at: 0, dirs: [] };
 
+// After the root folders changed (services/roots.js): the next scan reads them again.
+export function forgetDiscovered() {
+  discovered = { at: 0, dirs: [] };
+}
+
 function normFolder(p) {
   return String(p || '').replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
 }

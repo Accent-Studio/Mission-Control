@@ -1,7 +1,7 @@
 // Tests for wake word training: argument validation, path safety, the trainer's JSON lines, one job at a time,
 // clips, install, and the phone policy. A FAKE trainer (fake-waketrainer.mjs / .bat) stands in for the real one, so
 // no test trains anything or touches the GPU, and every folder (models, clips, BlitzVoice) is a throwaway one.
-// Run: node --test "tools/test/*.test.mjs"
+// Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -448,7 +448,7 @@ describe('a trainer left running by a server that was killed', () => {
     await until(() => fs.existsSync(dirs.pidFile) && Number(fs.readFileSync(dirs.pidFile, 'utf8')) === child.pid, 8000, 'fake trainer up');
     fs.mkdirSync(path.dirname(pidPath), { recursive: true });
     fs.writeFileSync(pidPath, JSON.stringify(record(child.pid)));
-    wt.recoverTrainer();
+    await wt.recoverTrainer();
     const st = wt.trainState();
     assert.equal(st.running, true);
     assert.equal(st.phase, 'running');
@@ -464,10 +464,10 @@ describe('a trainer left running by a server that was killed', () => {
     assert.equal(wt.trainState().running, false);
   });
 
-  test('a pid file with a dead pid is cleared and the last state is "interrupted"', () => {
+  test('a pid file with a dead pid is cleared and the last state is "interrupted"', async () => {
     wt.resetStateForTests();
     fs.writeFileSync(pidPath, JSON.stringify(record(2147483000)));
-    wt.recoverTrainer();
+    await wt.recoverTrainer();
     assert.equal(wt.trainState().running, false);
     assert.equal(wt.trainState().phase, 'interrupted');
     assert.equal(wt.trainState().phrase, 'hey orphan');
@@ -480,7 +480,7 @@ describe('a trainer left running by a server that was killed', () => {
     spawned.push(other);
     await until(() => alive(other.pid), 3000, 'other process');
     fs.writeFileSync(pidPath, JSON.stringify(record(other.pid)));
-    wt.recoverTrainer();
+    await wt.recoverTrainer();
     assert.equal(wt.trainState().running, false);
     assert.equal(wt.trainState().phase, 'interrupted');
     assert.equal(fs.existsSync(pidPath), false);

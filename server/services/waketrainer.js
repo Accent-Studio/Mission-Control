@@ -5,7 +5,7 @@
 // (letters, spaces and apostrophes only), the files are named from a slug, and a path from a request is never used.
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import { execFile, spawn, spawnSync } from 'node:child_process';
 import { publish } from '../lib/events.js';
 import { DATA_DIR, WAKETRAINER_DIR } from '../config.js';
 import { setWakeSettings, wakeStatus } from './voice.js';
@@ -499,48 +499,78 @@ const isAlive = (pid) => {
   }
 };
 
-// The command line of a process, or '' when it cannot be read.
+// The command line of a process, '' when it has none this user may read, or null when it could not be asked (on a busy
+// PC PowerShell can take longer than the timeout). Asynchronous, so a slow answer never holds up the server.
 function commandLineOf(pid) {
-  try {
-    if (process.platform === 'win32') {
-      const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CommandLine`], { encoding: 'utf8', windowsHide: true, timeout: 20000 });
-      return String(r.stdout || '').trim();
+  const [cmd, args, timeout] = process.platform === 'win32'
+    ? ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CommandLine`], 20000]
+    : ['ps', ['-o', 'args=', '-p', String(pid)], 5000];
+  return new Promise((resolve) => {
+    try {
+      execFile(cmd, args, { encoding: 'utf8', windowsHide: true, timeout }, (err, stdout) => resolve(err ? null : String(stdout || '').trim()));
+    } catch {
+      resolve(null);
     }
-    const r = spawnSync('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8', timeout: 5000 });
-    return String(r.stdout || '').trim();
-  } catch {
-    return '';
-  }
+  });
 }
 
-// True when the process is alive AND its command line names the trainer's folder (a reused pid is not ours).
-function isOurTrainer(pid) {
+// True when the process is alive AND its command line names the trainer's folder (a reused pid is not ours), false when
+// it is not, null when the command line could not be read: unknown, never "not ours".
+async function isOurTrainer(pid) {
   if (!isAlive(pid)) return false;
   const norm = (x) => String(x).replace(/\//g, '\\').toLowerCase();
   const folder = norm(path.dirname(paths().trainer)).replace(/\\+$/, '');
-  return !!folder && norm(commandLineOf(pid)).includes(folder);
+  if (!folder) return false;
+  const line = await commandLineOf(pid);
+  return line === null ? null : norm(line).includes(folder);
 }
 
+const RECOVER_TRIES = 4;
+const RECOVER_RETRY_MS = 15000;
+let recovering = null; // the check of a trainer left by the previous server, while it runs (no new start meanwhile)
+
 // Called when the server starts (and by tests): picks up a trainer a previous server left running, or records that
-// it did not survive.
+// it did not survive. When its command line cannot be read, the pid file stays and the check is tried again a few
+// times; after that, the next start of the server checks again. Resolves when it is decided (or given up for now).
 export function recoverTrainer() {
-  if (job) return;
+  if (job) return Promise.resolve();
+  if (!recovering) recovering = recover().finally(() => (recovering = null));
+  return recovering;
+}
+
+async function recover() {
+  for (let tries = 1; ; tries++) {
+    if (await recoverOnce()) return;
+    if (tries >= RECOVER_TRIES) {
+      console.log('[waketrain] could not tell whether the trainer left by the previous server is still running; its pid file is kept');
+      return;
+    }
+    await new Promise((r) => setTimeout(r, RECOVER_RETRY_MS));
+  }
+}
+
+// One check. False when the command line could not be read (try again later), true when it is decided.
+async function recoverOnce() {
+  if (job) return true;
   let rec = null;
   try {
     rec = JSON.parse(fs.readFileSync(pidFile(), 'utf8'));
   } catch {
-    return;
+    return true;
   }
   if (!rec || typeof rec !== 'object' || !Number.isInteger(rec.pid)) {
     removePidFile();
-    return;
+    return true;
   }
+  const ours = await isOurTrainer(rec.pid);
+  if (ours === null) return false;
+  if (job) return true;
   const base = { ...blankState(), phrase: rec.phrase || null, slug: rec.slug || null, preset: rec.preset || null, negatives: Array.isArray(rec.negatives) ? rec.negatives : [], clips: rec.clips || 0, startedAt: rec.startedAt || null, log: rec.log || null };
-  if (!isOurTrainer(rec.pid)) {
+  if (!ours) {
     state = { ...base, phase: 'interrupted', finishedAt: Date.now(), error: 'Mission Control restarted while this was training, and the trainer did not survive.' };
     removePidFile();
     saveState();
-    return;
+    return true;
   }
   state = { ...base, phase: 'running', running: true, msg: 'running (started before a restart)' };
   job = { child: null, pid: rec.pid, stopping: false, log: null, killTimer: null, sawDone: null, sawError: null, adopted: true, watch: null };
@@ -549,6 +579,7 @@ export function recoverTrainer() {
     if (job === mine && !isAlive(mine.pid)) finish(null, null);
   }, 3000);
   mine.watch.unref();
+  return true;
 }
 
 // Starts a training. Resolves { status, body }.
@@ -556,6 +587,7 @@ export function startTraining(body) {
   const v = validateStart(body);
   if (!v.ok) return { status: v.status, body: { error: v.error } };
   if (state.running || job) return { status: 409, body: { error: 'busy', message: 'A training is already running', phrase: state.phrase } };
+  if (recovering) return { status: 409, body: { error: 'busy', message: 'A trainer left by the previous server is still being checked', phrase: state.phrase } };
   const { phrase, slug, preset, steps, negatives } = v.value;
   const p = paths();
   if (!fs.existsSync(p.trainer)) return { status: 503, body: { error: 'trainer_missing', message: 'The trainer is not installed' } };
@@ -768,7 +800,7 @@ export async function installModel(model) {
   return { status: 200, body: result };
 }
 
-recoverTrainer();
+recoverTrainer().catch((err) => console.error('[waketrain] could not check the trainer left by the previous server:', err));
 
 export function overview() {
   return { presets: PRESETS, stages: STAGES, clipTarget: CLIP_TARGET, maxNegatives: MAX_NEGATIVES, state: trainState() };

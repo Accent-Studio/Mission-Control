@@ -21,11 +21,14 @@ const TABLE = [
   [/3-haiku/, [0.25, 1.25, 0.03]],
 ];
 
+import { isLocalModel, localPrice } from '../lib/localModels.js';
+
 const cache = new Map();
 
 // { in, out, cacheRead, cacheWrite5m, cacheWrite1h } in dollars per million tokens, or null for a model not in the table.
 export function priceFor(model) {
   if (typeof model !== 'string' || !model) return null;
+  if (isLocalModel(model)) return localPrice(model); // a local model costs its electricity (measured by the gate), never cached
   if (cache.has(model)) return cache.get(model);
   let p = null;
   for (const [re, [i, o, r]] of TABLE) {
@@ -54,6 +57,7 @@ export function savedOf(model, t) {
 
 // The family a model belongs to, for colors and grouping: fable, opus, sonnet, haiku or other.
 export function familyOf(model) {
+  if (isLocalModel(model)) return 'local';
   const m = /(fable|mythos|opus|sonnet|haiku)/.exec(String(model || ''));
   if (!m) return 'other';
   return m[1] === 'mythos' ? 'fable' : m[1];

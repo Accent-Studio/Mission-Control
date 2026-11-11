@@ -87,7 +87,8 @@ export function wrap(handler) {
       if (res.headersSent) return res.end();
       const status = err && err.status ? err.status : 500;
       if (status === 413) res.setHeader('Connection', 'close');
-      sendJson(res, status, { error: status === 500 ? 'Internal error' : err.message });
+      // err.body: an answer of its own ({ error: 'peer_locked', pc }), sent as it is
+      sendJson(res, status, err.body && status !== 500 ? err.body : { error: status === 500 ? 'Internal error' : err.message });
     }
   };
 }

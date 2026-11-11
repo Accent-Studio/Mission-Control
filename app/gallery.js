@@ -1,5 +1,6 @@
 // Mission Control, the picture viewer: one picture over the whole page, with every picture of its set in a strip at the bottom.
-// The left and right arrow keys, a swipe or the side buttons step through the set; Escape, Close or a click on the dark area
+// The left and right arrow keys, a swipe or the side buttons step through the set; a pinch, a double tap, the wheel or a double
+// click zooms in, and a zoomed picture pans with a finger or a drag; Escape, Close or a click on the dark area
 // closes it and puts the focus back where it was. Used by the Talk page (the pictures of a conversation) and the project page
 // (the Screenshots tab).
 //
@@ -42,6 +43,7 @@ MC.gallery = (function(){
       '.lbth img{width:64px;height:44px;object-fit:cover;border:1px solid var(--line-2);background:rgba(0,0,0,.4)}' +
       '.lbth span{font:600 8.5px var(--mono);letter-spacing:.08em;color:var(--w3);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lbth span:empty{display:none}.lbth.me span{color:var(--w2)}' +
       '.lbth:hover{opacity:.85}.lbth.on{opacity:1}.lbth.on img{border-color:var(--white)}.lbth.on span{color:var(--white)}.lbth:focus-visible{outline:1px solid var(--white);outline-offset:2px}' +
+      '.lb{touch-action:none}.lb > img{transform-origin:center;transition:transform .15s ease-out;will-change:transform;-webkit-user-drag:none;user-select:none}.lb.live > img{transition:none}.lb.zoomed > img{cursor:grab}.lb.zoomed.live > img{cursor:grabbing}' +
       '@media (max-width:560px){.lb{padding:12px 8px}.lb > img{max-width:96vw;max-height:calc(100dvh - 230px)}.lbnav{display:none}}';
     document.head.appendChild(st);
   }
@@ -49,7 +51,7 @@ MC.gallery = (function(){
   function paint(strip){
     if(!lb) return;
     const p = lb.list[lb.i], n = lb.list.length, el = lb.el;
-    const img = el.querySelector('img'); img.src = p.src; img.alt = p.name || 'Picture';
+    const img = el.querySelector('img'); if(img.getAttribute('src') !== p.src && lb.reset) lb.reset(); img.src = p.src; img.alt = p.name || 'Picture';
     el.setAttribute('aria-label', 'Picture ' + (lb.i + 1) + ' of ' + n + (whoText(p) ? ', ' + whoText(p) : ''));
     el.querySelector('.lbhead').innerHTML = '<span class="lbwho ' + (p.from === 'you' ? 'me' : 'ai') + '">' + esc(word(p)) + '</span>' + (n > 1 ? '<span class="lbnum">' + (lb.i + 1) + ' of ' + n + '</span>' : '') + '<span class="lbn">' + esc(p.name || '') + '</span>';
     const cap = el.querySelector('.lbcap'); cap.textContent = p.caption || ''; cap.hidden = !p.caption;
@@ -102,13 +104,71 @@ MC.gallery = (function(){
       if(th){ lb.i = Number(th.dataset.lbi); paint(false); return; }
       if(!e.target.closest('img, .lbhead, .lbcap, .lbstrip')) close(); /* only the dark area around closes it */
     });
-    let sx = null, sy = 0;
-    el.addEventListener('touchstart', e => { sx = null; if(e.touches.length === 1 && !e.target.closest('.lbstrip')){ sx = e.touches[0].clientX; sy = e.touches[0].clientY; } }, { passive:true }); /* the strip scrolls on its own */
+    /* zoom: pinch or double tap on a phone, the wheel or a double click with a mouse; a zoomed picture pans with one finger or a
+       drag. A swipe steps through the set only while the picture is not zoomed. */
+    const img = el.querySelector('img'), Z = { s: 1, x: 0, y: 0 }, MAX = 6;
+    const apply = () => { img.style.transform = Z.s === 1 ? '' : 'translate(' + Z.x + 'px,' + Z.y + 'px) scale(' + Z.s + ')'; el.classList.toggle('zoomed', Z.s > 1); };
+    const fit = () => {
+      if(Z.s <= 1.01){ Z.s = 1; Z.x = 0; Z.y = 0; return apply(); }
+      const mx = img.offsetWidth * (Z.s - 1) / 2, my = img.offsetHeight * (Z.s - 1) / 2;
+      Z.x = Math.max(-mx, Math.min(mx, Z.x)); Z.y = Math.max(-my, Math.min(my, Z.y)); apply();
+    };
+    /* scale to s keeping the point under (cx, cy) where it is */
+    const zoomAt = (s, cx, cy) => {
+      s = Math.max(1, Math.min(MAX, s));
+      const r = img.getBoundingClientRect(), bx = r.left + r.width / 2 - Z.x, by = r.top + r.height / 2 - Z.y;
+      const ux = (cx - bx - Z.x) / Z.s, uy = (cy - by - Z.y) / Z.s;
+      Z.x = cx - bx - ux * s; Z.y = cy - by - uy * s; Z.s = s; fit();
+    };
+    lb.reset = () => { Z.s = 1; Z.x = 0; Z.y = 0; apply(); };
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const mid = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
+    let g = null, lastTap = 0, lastXY = [0, 0];
+    el.addEventListener('touchstart', e => {
+      if(e.target.closest('.lbstrip, button')){ g = null; return; } /* the strip scrolls on its own */
+      el.classList.add('live');
+      if(e.touches.length === 2){ g = { k: 'pinch', d: dist(e.touches), s: Z.s, m: mid(e.touches) }; return; }
+      if(e.touches.length === 1){ const t = e.touches[0]; g = { k: Z.s > 1 ? 'pan' : 'swipe', sx: t.clientX, sy: t.clientY, x: Z.x, y: Z.y, moved: false }; }
+    }, { passive: true });
+    el.addEventListener('touchmove', e => {
+      if(!g) return;
+      if(g.k === 'pinch' && e.touches.length === 2){
+        e.preventDefault();
+        const m = mid(e.touches); zoomAt(g.s * dist(e.touches) / g.d, m[0], m[1]);
+        Z.x += m[0] - g.m[0]; Z.y += m[1] - g.m[1]; g.m = m; fit();
+      } else if(g.k === 'pan' && e.touches.length === 1){
+        e.preventDefault();
+        const t = e.touches[0]; Z.x = g.x + t.clientX - g.sx; Z.y = g.y + t.clientY - g.sy; g.moved = true; fit();
+      } else if(g.k === 'swipe' && e.touches.length === 1){
+        const t = e.touches[0]; if(Math.abs(t.clientX - g.sx) > 8 || Math.abs(t.clientY - g.sy) > 8) g.moved = true;
+      }
+    }, { passive: false });
     el.addEventListener('touchend', e => {
-      if(sx == null || !e.changedTouches.length) return;
-      const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
-      if(Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
+      el.classList.remove('live');
+      if(!g) return;
+      const t = e.changedTouches[0];
+      if(g.k === 'swipe' && t){
+        const dx = t.clientX - g.sx, dy = t.clientY - g.sy;
+        if(Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5){ g = null; step(dx < 0 ? 1 : -1); return; }
+      }
+      /* a double tap on the picture: zoom in there, or back out */
+      if(t && !g.moved && g.k !== 'pinch' && e.target === img){
+        const now = Date.now();
+        if(now - lastTap < 320 && Math.hypot(t.clientX - lastXY[0], t.clientY - lastXY[1]) < 30){
+          lastTap = 0; if(Z.s > 1) lb.reset(); else zoomAt(2.5, t.clientX, t.clientY);
+          e.preventDefault(); g = null; return;
+        }
+        lastTap = now; lastXY = [t.clientX, t.clientY];
+      }
+      if(e.touches.length === 1 && Z.s > 1){ const u = e.touches[0]; g = { k: 'pan', sx: u.clientX, sy: u.clientY, x: Z.x, y: Z.y, moved: true }; return; }
+      g = null;
     });
+    el.addEventListener('wheel', e => { if(e.target !== img && Z.s === 1) return; e.preventDefault(); zoomAt(Z.s * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX, e.clientY); }, { passive: false });
+    img.addEventListener('dblclick', e => { if(Z.s > 1) lb.reset(); else zoomAt(2.5, e.clientX, e.clientY); });
+    let drag = null;
+    img.addEventListener('mousedown', e => { if(Z.s <= 1 || e.button !== 0) return; e.preventDefault(); drag = { sx: e.clientX, sy: e.clientY, x: Z.x, y: Z.y }; el.classList.add('live'); });
+    addEventListener('mousemove', e => { if(!drag || !lb) return; Z.x = drag.x + e.clientX - drag.sx; Z.y = drag.y + e.clientY - drag.sy; fit(); });
+    addEventListener('mouseup', () => { if(drag){ drag = null; if(lb) lb.el.classList.remove('live'); } });
     if(typeof opt.more === 'function'){
       const mine = lb;
       Promise.resolve().then(opt.more).then(more => {

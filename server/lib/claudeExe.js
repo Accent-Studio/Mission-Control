@@ -35,7 +35,9 @@ const isFile = (f) => {
   }
 };
 
-// Every claude.exe and claude.cmd in the PATH folders, in PATH order. Only absolute folders are searched: where.exe looks in
+const WIN = process.platform === 'win32';
+
+// Every claude.exe and claude.cmd in the PATH folders (on Linux, every claude), in PATH order. Only absolute folders are searched: where.exe looks in
 // the current folder first (and so does a relative or empty PATH entry), and a claude binary dropped into the folder the
 // server was started from would be picked up and run as the user.
 function candidatesOnPath() {
@@ -45,7 +47,7 @@ function candidatesOnPath() {
   for (const raw of dirs) {
     const dir = raw.trim().replace(/^"(.*)"$/, '$1');
     if (!dir || !path.isAbsolute(dir) || dir.startsWith('\\\\')) continue;
-    for (const ext of ['.exe', '.cmd']) {
+    for (const ext of WIN ? ['.exe', '.cmd'] : ['']) {
       const file = path.join(dir, 'claude' + ext);
       const key = file.toLowerCase();
       if (seen.has(key) || !isFile(file)) continue;
@@ -57,9 +59,21 @@ function candidatesOnPath() {
 }
 
 // { cmd, pre }: the program to start and the arguments that always come first (a cli.js behind node).
-export async function resolveClaude() {
-  if (resolved) return resolved;
+// Claude Code updates itself: the link on PATH moves to a new version and the old one may be removed. So the answer is
+// kept only while its program is still there, and fresh: true reads PATH again (the runner does when a server names a
+// program it does not know, which happens when the server started after an update and the runner before it).
+export async function resolveClaude({ fresh = false } = {}) {
+  if (resolved && !fresh && fs.existsSync(resolved.pre[0] || resolved.cmd)) return resolved;
+  resolved = null;
   const lines = candidatesOnPath();
+  if (!WIN) {
+    // npm links bin/claude to the program: a native binary, or a cli.js that node runs
+    for (const l of lines) {
+      let real = l;
+      try { real = fs.realpathSync(l); } catch { continue; }
+      return (resolved = /\.(?:c|m)?js$/i.test(real) ? { cmd: process.execPath, pre: [real] } : { cmd: real, pre: [] });
+    }
+  }
   for (const l of lines) {
     if (/\.exe$/i.test(l)) return (resolved = { cmd: l, pre: [] });
   }
@@ -74,7 +88,7 @@ export async function resolveClaude() {
   throw err;
 }
 
-const samePath = (a, b) => path.resolve(String(a)).toLowerCase() === path.resolve(String(b)).toLowerCase();
+const samePath = (a, b) => (WIN ? path.resolve(String(a)).toLowerCase() === path.resolve(String(b)).toLowerCase() : path.resolve(String(a)) === path.resolve(String(b)));
 
 // True when cmd and the first arguments are exactly the resolved claude program (nothing else may be started).
 export function isClaudeCommand(entry, cmd, args) {

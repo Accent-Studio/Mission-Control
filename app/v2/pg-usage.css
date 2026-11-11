@@ -1,0 +1,81 @@
+/* Mission Control 2: styles for the Usage page (pg-usage.js). */
+#pgUsage .card.c5{grid-column:span 5} #pgUsage .card.c7{grid-column:span 7}
+#pgUsage .ucard{container-type:inline-size}
+#pgUsage .u-tiles{grid-column:span 12;grid-template-columns:repeat(6,minmax(0,1fr))}
+#pgUsage .u-tiles .tile{min-width:0}
+#pgUsage .u-tiles .tv{white-space:nowrap}
+
+/* the range and measure in the page bar */
+.u-bar{display:inline-flex;align-items:center;gap:calc(8px*var(--k));margin-right:calc(10px*var(--k));font-size:calc(14px*var(--k))}
+.u-bar .faint{margin-left:calc(6px*var(--k))}
+.useg{padding:calc(3px*var(--k))}
+.useg button{height:calc(28px*var(--k));padding:0 calc(10px*var(--k));font-size:calc(14px*var(--k))}
+
+/* charts: one floating tooltip, recessive grid and axes in the text colors */
+.uc{display:block;max-width:100%;overflow:visible}
+.uc text{font:calc(12px*var(--k)) var(--mono);fill:var(--text-3)}
+.uc .val{fill:var(--text);font-weight:600}
+.uc .grid{stroke:var(--line);stroke-width:1}
+.uc .base{stroke:var(--line-3);stroke-width:1}
+.uc .hit,.uc .hitc{fill:transparent}
+.uc .hit:hover{fill:var(--hi-soft)}
+.uc .dot0{fill:var(--line-2)}
+.uc rect[data-ut]:not(.hit):hover{stroke:var(--text);stroke-width:1}
+.utip{position:fixed;z-index:300;pointer-events:none;background:var(--raised);border:1px solid var(--line-2);border-radius:var(--r-xs);padding:calc(8px*var(--k)) calc(11px*var(--k));font-size:calc(14px*var(--k));line-height:1.5;color:var(--text);max-width:calc(340px*var(--k));box-shadow:var(--shadow)}
+.utip[hidden]{display:none}
+.utip .ur{display:flex;gap:calc(12px*var(--k));justify-content:space-between}
+.utip .ur span:last-child{font-family:var(--mono);font-size:.92em}
+.utip i{display:inline-block;width:calc(9px*var(--k));height:calc(9px*var(--k));margin-right:calc(7px*var(--k));border-radius:2px}
+.u-leg{display:flex;flex-wrap:wrap;gap:calc(16px*var(--k));font-size:calc(14px*var(--k));color:var(--text-2);margin-bottom:calc(8px*var(--k))}
+.u-leg span{display:inline-flex;align-items:center;gap:calc(7px*var(--k))}
+.u-leg i{width:calc(11px*var(--k));height:calc(11px*var(--k));border-radius:2px}
+.u-leg i.ln{height:2px;width:calc(16px*var(--k))}
+.u-key{display:flex;gap:calc(4px*var(--k));align-items:center;justify-content:flex-end;font-size:calc(12px*var(--k));color:var(--text-3);margin-top:calc(8px*var(--k))}
+.u-key i{width:calc(12px*var(--k));height:calc(12px*var(--k));border-radius:2px}
+.u-key span{margin:0 calc(4px*var(--k))}
+
+/* records: one line each */
+.u-rec{display:grid;grid-template-columns:auto minmax(0,1fr);gap:calc(11px*var(--k)) calc(16px*var(--k));align-items:baseline;font-size:calc(15px*var(--k))}
+.u-rec dt{color:var(--text-3);font-size:calc(14px*var(--k));white-space:nowrap}
+.u-rec dd{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.u-rec dd b{font-weight:600}
+.u-rec dd small{font:calc(13px*var(--k)) var(--mono);color:var(--text-3);margin-left:calc(8px*var(--k))}
+
+/* share rows: a 100% bar per measure, segments with a 2px gap */
+.u-share{display:grid;grid-template-columns:calc(80px*var(--k)) minmax(0,1fr);gap:calc(10px*var(--k)) calc(12px*var(--k));align-items:center;margin-bottom:calc(10px*var(--k))}
+.u-share .k{font-size:calc(14px*var(--k));color:var(--text-3)}
+.u-share .sb{display:flex;gap:2px;height:calc(16px*var(--k))}
+.u-share .sb i{display:block;min-width:2px}
+.u-share .sb i:first-child{border-radius:3px 0 0 3px} .u-share .sb i:last-child{border-radius:0 3px 3px 0}
+.u-share .sb i:focus-visible{outline:2px solid var(--text);outline-offset:1px}
+.u-sw{display:inline-block;width:calc(10px*var(--k));height:calc(10px*var(--k));border-radius:2px;margin-right:calc(8px*var(--k))}
+
+/* tables */
+#pgUsage .tbl .r{text-align:right;white-space:nowrap}
+#pgUsage .tbl .tr.hd .r{display:inline-flex;align-items:center;justify-content:flex-end;gap:calc(3px*var(--k))}
+#pgUsage .tbl .tr{font-size:calc(15px*var(--k))}
+#pgUsage .tbl .tr.hd{font-size:calc(12px*var(--k))}
+#pgUsage .tbl .mono .faint{font-size:.9em}
+#pgUsage .tr.click{cursor:pointer;border-radius:var(--r-xs)}
+#pgUsage .tr.click:hover{background:var(--hover)}
+#pgUsage .tr.click:focus-visible{outline:1px solid var(--line-3)}
+.u-t5 .tr{grid-template-columns:minmax(0,1.2fr) repeat(3,minmax(0,.8fr)) minmax(0,1.1fr)}
+.u-t3 .tr{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}
+.u-proj .tr{grid-template-columns:minmax(0,1fr) calc(96px*var(--k)) calc(80px*var(--k)) calc(52px*var(--k))}
+.u-conv .tr{grid-template-columns:minmax(0,1fr) calc(80px*var(--k)) calc(72px*var(--k)) calc(72px*var(--k)) calc(64px*var(--k))}
+.u-nm{display:flex;flex-direction:column;min-width:0}
+.u-nm small{font:calc(12.5px*var(--k)) var(--mono);color:var(--text-3);margin-top:2px}
+.u-pb{display:block;height:3px;background:var(--line);margin-top:calc(6px*var(--k));position:relative;border-radius:2px}
+.u-pb i{position:absolute;inset:0 auto 0 0;background:var(--text-2);border-radius:2px}
+.u-more{align-self:center}
+@container (max-width:520px){
+  .u-proj .tr{grid-template-columns:minmax(0,1fr) calc(96px*var(--k))}
+  .u-conv .tr{grid-template-columns:minmax(0,1fr) calc(80px*var(--k)) calc(72px*var(--k))}
+  .ucard .u-hs{display:none !important}
+}
+.u-chk{font-size:calc(13px*var(--k));gap:calc(8px*var(--k));margin:calc(12px*var(--k)) 0 calc(16px*var(--k))}
+#uPlanTs{border-top:1px solid var(--line);padding-top:calc(14px*var(--k))}
+
+/* narrower windows: the six tiles in two rows, the pairs of cards one under the other where they would get cramped */
+@media (max-width:1400px){#pgUsage .u-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:1250px){#pgUsage .card.c8,#pgUsage .card.c4,#pgUsage .card.c5,#pgUsage .card.c7{grid-column:span 12}}

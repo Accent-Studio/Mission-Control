@@ -1,4 +1,5 @@
 {
+  "machineName": "Home",
   "discoveryRoots": ["D:\\Dev", "D:\\Games"],
   "defaultCwd": "D:\\Dev",
   "openDrives": [],
@@ -18,5 +19,18 @@
   },
   "wakeTrainerDir": "",
   "mcpStarterServers": "",
-  "tempRoot": "D:\\Dev\\Temp"
+  "tempRoot": "D:\\Dev\\Temp",
+  "electricity": { "pricePerKWh": 0.17, "currency": "USD", "perDollar": 1, "otherWatts": 60 },
+  "localModels": [
+    {
+      "id": "qwen3.8-27b",
+      "label": "Qwen 3.8 27B",
+      "server": "D:\\Tools\\llama.cpp\\llama-server.exe",
+      "model": "D:\\Models\\Qwen3.8-27B-IQ3_XXS.gguf",
+      "port": 8080,
+      "ctx": 131072,
+      "args": ["-fa", "on", "-ctk", "q8_0", "-ctv", "q4_0"],
+      "idleSec": 600
+    }
+  ]
 }

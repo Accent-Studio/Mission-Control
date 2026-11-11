@@ -51,6 +51,19 @@
 .dv-top .ver{font-family:var(--mono);font-size:11px;color:var(--w3)}
 .dv-top .push{margin-left:auto;display:flex;align-items:center;gap:10px}
 .dv-pairbtn:disabled{pointer-events:auto;cursor:not-allowed}
+/* hub: what the sync is doing */
+.hb-sync{border-top:1px solid var(--line-3);padding:12px 18px 14px;display:flex;flex-direction:column;gap:10px}
+.hb-sync[hidden]{display:none}
+.hb-st{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--w2)}
+.hb-st b{color:var(--white);font-family:var(--mono);font-weight:600}
+.hb-bar{height:8px;max-width:640px;border:1px solid var(--line-2)}
+.hb-now{font-size:13px;color:var(--w2);overflow-wrap:anywhere}
+.hb-now b{color:var(--white);font-weight:600}
+.hb-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 16px;font-family:var(--mono);font-size:11.5px;margin:0}
+.hb-facts dt{color:var(--w3)}
+.hb-facts dd{margin:0;color:var(--white);overflow-wrap:anywhere}
+.hb-facts dd.bad{color:var(--red-2)}
+.hb-rec td.wrap{white-space:normal;overflow-wrap:anywhere}
 .dv-pairbtn:disabled:hover{background:var(--red);color:#fff}
 .dv-note{display:flex;align-items:center;gap:10px;padding:0 18px 12px;font-size:13px;color:var(--w2)}
 .dv-note[hidden]{display:none}
@@ -181,6 +194,16 @@
       <div class="dv-pair" id="dvPair" hidden></div>
       <div id="dvList"><div class="dim">Loading devices</div></div>
     </section>
+    <section class="fr span-12 pc-only" aria-label="Hub">
+      <div class="ttl"><h3>Hub</h3><span class="cnt" id="hbState"></span></div>
+      <div class="dv-top" id="hb"><div class="dim">Loading</div></div>
+      <div class="hb-sync" id="hbSync" role="status" aria-live="polite" hidden></div>
+    </section>
+    <section class="fr span-12 phone-only" aria-label="Places on this phone">
+      <div class="ttl"><h3>Places on this phone</h3></div>
+      <div class="dv-top"><span>Pair this phone with a second place, the hub, so the chats open when your PC is off. On the PC, open Connections, then Hub, then Pair a phone with the hub. Then press Scan a pairing code here.</span>
+        <a class="act" href="http://tauri.localhost/#repair">Scan a pairing code</a></div>
+    </section>
 
   </main>
 </div>
@@ -270,6 +293,8 @@ function loadLocal(){
   }).catch(() => { $('localApps').innerHTML = '<div class="dim">Server offline. Local apps cannot be read right now.</div>'; delete $('localApps').dataset.html; });
 }
 loadLocal();
+/* many parts load on their own here: a pull loads the whole page again */
+MC.pull.page(() => { location.reload(); return new Promise(() => {}); });
 setInterval(() => { if(!document.hidden) loadLocal(); }, 5000);
 document.addEventListener('visibilitychange', () => { if(!document.hidden) loadLocal(); });
 MC.api.get('/api/connections').then(d => { data = d; draw(); }).catch(() => {
@@ -426,6 +451,107 @@ async function dvLoad(){
 function dvNote(kind, text){
   const n = dv.note = { kind, text };
   if(kind === 'ok') setTimeout(() => { if(dv.note === n){ dv.note = null; dvDrawNote(); } }, 8000);
+}
+
+/* ---------- Hub: this PC's link to the always-on server the PCs share (services/hubLink.js) ---------- */
+const HB_STATE = { off: 'Off', starting: 'Starting', connecting: 'Connecting', online: 'Online', 'no longer paired': 'No longer paired' };
+let hbBusy = false;
+let hbSync = null; /* the sync's last status, drawn under the link */
+async function loadHub(){
+  let h; try { h = await MC.api.get('/api/hub-link'); } catch(e){ $('hb').innerHTML = '<div class="dim">Could not read the link to the hub.</div>'; return; }
+  const st = String(h.state || 'off'), off = /^offline/.test(st);
+  $('hbState').textContent = h.paired ? (off ? 'Offline' : HB_STATE[st] || st) : 'Not paired';
+  if (!h.available) { $('hb').innerHTML = '<div class="dim">mc-link is not built. Run bridge\\build-bridge.bat.</div>'; return; }
+  hbSync = h.paired ? h.sync || null : null;
+  hbDrawSync();
+  if (h.paired) {
+    $('hb').innerHTML = '<span>Linked to <b>' + esc(h.paired.name) + '</b>: ' + esc(off ? 'offline (' + st.replace(/^offline:\s*/, '') + ')' : (HB_STATE[st] || st).toLowerCase()) + '</span>' +
+      '<button class="act" type="button" id="hbPhone"' + (hbBusy ? ' disabled' : '') + ' title="So the phone can reach the chats when every PC is off">Pair a phone with the hub</button>' +
+      '<button class="act" type="button" id="hbForget"' + (hbBusy ? ' disabled' : '') + '>Forget the hub</button>' + hbPhoneHtml();
+  } else {
+    $('hb').innerHTML = '<input class="in" id="hbText" placeholder="Pairing text from the hub (missioncontrol-pair:...)" aria-label="Pairing text from the hub" style="flex:1;min-width:260px">' +
+      '<button class="act" type="button" id="hbPair"' + (hbBusy ? ' disabled' : '') + '>Pair</button>';
+  }
+}
+/* a pairing code made by the hub, for the phone app's second place (the hub runs the chats when every PC is off) */
+let hbPhone = null, hbPhoneT = 0;
+function hbPhoneHtml(){
+  if (!hbPhone) return '';
+  const left = Math.max(0, Math.round((Date.parse(hbPhone.expiresAt) - Date.now()) / 1000));
+  if (!left) { hbPhone = null; return ''; }
+  return '<div class="dv-pair" style="flex-basis:100%"><div class="dv-qr"><span class="dv-qrbox">' + dvQr(hbPhone.uri) + '</span><div class="dv-code" aria-label="Pairing code">' + esc(hbPhone.code) + '</div></div>' +
+    '<div class="dv-side"><p>Open Mission Control on the phone. Choose Pair, then scan this code. The phone keeps this PC too: it opens the hub only when this PC is off.</p>' +
+    '<div class="left">Expires in <b role="timer">' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') + '</b></div>' +
+    '<div class="dv-btns"><button class="act" type="button" id="hbPhoneCopy">Copy pairing text</button><button class="act" type="button" id="hbPhoneDone">Done</button></div></div></div>';
+}
+$('hb').addEventListener('click', async e => {
+  if (e.target.closest('#hbPhoneDone')) { hbPhone = null; clearInterval(hbPhoneT); loadHub(); return; }
+  if (e.target.closest('#hbPhoneCopy')) { try { await navigator.clipboard.writeText(hbPhone.uri); e.target.textContent = 'Copied'; } catch (err) { alert('Could not copy. Select the code instead.'); } return; }
+  if (e.target.closest('#hbPhone')) {
+    hbBusy = true; loadHub();
+    try { hbPhone = await MC.api.post('/api/hub-link/pair-phone', {}); clearInterval(hbPhoneT); hbPhoneT = setInterval(() => { if (!hbPhone) clearInterval(hbPhoneT); loadHub(); }, 1000); }
+    catch (err) { alert('Could not make a pairing code: ' + (err && err.message || err)); }
+    hbBusy = false; loadHub(); return;
+  }
+  const pair = e.target.closest('#hbPair'), forget = e.target.closest('#hbForget');
+  if (!pair && !forget) return;
+  if (forget && !confirm('Forget the hub? This PC stops sending its conversations there. Pairing again needs a new code from the hub.')) return;
+  hbBusy = true; loadHub();
+  try {
+    if (pair) await MC.api.post('/api/hub-link/pair', { text: ($('hbText') ? $('hbText').value : '').trim() });
+    else await MC.api.post('/api/hub-link/forget', {});
+  } catch(err){ alert('Could not ' + (pair ? 'pair' : 'forget the hub') + ': ' + (err && err.message || err)); }
+  hbBusy = false; loadHub();
+});
+MC.events.on('hub-link', loadHub);
+MC.events.on('hub-sync', s => { if (hbSync) { hbSync = s; hbDrawSync(); } });
+setInterval(() => { if (hbSync && !document.hidden) hbDrawSync(); }, 10000); /* the "ago" times move on */
+loadHub();
+
+/* what the sync is doing (services/hubSync.js syncStatus): the round running now with its progress, what is on this PC and on
+   the hub, the computers, and the last things sent and picked up */
+function hbBytes(n){
+  n = Number(n) || 0;
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return Math.round(n / 1024) + ' KB';
+  if (n < 1073741824) return (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' MB';
+  return (n / 1073741824).toFixed(2) + ' GB';
+}
+const HB_WHAT = { sent: 'Sent', got: 'Picked up', copy: 'Made a copy', failed: 'Failed' };
+function hbDrawSync(){
+  const el = $('hbSync'), s = hbSync;
+  if (!s || !s.linked) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  const errAt = s.lastError ? s.lastError.slice(0, 24) : null, errMsg = s.lastError ? s.lastError.slice(25) : '';
+  const failing = errAt && (!s.lastOk || errAt > s.lastOk);
+  let top;
+  if (s.round) {
+    const r = s.round, frac = r.bytes ? r.bytesDone / r.bytes : (r.total ? r.done / r.total : 1), pc = Math.min(100, Math.floor(frac * 100));
+    top = '<div class="hb-st">' + MC.chip('warn', 'Sending') + '<span><b>' + r.done + '</b> of <b>' + r.total + '</b> conversations, <b>' + esc(hbBytes(r.bytesDone)) + '</b> of <b>' + esc(hbBytes(r.bytes)) + '</b> (' + pc + '%)' + (r.failed ? ', ' + r.failed + ' failed' : '') + '</span></div>' +
+      '<div class="bar hb-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pc + '"><i style="width:' + pc + '%"></i></div>' +
+      (r.current ? '<div class="hb-now">Now: <b>' + esc(r.current) + '</b></div>' : '');
+  } else if (failing) {
+    top = '<div class="hb-st">' + MC.chip('bad', 'Problem') + '<span>The hub did not answer. Mission Control tries again by itself.</span></div>';
+  } else if (s.lastRound) {
+    const l = s.lastRound;
+    top = '<div class="hb-st">' + (l.failed ? MC.chip('bad', l.failed + ' failed') : MC.chip('ok', 'Up to date')) + '<span>Last full check ' + esc(dvAgo(l.finishedAt)) + (l.sent ? ': sent ' + l.sent + ' (' + esc(hbBytes(l.bytes)) + ')' : ': nothing new to send') + '. The next one is in 5 min at most.</span></div>';
+  } else {
+    top = '<div class="hb-st">' + MC.chip('idle', 'Waiting') + '<span>The first check starts once the hub answers.</span></div>';
+  }
+  const kinds = (o) => o ? o.chats + ' chats, ' + o.code + ' code conversations' : 'not known yet';
+  const facts = [
+    ['On this PC', s.local ? kinds(s.local) + (s.local.waiting ? '. Not sent yet: ' + s.local.waiting + ' (' + hbBytes(s.local.waitingBytes) + ')' : '. All sent') : 'not counted yet'],
+    ['On the hub', s.hub ? kinds(s.hub) + ', ' + hbBytes(s.hub.bytes) : 'not known yet'],
+    ['Hub answered', s.lastRing ? dvAgo(s.lastRing) : 'not yet'],
+    ['Computers', (s.machines || []).length ? s.machines.map(m => m.name + (m.me ? ' (this PC)' : '') + ': ' + (m.online ? 'on' : 'off, seen ' + dvAgo(m.lastSeen))).join('  /  ') : 'none yet'],
+  ];
+  if (failing) facts.push(['Last problem', dvAgo(errAt) + ': ' + errMsg, 'bad']);
+  const rec = (s.recent || []).slice(0, 12);
+  el.innerHTML = top +
+    '<dl class="hb-facts">' + facts.map(f => '<dt>' + esc(f[0]) + '</dt><dd' + (f[2] ? ' class="' + f[2] + '"' : '') + '>' + esc(f[1]) + '</dd>').join('') + '</dl>' +
+    (rec.length ? '<table class="tbl hb-rec"><thead><tr><th>WHEN</th><th>WHAT</th><th>CONVERSATION</th><th>SIZE</th></tr></thead><tbody>' +
+      rec.map(x => '<tr><td class="m">' + esc(dvAgo(x.at)) + '</td><td>' + (x.what === 'failed' ? MC.chip('bad', 'Failed') : esc(HB_WHAT[x.what] || x.what)) + '</td><td class="wrap">' + esc(x.title || x.id) + (x.error ? ' <span class="m">(' + esc(x.error) + ')</span>' : '') + '</td><td class="m">' + (x.bytes ? esc(hbBytes(x.bytes)) : '') + '</td></tr>').join('') +
+      '</tbody></table>' : '');
 }
 
 MC.events.on('devices.changed', ev => {

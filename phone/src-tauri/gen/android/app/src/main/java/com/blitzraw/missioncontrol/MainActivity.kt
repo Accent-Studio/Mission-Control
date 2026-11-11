@@ -18,6 +18,7 @@ class MainActivity : TauriActivity() {
   // Wi-Fi power saving lets the radio doze between beacons, and the link to the PC then goes silent for seconds at a
   // time. While the app is on screen this lock keeps Wi-Fi fully awake; it is let go as soon as the app is not.
   private var wifiLock: WifiManager.WifiLock? = null
+  private var speech: PhoneSpeech? = null
 
   override fun onResume() {
     super.onResume()
@@ -32,7 +33,13 @@ class MainActivity : TauriActivity() {
 
   override fun onPause() {
     wifiLock?.let { if (it.isHeld) it.release() }
+    speech?.cancel() // the microphone never listens with the app out of sight
     super.onPause()
+  }
+
+  override fun onDestroy() {
+    speech?.close()
+    super.onDestroy()
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,6 +72,7 @@ class MainActivity : TauriActivity() {
   // (it moves to the background, like the Home button). Everywhere else Back goes back one page.
   override fun onWebViewCreate(webView: WebView) {
     super.onWebViewCreate(webView)
+    speech = PhoneSpeech(this, webView).also { webView.addJavascriptInterface(it, "MCSpeech") }
     onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
       override fun handleOnBackPressed() {
         val list = webView.copyBackForwardList()

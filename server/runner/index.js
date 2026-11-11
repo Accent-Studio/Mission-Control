@@ -2,13 +2,14 @@
 //
 // The server (runs.js) used to start one `claude -p` process per conversation as its own child and killed them all when
 // it exited, so the Restart button ended every running conversation and its background helper agents. This program is
-// started once on a cold start (run-server.bat, like the phone bridge; the restart loop does not touch it), starts and
+// started by the launcher (run-server.bat on Windows, once per cold start; start-mac.command on macOS, before each server
+// start, where a second one exits at once), like the phone bridge, outlives server restarts, starts and
 // keeps the claude processes, and hands their output to whichever server is connected. A second runner finds the port
 // taken and exits with code 73. A new version of this file is picked up only on the next cold start: the server logs
 // when the running runner is older than its code (see runnerClient.js).
 //
 // Listens on 127.0.0.1 only (MC_RUNNER_PORT, default 1702). One authenticated TCP connection at a time, newline-delimited
-// JSON. The secret lives in .data\runner\secret (locked to the current Windows user, same method as the bridge secret) and
+// JSON. The secret lives in .data/runner/secret (locked to the current user: a Windows ACL, or mode 600, as the bridge secret) and
 // never crosses the socket. Each side proves it knows it with a challenge-response, the runner first sending a nonce:
 //   runner -> {op:'challenge', proto, nonce: runnerNonce}                     at once, before reading anything
 //   client -> {op:'hello', proto, nonce: clientNonce, proof}                  proof = HMAC(secret, "client"|runnerNonce|clientNonce)
@@ -156,14 +157,40 @@ function summary(r) {
   };
 }
 
+// A process and what it started (the tools it runs). On Windows taskkill /T takes the tree. On macOS and Linux each claude
+// process leads its own process group (spawned detached, below), so a signal to the group reaches its children too: first a
+// polite SIGTERM, then SIGKILL for whatever is still there a few seconds later.
+const IS_WIN = process.platform === 'win32';
+function signalGroup(pid, sig) {
+  try {
+    process.kill(-pid, sig);
+    return true;
+  } catch {
+    try {
+      process.kill(pid, sig);
+      return true;
+    } catch {
+      return false; // already gone
+    }
+  }
+}
 function killTree(r) {
   if (!r.pid || !r.alive) return;
+  if (!IS_WIN) {
+    const pid = r.pid;
+    if (signalGroup(pid, 'SIGTERM')) setTimeout(() => signalGroup(pid, 'SIGKILL'), 3000).unref();
+    return;
+  }
   execFile('taskkill', ['/PID', String(r.pid), '/T', '/F'], { windowsHide: true, timeout: 10000 }, () => {});
 }
 
 function killAllNow() {
   for (const r of runs.values()) {
     if (!r.alive || !r.pid) continue;
+    if (!IS_WIN) {
+      signalGroup(r.pid, 'SIGKILL');
+      continue;
+    }
     try {
       execFileSync('taskkill', ['/PID', String(r.pid), '/T', '/F'], { windowsHide: true, timeout: 5000, stdio: 'ignore' });
     } catch {
@@ -206,7 +233,15 @@ async function doSpawn(c, msg) {
   } catch (err) {
     return refuse(`claude was not found: ${err.message}`);
   }
-  if (!isClaudeCommand(entry, msg.cmd, msg.args)) return refuse('the program is not the claude binary');
+  if (!isClaudeCommand(entry, msg.cmd, msg.args)) {
+    // Claude Code may have updated itself since this runner looked: look again before saying no
+    try {
+      entry = await resolveClaude({ fresh: true });
+    } catch (err) {
+      return refuse(`claude was not found: ${err.message}`);
+    }
+    if (!isClaudeCommand(entry, msg.cmd, msg.args)) return refuse('the program is not the claude binary');
+  }
   const bad = checkSpawnArgs(msg.args.slice(entry.pre.length));
   if (bad) return refuse(bad);
   if (runs.has(msg.runId)) return refuse('run id already in use'); // the resolve above awaited
@@ -233,7 +268,9 @@ async function doSpawn(c, msg) {
   try {
     // The program is the one this runner resolved itself, with the leading arguments it belongs to; the request only decided
     // that it matches (isClaudeCommand above), it never supplies the path that runs.
-    child = spawn(entry.cmd, [...entry.pre, ...msg.args.slice(entry.pre.length)], { cwd: msg.cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false });
+    // detached on macOS and Linux: the process leads its own group (a kill takes its tools too) and a hangup of the terminal
+    // the runner was started from does not reach it
+    child = spawn(entry.cmd, [...entry.pre, ...msg.args.slice(entry.pre.length)], { cwd: msg.cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false, detached: !IS_WIN });
   } catch (err) {
     send(c, { op: 'spawned', runId: r.runId, pid: null });
     endRun(r, -1, String(err.message).slice(0, 500));

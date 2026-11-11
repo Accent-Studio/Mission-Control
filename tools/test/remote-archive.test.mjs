@@ -1,5 +1,5 @@
 // Tests for Remote Control ("Show on claude.ai") and archived conversations, against the FAKE Claude CLI in tools/fakeclaude.
-// Nothing here starts a real Claude conversation. Run: node --test "tools/test/*.test.mjs"
+// Nothing here starts a real Claude conversation. Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';

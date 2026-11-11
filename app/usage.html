@@ -466,6 +466,7 @@ window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() =
 MC.events.on('usage', () => { clearTimeout(rz); rz = setTimeout(load, 1500); }); /* a new plan usage reading adds a point */
 setPicks();
 load();
+MC.pull.page(load);
 </script>
 </body>
 </html>

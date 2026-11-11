@@ -1,5 +1,6 @@
 @echo off
-rem Builds the phone bridge (release) and puts the result next to run-bridge.bat as run\mc-bridge.new.exe.
+rem Builds the phone bridge and mc-link (release) and puts them next to run-bridge.bat as run\mc-bridge.new.exe and
+rem run\mc-link.new.exe.
 rem The running bridge uses run\mc-bridge.exe, which Windows will not let anyone overwrite, so the new
 rem build waits under another name. run-bridge.bat swaps it in the next time the bridge starts
 rem (for example after the Restart bridge button, which makes the bridge exit with code 75).
@@ -18,6 +19,12 @@ if not exist "%~dp0run" mkdir "%~dp0run"
 copy /y "%CARGO_TARGET_DIR%\release\mc-bridge.exe" "%~dp0run\mc-bridge.new.exe" >nul
 if errorlevel 1 (
   echo Could not copy the built bridge into bridge\run.
+  exit /b 1
+)
+rem mc-link (a PC's link to the hub) waits as mc-link.new.exe too; Mission Control swaps it in when it starts the link.
+copy /y "%CARGO_TARGET_DIR%\release\mc-link.exe" "%~dp0run\mc-link.new.exe" >nul
+if errorlevel 1 (
+  echo Could not copy mc-link into bridge\run.
   exit /b 1
 )
 echo Bridge built. It is used the next time the bridge starts.

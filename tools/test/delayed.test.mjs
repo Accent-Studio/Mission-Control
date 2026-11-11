@@ -1,5 +1,5 @@
 // Tests for Send later (server/services/delayed.js), against the FAKE Claude CLI in tools/fakeclaude.
-// Nothing here starts a real Claude conversation. Run: node --test "tools/test/*.test.mjs"
+// Nothing here starts a real Claude conversation. Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -65,7 +65,7 @@ describe('send later', () => {
     const s = await boot();
     const past = await pc(s, 'POST', '/api/delayed', { kind: 'time', at: new Date(Date.now() - 1000).toISOString(), req: { prompt: 'x' } });
     assert.equal(past.status, 400);
-    const far = await pc(s, 'POST', '/api/delayed', { kind: 'time', at: new Date(Date.now() + 8 * 86400e3).toISOString(), req: { prompt: 'x' } });
+    const far = await pc(s, 'POST', '/api/delayed', { kind: 'time', at: new Date(Date.now() + 361 * 86400e3).toISOString(), req: { prompt: 'x' } });
     assert.equal(far.status, 400);
     const empty = await pc(s, 'POST', '/api/delayed', { kind: 'timer', at: new Date(Date.now() + 60e3).toISOString(), req: { prompt: '  ' } });
     assert.equal(empty.status, 400);

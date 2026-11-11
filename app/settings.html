@@ -188,6 +188,7 @@
       <div class="ttl"><h3>Brain</h3></div>
       <div class="st-rows">
         <div class="st-row"><div class="st-t"><b>Name</b><small>What the assistant is called on every page.</small></div><div class="st-c"><input class="wk-in st-name" type="text" maxlength="24" data-set="comlinkName" data-kind="text" aria-label="Assistant name"></div></div>
+        <div class="st-row"><div class="st-t"><b>Face</b><small>How the assistant looks on every page: the HAL eye, or Clawd, Claude's pixel crab.</small></div><div class="st-c"><select class="st-sel" data-set="comlinkLook" aria-label="Face"><option value="hal">HAL eye</option><option value="clawd">Clawd</option></select></div></div>
         <div class="st-row"><div class="st-t"><b>Model</b><small>Who answers in the Com Link. Haiku is the fastest and cheapest.</small></div><div class="st-c"><select class="st-sel" data-set="comlinkModel" aria-label="Model"><option value="">Newest Haiku</option></select></div></div>
         <div class="st-row"><div class="st-t"><b>Effort</b><small>How hard it thinks before it answers. More effort is slower.</small></div><div class="st-c"><select class="st-sel" data-set="comlinkEffort" aria-label="Effort"><option value="default">Model default</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Max</option></select></div></div>
         <div class="st-row"><div class="st-t"><b>Permissions</b><small>Auto runs safe commands without asking. Ask first asks before every command.</small></div><div class="st-c"><select class="st-sel" data-set="comlinkMode" aria-label="Permissions"><option value="auto">Auto</option><option value="default">Ask first</option><option value="acceptEdits">Accept edits</option><option value="plan">Plan only</option></select></div></div>
@@ -208,6 +209,7 @@
       <div class="ttl"><h3>Memory</h3><span class="cnt" id="memCnt"></span></div>
       <div class="st-rows">
         <div class="st-t" style="margin-bottom:10px"><small>What the assistant remembers about you, one line each. It adds to it by itself. You can edit or delete lines here.</small></div>
+        <div class="st-err" id="memFull" role="alert" style="padding:0 0 10px" hidden></div>
         <textarea class="st-mem" id="mem" spellcheck="false" aria-label="Memory"></textarea>
         <div class="st-memb"><button type="button" class="act red" id="memSave">Save memory</button><span class="st-saved" id="memSaved" role="status"></span></div>
       </div>
@@ -300,6 +302,8 @@
 <script src="redline.js"></script>
 <script>
 MC.init('set');
+/* many parts load on their own here: a pull loads the whole page again */
+MC.pull.page(() => { location.reload(); return new Promise(() => {}); });
 const $ = id => document.getElementById(id);
 const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -330,7 +334,7 @@ const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp
 /* ---------- The Com Link and the Talk page: settings kept by the server (MC.voicePrefs) ---------- */
 (function stInit(){
   const P = MC.voicePrefs;
-  const ERR = { comlinkName:'brain', comlinkModel:'brain', comlinkEffort:'brain', comlinkMode:'brain', comlinkPersona:'brain', listenSilenceSec:'listen', hidePanelSec:'listen' };
+  const ERR = { comlinkName:'brain', comlinkLook:'brain', comlinkModel:'brain', comlinkEffort:'brain', comlinkMode:'brain', comlinkPersona:'brain', listenSilenceSec:'listen', hidePanelSec:'listen' };
   function say(key, msg){
     const box = document.querySelector('[data-err="' + (ERR[key] || 'listen') + '"]'); if(!box) return;
     box.hidden = !msg; box.textContent = msg || '';
@@ -383,10 +387,17 @@ const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp
 
   /* the assistant's memory */
   const mem = $('mem'), saved = $('memSaved');
-  let memMax = 8000;
-  const count = () => { $('memCnt').textContent = mem.value.trim() ? mem.value.trim().split(/\n/).filter(l => l.trim()).length + ' lines' : 'Empty'; };
+  let memWarn = 100000;
+  const count = () => {
+    const t = mem.value.trim();
+    $('memCnt').textContent = t ? t.split(/\n/).filter(l => l.trim()).length + ' lines, ' + t.length.toLocaleString('en-US') + ' characters' : 'Empty';
+    /* nothing is ever deleted by itself: past this size the owner is told, here and by the assistant */
+    const f = $('memFull');
+    f.hidden = t.length <= memWarn;
+    f.textContent = f.hidden ? '' : 'Warning: the memory is over ' + memWarn.toLocaleString('en-US') + ' characters (about ' + Math.round(memWarn / 4000) + 'k tokens). All of it goes with every Com Link message. Delete the lines you no longer need.';
+  };
   function loadMem(){
-    MC.api.get('/api/voice/memory').then(m => { if(document.activeElement !== mem){ mem.value = (m && m.text) || ''; } memMax = (m && m.max) || memMax; count(); }).catch(() => { saved.textContent = 'Could not load the memory.'; });
+    MC.api.get('/api/voice/memory').then(m => { if(document.activeElement !== mem){ mem.value = (m && m.text) || ''; } memWarn = (m && m.warnAt) || memWarn; count(); }).catch(() => { saved.textContent = 'Could not load the memory.'; });
   }
   mem.addEventListener('input', () => { count(); saved.textContent = 'Not saved yet'; });
   $('memSave').addEventListener('click', async () => {

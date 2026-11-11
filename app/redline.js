@@ -4,6 +4,7 @@ MC.reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- icons ---------- */
 MC.ic = {
+  v2:'<svg viewBox="0 0 18 18"><rect x="1.5" y="1.5" width="15" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><text x="9" y="13" text-anchor="middle" font-size="10.5" font-weight="700" fill="currentColor" font-family="sans-serif">2</text></svg>',
   home:'<svg viewBox="0 0 18 18"><path d="M2 8 L9 2 L16 8 V16 H2 Z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
   proj:'<svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><ellipse cx="9" cy="9" rx="8" ry="3.2" fill="none" stroke="currentColor" stroke-width="1.2" transform="rotate(-20 9 9)"/></svg>',
   sys:'<svg viewBox="0 0 18 18"><rect x="4" y="4" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 1V4M11 1V4M7 14V17M11 14V17M1 7H4M1 11H4M14 7H17M14 11H17" stroke="currentColor" stroke-width="1.4"/></svg>',
@@ -28,9 +29,9 @@ MC.chip = (k, t) => `<span class="chip c-${k}">${MC.ic[k] || ''}${t}</span>`;
 /* ---------- rail ---------- */
 MC.rail = function(page){
   const el = document.querySelector('nav.rail'); if(!el) return;
-  const items = [['home','index.html','Home'],['proj','project.html','Projects'],['sys','system.html','System and servers'],['auto','automation.html','Skills and schedules'],['conn','connections.html','Connections'],['chat','chat.html','Talk to Claude'],['usage','usage.html','Usage and cost'],['set','settings.html','Settings']];
+  const items = [['home','index.html','Home'],['proj','project.html','Projects'],['sys','system.html','System and servers'],['auto','automation.html','Skills and schedules'],['conn','connections.html','Connections'],['chat','chat.html','Talk to Claude'],['usage','usage.html','Usage and cost'],['set','settings.html','Settings'],['v2','/v2/','Mission Control 2']];
   el.innerHTML = `<a class="rail-home ${page==='home'?'on':''}" href="index.html" aria-label="Home" title="Home"${page==='home'?' aria-current="page"':''}><canvas class="rail-eye" data-eye="mini"></canvas></a>` +
-    items.map(([k,h,t]) => `<div class="tab-wrap${k==='home'?' tw-home':''}"><a class="tab ${k===page?'on':''}" href="${h}" aria-label="${t}">${MC.ic[k]}</a><span class="tip">${t}</span></div>`).join('') +
+    items.map(([k,h,t]) => `<div class="tab-wrap tw-${k}"><a class="tab ${k===page?'on':''}" href="${h}" aria-label="${t}">${MC.ic[k]}</a><span class="tip">${t}</span></div>`).join('') +
     ``;
 };
 
@@ -88,6 +89,38 @@ MC.drawEye = function(ex, x, y, R, L, spin, mini){
   ex.beginPath(); ex.ellipse(x-lr*.35,y-lr*.42,lr*.22,lr*.1,-.5,0,7); ex.fillStyle='rgba(220,231,243,.22)'; ex.fill();
 };
 
+/* ---------- Clawd: Claude's pixel crab, the other face the Com Link can wear (Settings, Face) ----------
+   The voice states drive him: idle breathes and blinks, listening raises both claws, thinking looks around and bobs,
+   speaking bounces with the level. Units are pixels of the sprite: the body is 12x7, with two claws and four legs. */
+MC.drawClawd = function(ex, w, h, L, t, state, mini){
+  const u = Math.max(1, Math.floor(Math.min(w / 21, h / (mini ? 16 : 19))));
+  const cx = Math.round(w / 2), cy = Math.round(h / 2 + u * (mini ? 0 : 1));
+  let lift = 0, eyeDx = 0, eyeH = 2, arms = 'mid', squash = 0;
+  if(!MC.reduce){
+    if(state === 'thinking'){ eyeDx = Math.round(Math.sin(t * 1.6) * 1.2); lift = Math.round(Math.sin(t * 3.2) * .5 + .5); }
+    else if(state === 'listening') arms = 'up';
+    else if(state === 'speaking'){ lift = Math.round(L * 2); arms = L > .5 ? 'up' : 'mid'; }
+    else squash = Math.sin(t * 1.8) > .6 ? 1 : 0;
+    if((t % 4.2) < .14) eyeH = .35; /* blink */
+  }
+  const col = '#D77757', px = (x, y, ww, hh, c) => { ex.fillStyle = c || col; ex.fillRect(cx + x * u, cy + y * u - lift * u, ww * u, hh * u); };
+  ex.save();
+  if(!mini){ ex.shadowColor = 'rgba(215,119,87,' + (.25 + L * .4) + ')'; ex.shadowBlur = u * 3; }
+  px(-6, -4 + squash, 12, 7 - squash); /* body: a breath squashes it by one pixel row */
+  [-1, 1].forEach(side => {
+    if(arms === 'up'){ px(side < 0 ? -8 : 6, -2, 2, 2); px(side < 0 ? -9 : 7, -4, 2, 2); }
+    else px(side < 0 ? -8 : 6, -1, 2, 2);
+  });
+  ex.shadowBlur = 0;
+  const legH = lift > 1 ? 1 : 2; /* legs tuck in when he jumps */
+  [-5, -3, 2, 4].forEach(x => { ex.fillStyle = col; ex.fillRect(cx + x * u, cy + 3 * u - lift * u, u, legH * u); });
+  const ey = -2 + squash + (2 - eyeH) / 2;
+  px(-4 + eyeDx, ey, 1, eyeH, '#1a1a1a'); px(3 + eyeDx, ey, 1, eyeH, '#1a1a1a');
+  ex.restore();
+};
+/* The face in use, from the settings; the last one seen is kept in this browser so a page opens with it at once */
+MC.look = function(){ const P = MC.voicePrefs; return P && P.comlinkLook ? P.comlinkLook : (localStorage.getItem('mc.look') || 'hal'); };
+
 /* one loop drives the level and every eye canvas on the page */
 (function(){
   let t0 = performance.now(), spin = 0;
@@ -100,11 +133,13 @@ MC.drawEye = function(ex, x, y, R, L, spin, mini){
     v.level += (tg - v.level) * (v.state==='speaking'||v.state==='listening' ? .35 : .08);
     const L = Math.max(0, Math.min(1, v.level)); v.peak = Math.max(L, v.peak - .006);
     if(!MC.reduce) spin += .004 + (v.state==='thinking' ? .02 : 0);
+    const clawd = MC.look() === 'clawd';
     document.querySelectorAll('canvas[data-eye]').forEach(c => {
       const [ex,w,h] = MC.fit(c); ex.clearRect(0,0,w,h);
       if(w < 24 || h < 24) return; /* a hidden canvas has no size: a negative radius would throw and stop the loop for every eye */
       const mini = c.dataset.eye === 'mini';
-      MC.drawEye(ex, w/2, h/2, Math.min(w,h)/2 - (mini?2:8), L, spin, mini);
+      if(clawd) MC.drawClawd(ex, w, h, L, t, v.state, mini);
+      else MC.drawEye(ex, w/2, h/2, Math.min(w,h)/2 - (mini?2:8), L, spin, mini);
     });
     document.querySelectorAll('[data-voice-meter]').forEach(m => {
       if(!m.children.length) for(let i=0;i<28;i++) m.appendChild(document.createElement('i'));
@@ -118,25 +153,75 @@ MC.drawEye = function(ex, x, y, R, L, spin, mini){
 })();
 
 /* ---------- 3D helpers ---------- */
-// camera: yaw around Y, pitch around X, perspective distance D, zoom z
+// camera: yaw around Y, pitch around X, perspective distance D, zoom z. P.eye is where the viewer stands, in world space.
 MC.cam = function(yaw, pitch, zoom, cx, cy, D){
   const cy_ = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
-  return function(x, y, z){
+  const P = function(x, y, z){
     const x1 = x*cy_ - z*sy, z1 = x*sy + z*cy_;
     const y2 = y*cp - z1*sp, z2 = y*sp + z1*cp;
     const f = D/(D + z2) * zoom;
     return [cx + x1*f, cy - y2*f, z2, f];
   };
+  P.eye = [-D*cp*sy, -D*sp, -D*cp*cy_];
+  return P;
 };
-// wireframe sphere in world space, lines fade on the far side
+// wireframe sphere in world space. What faces the viewer is judged from P.eye, perspective included, and a line that crosses
+// the edge is cut exactly there, so no piece pops. The far half is drawn first, then opt.shade (a fill style) over the
+// sphere's outline, which dims it, then the near half on top. With no shade the far half is drawn faint instead.
 MC.wireSphere = function(ctx, P, ox, oy, oz, r, spin, col, opt){
   opt = opt || {};
   const lat = opt.lat || 6, lon = opt.lon || 8, seg = opt.seg || 22, c0 = P(ox,oy,oz);
-  const line = pts => { for(let i=1;i<pts.length;i++){ const a=pts[i-1], b=pts[i], front=(a[2]+b[2])/2 < c0[2]; ctx.strokeStyle = front ? col : col.replace(/[\d.]+\)$/, m => (parseFloat(m)*.22).toFixed(2)+')'); ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); } };
+  const ex = P.eye[0] - ox, ey = P.eye[1] - oy, ez = P.eye[2] - oz, d = Math.hypot(ex, ey, ez);
+  const near = [], far = []; /* runs of screen points, one per unbroken piece of line on that side */
+  /* one line over the sphere: dir(k) gives the unit direction from the center for k = 0..seg. A point faces the viewer when
+     dir . (eye - center) > r. */
+  const line = dir => {
+    let a = null, sa = 0, qa = null, run = null;
+    for(let k = 0; k <= seg; k++){
+      const b = dir(k), sb = b[0]*ex + b[1]*ey + b[2]*ez - r, qb = P(ox + r*b[0], oy + r*b[1], oz + r*b[2]);
+      if(a){
+        if((sa > 0) === (sb > 0)){ if(!run){ run = [qa]; (sa > 0 ? near : far).push(run); } run.push(qb); }
+        else {
+          const t = sa / (sa - sb), mx = a[0] + (b[0]-a[0])*t, my = a[1] + (b[1]-a[1])*t, mz = a[2] + (b[2]-a[2])*t, ml = Math.hypot(mx, my, mz) || 1;
+          const qm = P(ox + r*mx/ml, oy + r*my/ml, oz + r*mz/ml);
+          if(!run){ run = [qa]; (sa > 0 ? near : far).push(run); } run.push(qm);
+          run = [qm, qb]; (sb > 0 ? near : far).push(run);
+        }
+      }
+      a = b; sa = sb; qa = qb;
+    }
+  };
+  for(let i=1;i<lat;i++){ const la = -Math.PI/2 + i*Math.PI/lat, cl = Math.cos(la), sl = Math.sin(la); line(k => { const lo = k/seg*6.283 + spin; return [cl*Math.cos(lo), sl, cl*Math.sin(lo)]; }); }
+  for(let j=0;j<lon;j++){ const lo = j/lon*Math.PI*2 + spin, co = Math.cos(lo), so = Math.sin(lo); line(k => { const la = -Math.PI/2 + k/seg*Math.PI, cl = Math.cos(la); return [cl*co, Math.sin(la), cl*so]; }); }
   ctx.lineWidth = opt.lw || 1;
-  for(let i=1;i<lat;i++){ const la = -Math.PI/2 + i*Math.PI/lat, pts=[]; for(let k=0;k<=seg;k++){ const lo=k/seg*6.283+spin; pts.push(P(ox+r*Math.cos(la)*Math.cos(lo), oy+r*Math.sin(la), oz+r*Math.cos(la)*Math.sin(lo))); } line(pts); }
-  for(let j=0;j<lon;j++){ const lo = j/lon*Math.PI*2 + spin, pts=[]; for(let k=0;k<=seg;k++){ const la=-Math.PI/2+k/seg*Math.PI; pts.push(P(ox+r*Math.cos(la)*Math.cos(lo), oy+r*Math.sin(la), oz+r*Math.cos(la)*Math.sin(lo))); } line(pts); }
+  ctx.strokeStyle = opt.shade ? col : col.replace(/[\d.]+\)$/, m => (parseFloat(m)*.22).toFixed(2)+')');
+  MC.strokeRuns(ctx, far);
+  if(opt.shade && d > r){
+    /* the outline the viewer sees: the circle on the sphere where the view grazes it, projected */
+    const ux = ex/d, uy = ey/d, uz = ez/d, k0 = r*r/d, rho = r*Math.sqrt(1 - (r/d)*(r/d));
+    let ax = -uz, az = ux, al = Math.hypot(ax, az); if(al < 1e-6){ ax = 1; az = 0; al = 1; } ax /= al; az /= al; /* across the view, level */
+    const bx = uy*az, by = uz*ax - ux*az, bz = -uy*ax; /* u x a */
+    ctx.beginPath();
+    for(let k = 0; k <= 48; k++){ const t = k/48*6.283, c = Math.cos(t)*rho, s = Math.sin(t)*rho, q = P(ox + ux*k0 + ax*c + bx*s, oy + uy*k0 + by*s, oz + uz*k0 + az*c + bz*s); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }
+    ctx.closePath(); ctx.fillStyle = opt.shade; ctx.fill();
+  }
+  ctx.strokeStyle = col; MC.strokeRuns(ctx, near);
   return c0;
+};
+/* strokes runs of screen points ([[x, y], ...]) in short pieces. One long path over a large area is slow for the browser to
+   paint (the cost grows with the area it covers, so zooming in made Home lag), and one stroke per tiny segment is slow too,
+   so each stroke covers about `len` pixels of line. */
+MC.strokeRuns = function(ctx, runs, len){
+  len = len || 48;
+  for(const run of runs){
+    let i = 0;
+    while(i < run.length - 1){
+      ctx.beginPath(); ctx.moveTo(run[i][0], run[i][1]);
+      let used = 0;
+      do { const a = run[i], b = run[++i]; used += Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]); ctx.lineTo(b[0], b[1]); } while(i < run.length - 1 && used < len);
+      ctx.stroke();
+    }
+  }
 };
 
 /* ---------- misc ---------- */
@@ -866,11 +951,11 @@ MC.voicePanel = () => MC.comlink.build();
   /* ---- voice preferences (kept by the server, so every tab agrees): the Talk page switches, the spoken phrases, and how the
      Com Link runs and listens. The Settings page edits them all. ---- */
   const P = MC.voicePrefs = { readAloud:false, cleanup:true, sendPhrase:'send it', cancelPhrase:'cancel that', rewritePhrase:'start over', endPhrase:'end conversation',
-    comlinkName:'Com Link', comlinkPersona:true, autoListen:true, remoteControl:true, listenSilenceSec:30, hidePanelSec:0, comlinkEffort:'medium', comlinkMode:'auto', comlinkModel:'', ready:null }, psubs = [];
+    comlinkName:'Com Link', comlinkPersona:true, autoListen:true, remoteControl:true, listenSilenceSec:30, hidePanelSec:0, comlinkEffort:'medium', comlinkMode:'auto', comlinkModel:'', comlinkLook:localStorage.getItem('mc.look') || 'hal', ready:null }, psubs = [];
   const PHRASE_KEYS = ['sendPhrase', 'cancelPhrase', 'rewritePhrase', 'endPhrase'];
   const BOOL_KEYS = ['readAloud', 'cleanup', 'comlinkPersona', 'autoListen', 'remoteControl'];
   const NUM_KEYS = ['listenSilenceSec', 'hidePanelSec'];
-  const TEXT_KEYS = ['comlinkName', 'comlinkEffort', 'comlinkMode', 'comlinkModel'];
+  const TEXT_KEYS = ['comlinkName', 'comlinkEffort', 'comlinkMode', 'comlinkModel', 'comlinkLook'];
   P.on = fn => { psubs.push(fn); return () => { const i = psubs.indexOf(fn); if(i >= 0) psubs.splice(i, 1); }; };
   const pnotify = () => psubs.forEach(f => { try { f(P); } catch(e){ console.error(e); } });
   function applyPrefs(j){
@@ -879,6 +964,7 @@ MC.voicePanel = () => MC.comlink.build();
     PHRASE_KEYS.forEach(k => { if(typeof j[k] === 'string' && j[k]) P[k] = j[k]; });
     NUM_KEYS.forEach(k => { if(typeof j[k] === 'number' && isFinite(j[k])) P[k] = j[k]; });
     TEXT_KEYS.forEach(k => { if(typeof j[k] === 'string') P[k] = j[k]; });
+    try { localStorage.setItem('mc.look', P.comlinkLook); } catch(e){ /* storage off: the page still follows the server */ }
     pnotify();
   }
   P.load = () => (P.ready = MC.api.get('/api/voice/prefs').then(applyPrefs).catch(() => {}));
@@ -998,10 +1084,12 @@ MC.voicePanel = () => MC.comlink.build();
 /* ---------- microphone capture helpers: the Com Link on a phone and the wake word recorder on Settings ----------
    MC.audio.wav(f32) is a 16kHz mono 16-bit PCM WAV blob from float samples, MC.audio.to16k(samples, rate) resamples to 16kHz,
    MC.audio.WORKLET is the source of the capture processor ("wk-cap"). MC.audio.record(opts) asks for the microphone and resolves
-   a recording: { stop() resolves { wav, seconds, peak } (peak 0 to 1), cancel() }. It rejects with the getUserMedia error
+   a recording: { stop() resolves { wav, seconds, peak } (peak 0 to 1), cancel(), seconds() (how long it is so far) }. The sound is
+   brought down to 16kHz while it records, so a long recording stays small. It rejects with the getUserMedia error
    (name NotAllowedError when the microphone is blocked), or TimeoutError when the microphone opened but the audio would not
-   start within 8 seconds (the microphone is released first). opts: maxSec (the recording ends by itself, default 120: onLimit is
-   called, the page then calls stop), skipMs (the first milliseconds are not kept, so a chime is not recorded), onLevel(0 to 1),
+   start within 8 seconds (the microphone is released first). opts: maxSec (the recording ends by itself, default 1200, the most
+   one upload can carry: onLimit is called, the page then calls stop), silenceSec and onSilence (called once when nothing louder
+   than room noise was heard for that long, default 60; the page then calls stop, so what was said is still written out), skipMs (the first milliseconds are not kept, so a chime is not recorded), onLevel(0 to 1),
    openMs (give up with TimeoutError when getUserMedia has not answered after this long, default: wait for ever) and signal (an
    AbortSignal: aborting it rejects with AbortError at any point of the start). Whenever a start is given up, whether it timed out,
    was aborted or failed, every track is stopped, also the ones of a getUserMedia that answers late. */
@@ -1071,14 +1159,27 @@ MC.audio = (function(){
       if(ctx) ctx.close().catch(() => {}); /* not awaited: a context that never settled may never close either */
       throw e;
     } finally { if(url) URL.revokeObjectURL(url); }
-    const maxSec = o.maxSec || 120, chunks = []; let total = 0, level = 0, ended = false, limitT = 0;
-    const keepFrom = performance.now() + (o.skipMs || 0), cap = Math.round(maxSec * ctx.sampleRate);
+    const maxSec = o.maxSec || 1200, silenceMs = (o.silenceSec || 60) * 1000, chunks = []; let total = 0, level = 0, ended = false, limitT = 0;
+    const keepFrom = performance.now() + (o.skipMs || 0), cap = Math.round(maxSec * 16000);
+    /* 16kHz as it comes: each kept sample is the mean of the input samples it stands for (a light low-pass) */
+    const step = ctx.sampleRate / 16000, CH = 16000;
+    let buf = new Float32Array(CH), at = 0, sum = 0, cnt = 0, edge = step, pos = 0, heardAt = performance.now(), silent = false;
     node.port.onmessage = e => {
       const d = e.data; if(!d || performance.now() < keepFrom || total >= cap) return;
-      chunks.push(d); total += d.length;
+      for(let i = 0; i < d.length; i++){
+        sum += d[i]; cnt++; pos++;
+        if(pos >= edge){
+          buf[at++] = sum / cnt; sum = 0; cnt = 0; edge += step; total++;
+          if(at === CH){ chunks.push(buf); buf = new Float32Array(CH); at = 0; }
+          if(total >= cap) break;
+        }
+      }
       let peak = 0; for(let i = 0; i < d.length; i++){ const a = Math.abs(d[i]); if(a > peak) peak = a; }
       level = Math.max(peak, level * .85);
       if(o.onLevel) o.onLevel(Math.min(1, level));
+      const now = performance.now();
+      if(peak > .03) heardAt = now; /* louder than room noise: someone is talking */
+      else if(!silent && o.onSilence && now - heardAt > silenceMs){ silent = true; o.onSilence(); }
     };
     if(o.onLimit) limitT = setTimeout(() => { if(!ended) o.onLimit(); }, maxSec * 1000);
     async function end(){
@@ -1091,12 +1192,13 @@ MC.audio = (function(){
       async stop(){
         const rate = await end(); if(!rate) return null;
         try { await ctx.close(); } catch(e){ /* ignore */ }
-        const all = new Float32Array(Math.min(total, cap)); let at = 0; for(const c of chunks){ const room = all.length - at; if(room <= 0) break; all.set(c.length > room ? c.subarray(0, room) : c, at); at += c.length; }
-        const mono = await to16k(all, rate);
+        const mono = new Float32Array(Math.min(total, cap)); let n = 0;
+        for(const c of chunks.concat([buf.subarray(0, at)])){ const room = mono.length - n; if(room <= 0) break; mono.set(c.length > room ? c.subarray(0, room) : c, n); n += c.length; }
         let peak = 0; for(let i = 0; i < mono.length; i++){ const a = Math.abs(mono[i]); if(a > peak) peak = a; }
         return { wav:wav(mono), seconds:mono.length / 16000, peak };
       },
-      async cancel(){ if(await end()){ try { await ctx.close(); } catch(e){ /* ignore */ } } }
+      async cancel(){ if(await end()){ try { await ctx.close(); } catch(e){ /* ignore */ } } },
+      seconds(){ return total / 16000; }
     };
   }
   return { wav, to16k, record, WORKLET };
@@ -1260,17 +1362,17 @@ MC.sound = (function(){
      Talk records in the page (MC.audio), Send posts the WAV to /api/voice/transcribe, and the text goes to the assistant exactly like a
      PC voice question (cl.send with voice:true, the same conversation). The reply is spoken by BlitzVoice into a WAV
      (/api/voice/tts) that this page plays. Nothing here touches the PC's microphone or speakers, and the wake word, the focus
-     reports and BlitzVoice's own state stay off. There is no silence detection yet, so there is no "listen again after she
-     answers" and no silence timeout: Talk is pressed for every question, and a recording ends by Send or after two minutes.
+     reports and BlitzVoice's own state stay off. There is no "listen again after she answers": Talk is pressed for every
+     question. A recording ends by Send, after a minute with nothing said (it is sent), or at the 20-minute limit (it is sent).
      R.step: idle, starting (waiting for the microphone), recording, sending (uploading and transcribing), preparing (the voice is
      being made), speaking. The step is mirrored into V.link (recording, transcribing, speaking) so the eye, the status word and
      the end-of-turn logic work as they do on the PC. */
-  const PHONE_MAX_SEC = 120;
+  const PHONE_MAX_SEC = 1200; /* what one upload can carry (server PHONE_WAV_MAX, the bridge's request limit) */
   /* R.tok numbers the starts: a start whose number is no longer R.tok was dropped (Escape, page hidden, timeout) while the
      microphone was still being asked for, so when it answers its recorder is released at once instead of going live. */
   const R = { step:'idle', rec:null, prefix:'', gen:0, tok:0, audio:null, url:'', startAc:null, job:null };
   const PHONE_OPEN_MS = 12000; /* the whole start gives up when the microphone has not answered by then; a late answer is released, so Talk can be tried again */
-  const PHONE_SEND_MS = 70000; /* the upload and transcription of one question gives up after this long */
+  const PHONE_SEND_MS = 70000; /* the upload and transcription of one question gives up after this long, plus 0.6 s per second recorded */
   /* a start that is no longer wanted: its number goes stale and the abort releases whatever it was waiting for */
   function dropStart(){
     R.tok++;
@@ -1323,7 +1425,7 @@ MC.sound = (function(){
     phoneStep('starting');
     let rec;
     try {
-      rec = await MC.audio.record({ signal:ac.signal, openMs:PHONE_OPEN_MS, maxSec:PHONE_MAX_SEC, skipMs:260, onLevel:v => { if(tok === R.tok){ V.live = Math.min(1, v * 2.5); V.liveAt = performance.now(); } }, onLimit:() => { if(tok === R.tok && R.step === 'recording'){ cl.note('That is the two minute limit, so it was sent.'); phoneSend(); } } });
+      rec = await MC.audio.record({ signal:ac.signal, openMs:PHONE_OPEN_MS, maxSec:PHONE_MAX_SEC, skipMs:260, onLevel:v => { if(tok === R.tok){ V.live = Math.min(1, v * 2.5); V.liveAt = performance.now(); } }, onLimit:() => { if(tok === R.tok && R.step === 'recording'){ cl.note('That is the 20-minute limit, so it was sent.'); phoneSend(); } }, onSilence:() => { if(tok === R.tok && R.step === 'recording'){ cl.note('Nothing was said for a minute, so it was sent.'); phoneSend(); } } });
     } catch(e){ if(tok === R.tok){ phoneStep('idle'); micFailed(e); phoneTidyPanel(); } return; }
     if(tok !== R.tok){ rec.cancel().catch(() => {}); return; } /* dropped while the microphone was starting: release it at once */
     R.startAc = null;
@@ -1393,7 +1495,7 @@ MC.sound = (function(){
        below returns the button to Talk. */
     const ac = new AbortController();
     const job = R.job = { canceled:false, timedOut:false, stop(byUser){ if(byUser) job.canceled = true; ac.abort(); } };
-    const timer = setTimeout(() => { job.timedOut = true; ac.abort(); }, PHONE_SEND_MS);
+    const timer = setTimeout(() => { job.timedOut = true; ac.abort(); }, PHONE_SEND_MS + Math.round(rec.seconds() * 600));
     try {
       let out = null, text = '', fail = '';
       try { out = await rec.stop(); } catch(e){ out = null; }
@@ -1840,8 +1942,8 @@ MC.fades = (function(){
 /* ---------- the project card: shown when pointing at a planet on Home or a dot in the title bar ----------
    One card for both. It opens next to what it describes and stays there (it never follows the pointer), so its buttons can be
    reached: the project's dev run jobs, Open app for an installed program (PC only), and Project page. Leaving the
-   planet or dot hides it after a moment unless the pointer is on the card. A run that needs a question first (sends something
-   off this PC, or opens its own window) goes to the project page, which asks it there.
+   planet or dot hides it after a moment unless the pointer is on the card. A run that sends something off this PC goes to the
+   project page, which asks for the typed name there. Every other run starts at once.
    API: MC.pcard.show(project, anchorRect, {below, area}), hideSoon(), hide(), held() (the pointer is on the card), current(). */
 MC.SUN = 'mission-control'; /* the project drawn as the sun on Home and in the title bar */
 /* a run job's short name for small buttons: "Run dev" is Dev, "Run game" is Game */
@@ -1911,7 +2013,7 @@ MC.pcard = (function(){
       b.disabled = false; return;
     }
     const j = (p.jobs || []).find(x => x.id === b.dataset.pcJob); if(!j) return;
-    if(j.outward || j.interactive){ location.href = page + '#run=' + encodeURIComponent(j.id); return; } /* the project page asks first */
+    if(j.outward){ location.href = page + '#run=' + encodeURIComponent(j.id); return; } /* the project page asks first */
     b.disabled = true; note('Starting ' + j.label + '...');
     try {
       const res = await fetch('/api/projects/' + encodeURIComponent(p.id) + '/jobs/' + encodeURIComponent(j.id) + '/run', { method:'POST', headers:{ 'X-MC':'1', 'Content-Type':'application/json' }, body:'{}' });
@@ -2119,10 +2221,12 @@ MC.init = function(page){
 };
 
 /* ---------- local paths in Claude's text (md.js marks them as a.md-path) ----------
-   A text file opens in the viewer below, the same reader look as the project page; a folder, or any other file, opens in
-   Windows Explorer on the PC. A relative path is taken from the conversation's folder: the nearest [data-cwd], else
-   MC.pathBase() (the Talk page sets it to the open conversation's folder, the project page to the project folder). */
+   A web page (.html) opens in a new browser tab. A text file opens in the viewer below, the same reader look as the project
+   page; a folder, or any other file, opens in Windows Explorer on the PC (the Finder on a Mac). A relative path is taken from the conversation's
+   folder: the nearest [data-cwd], else MC.pathBase() (the Talk page sets it to the open conversation's folder, the project page to the project folder). */
 MC.pathBase = MC.pathBase || (() => '');
+/* the file manager that shows a path: a path from the root is on a Mac */
+MC.fileManager = p => /^\//.test(String(p || '')) ? 'Finder' : 'Explorer';
 MC.viewer = (function(){
   let el = null, from = null, cur = null, seq = 0;
   const q = s => el.querySelector(s);
@@ -2145,6 +2249,7 @@ MC.viewer = (function(){
     build(); from = document.activeElement;
     q('[data-mcv-title]').textContent = title; q('[data-mcv-title]').title = title;
     q('[data-mcv-kind]').textContent = kind; q('[data-mcv-sub]').textContent = sub || '';
+    q('[data-mcv-reveal]').textContent = 'Show in ' + MC.fileManager(sub);
     q('[data-mcv-reveal]').hidden = document.documentElement.hasAttribute('data-remote') || MC.remote === true; /* Explorer opens on the PC only */
     q('[data-mcv-body]').innerHTML = '<div class="mcv-in"><div class="mut">Loading...</div></div>';
     el.hidden = false; document.documentElement.classList.add('mcv-open');
@@ -2185,8 +2290,11 @@ MC.viewer = (function(){
 })();
 MC.revealPath = async (p) => {
   try { await MC.api.post('/api/path/reveal', { path: p }); }
-  catch(e){ MC.viewer.note('Show in Explorer', 'Could not open Explorer: ' + ((e && e.message) || 'error')); }
+  catch(e){ const fm = MC.fileManager(p); MC.viewer.note('Show in ' + fm, 'Could not open ' + fm + ': ' + ((e && e.message) || 'error')); }
 };
+/* a local file as the server shows it in a browser tab (GET /local/<drive>/<path>, or /local/<path from the root> on a Mac,
+   server/app.js), so the page's own relative links (styles, scripts, images) load too */
+MC.localUrl = p => '/local/' + String(p).replace(/^([A-Za-z]):[\\/]*/, '$1/').replace(/^\/+/, '').split(/[\\/]+/).map(encodeURIComponent).join('/');
 MC.openPath = async (raw, base) => {
   let info;
   try { info = await MC.api.get('/api/path/info?p=' + encodeURIComponent(raw) + '&base=' + encodeURIComponent(base || '')); }
@@ -2194,8 +2302,9 @@ MC.openPath = async (raw, base) => {
   const remote = document.documentElement.hasAttribute('data-remote') || MC.remote === true;
   if(info.kind === 'missing') return MC.viewer.note(info.name, 'Not found: ' + info.path);
   if(info.kind === 'choice') return MC.viewer.pick(info.name, 'Several projects have ' + info.path + '. Which one?', info.choices || []);
+  if(info.kind === 'file' && info.readable && /\.html?$/i.test(info.path)) return void open(MC.localUrl(info.path), '_blank', 'noopener');
   if(info.kind === 'file' && info.view) return MC.viewer.open(info);
-  if(remote) return MC.viewer.note(info.name, (info.kind === 'folder' ? 'Folders' : 'Files like this one') + ' open in Explorer on the PC: ' + info.path);
+  if(remote) return MC.viewer.note(info.name, (info.kind === 'folder' ? 'Folders' : 'Files like this one') + ' open in ' + MC.fileManager(info.path) + (MC.fileManager(info.path) === 'Finder' ? ' on the Mac: ' : ' on the PC: ') + info.path);
   if(info.kind === 'file' && !info.readable && /\.(md|markdown|txt|log|json|js|ts|css|html)$/i.test(info.path)) {
     return MC.viewer.note(info.name, 'Mission Control only shows files inside your project folders. It is here: ' + info.path);
   }

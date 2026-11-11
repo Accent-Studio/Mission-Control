@@ -1,7 +1,7 @@
 @echo off
 setlocal
 set "ROOT=%~dp0"
-set "URL=http://127.0.0.1:1700/"
+set "URL=http://127.0.0.1:1700/v2/"
 set "HEALTH=http://127.0.0.1:1700/api/health"
 
 call :health

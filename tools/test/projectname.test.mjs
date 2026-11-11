@@ -1,6 +1,6 @@
 // Tests for the project's display name and subtitle in PUT /api/projects/:id/settings: one line of text each, the folder keeps
 // its own name, and an emptied subtitle stays empty.
-// Run: node --test "tools/test/*.test.mjs"        (no npm packages; the server uses a free port and its own data folder)
+// Run: npm test (2 test files at a time)        (no npm packages; the server uses a free port and its own data folder)
 import assert from 'node:assert/strict';
 import { after, describe, test } from 'node:test';
 import { localReq, makeDataDir, seedFixture, startServer } from './harness.mjs';

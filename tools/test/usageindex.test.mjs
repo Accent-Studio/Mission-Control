@@ -1,6 +1,6 @@
 // Tests for the usage index (server/services/usageIndex.js): hourly token totals per session, read incrementally from
 // synthetic transcripts in a temporary Claude home. Nothing real is read or written.
-// Run: node --test "tools/test/*.test.mjs"        (no npm packages; no server is started)
+// Run: npm test (2 test files at a time)        (no npm packages; no server is started)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';

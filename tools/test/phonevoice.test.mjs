@@ -1,6 +1,6 @@
 // Tests for a phone's voice: POST /api/voice/transcribe (a WAV in, text out) and POST /api/voice/tts (text in, a WAV out),
 // against the FAKE BlitzVoice in tools/fakevoice. Nothing here uses a microphone, a speaker or a real Claude.
-// Run: node --test "tools/test/*.test.mjs"
+// Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -151,9 +151,9 @@ describe('POST /api/voice/transcribe', () => {
     assert.equal((await pcPost(f.s, '/api/voice/transcribe', wav(), { 'Content-Type': 'audio/wav; codecs=1' })).status, 200);
   });
 
-  test('over 4 MB is a 413: by Content-Length at once, and while streaming without one', async () => {
+  test('over 40 MB is a 413: by Content-Length at once, and while streaming without one', async () => {
     const before = f.reqs('/transcribe').length;
-    const big = Buffer.concat([wav(), Buffer.alloc(4 * 1024 * 1024 + 10)]);
+    const big = Buffer.concat([wav(), Buffer.alloc(40 * 1024 * 1024 + 10)]);
     const r = await phonePost(f.s, '/api/voice/transcribe', big).catch(() => ({ status: 0 }));
     assert.ok(r.status === 413 || r.status === 0, `status ${r.status}`); // a reset connection is also a refusal
     // Chunked: no length is declared, so only the streaming cap can stop it.
@@ -169,7 +169,7 @@ describe('POST /api/voice/transcribe', () => {
       const chunk = Buffer.alloc(256 * 1024);
       let n = 0;
       const pump = () => {
-        while (n++ < 20) if (!req.write(chunk)) return req.once('drain', pump);
+        while (n++ < 170) if (!req.write(chunk)) return req.once('drain', pump);
         req.end();
       };
       pump();

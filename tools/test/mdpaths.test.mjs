@@ -1,5 +1,5 @@
 // Tests for local paths in the markdown renderer (app/md.js): which paths become md-path links, and that nothing else
-// changes. Run: node --test "tools/test/*.test.mjs"
+// changes. Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -31,8 +31,48 @@ describe('md: local paths become links', () => {
     assert.deepEqual(paths(h), ['G:\\My Folder\\notes.md', 'server/config.js:12', 'app/', './x/y.ts', 'README.md', 'app.js:2']);
     assert.match(h, /<a class="md-path"[^>]*><code class="md-ic">server\/config\.js:12<\/code><\/a>/);
   });
+  test('in a code span: a relative path whose later parts hold spaces', () => {
+    const h = md('`01-Acme/Map - Acme systems.html` and `My Notes/a.md` and `docs/Old plans/` and `node tools/x.js` and `app/x.js and app/y.js`');
+    assert.deepEqual(paths(h), ['01-Acme/Map - Acme systems.html', 'docs/Old plans/']);
+  });
   test('a [text](path) link to a relative or absolute path', () => {
     assert.deepEqual(paths(md('[the renderer](app/md.js) and [notes](D:/Notes/a.md)')), ['app/md.js', 'D:/Notes/a.md']);
+  });
+});
+
+describe('md: macOS paths become links', () => {
+  test('an absolute path under the usual local folders, in the text, without the punctuation after it', () => {
+    const h = md('See /Users/me/Dev/App/README.md, then /Volumes/Disk/x.txt. Also /private/tmp/a.log and /tmp/b.md:12 and ~/notes/c.md.');
+    assert.deepEqual(paths(h), ['/Users/me/Dev/App/README.md', '/Volumes/Disk/x.txt', '/private/tmp/a.log', '/tmp/b.md:12', '~/notes/c.md']);
+    assert.match(h, /README\.md<\/a>, then/);
+  });
+  test('in a code span (with spaces) and as a [text](path) link', () => {
+    assert.deepEqual(paths(md('`/Users/me/My Folder/notes.md` and [plan](/Users/me/Dev/docs/PLAN.md)')), ['/Users/me/My Folder/notes.md', '/Users/me/Dev/docs/PLAN.md']);
+  });
+  test('routes, other root folders and paths inside a web address or a word stay as they were', () => {
+    const h = md('GET /api/projects and /usr/bin/node, `/api/path/info`, https://a.example/Users/x, a/Users/b, x~/y and ~~/tmp/z~~');
+    assert.deepEqual(paths(h), []);
+    assert.match(h, /<a href="https:\/\/a\.example\/Users\/x" target="_blank"/);
+  });
+  test('long runs stay fast', () => {
+    for (const src of ['/Users/'.repeat(20000), '/Users/' + 'a'.repeat(50000), 'x /tmp/a '.repeat(5000), '~/'.repeat(30000)]) {
+      const t0 = process.hrtime.bigint();
+      assert.equal(typeof md(src), 'string');
+      assert.ok(Number(process.hrtime.bigint() - t0) / 1e6 < 300, 'slow');
+    }
+  });
+});
+
+describe('md: addresses in a code span become web links', () => {
+  const hrefs = (h) => [...h.matchAll(/<a href="([^"]*)" target="_blank"/g)].map((m) => m[1]);
+  test('a web address, a local server without http, a www address', () => {
+    const h = md('`https://a.example/x` `localhost:3000` `127.0.0.1:1700/api` `192.168.1.20` `10.0.0.5:8080` `www.a.example`');
+    assert.deepEqual(hrefs(h), ['https://a.example/x', 'http://localhost:3000', 'http://127.0.0.1:1700/api', 'http://192.168.1.20', 'http://10.0.0.5:8080', 'https://www.a.example']);
+    assert.deepEqual(paths(h), []);
+  });
+  test('versions, times and other code stay as they were', () => {
+    const h = md('`1.2.3` `8.8.8.8` `10:30` `npm test` `javascript:alert(1)`');
+    assert.deepEqual(hrefs(h), []);
   });
 });
 

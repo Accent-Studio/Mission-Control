@@ -2,7 +2,7 @@
 // (pairing is PC-only; removing is allowed from a paired phone, because it only reduces access).
 import { sendJson, readJson } from '../lib/http.js';
 import {
-  cancelPairing, isDeviceId, listView, removeDevice, renameDevice, restartBridge, startPairing,
+  cancelPairing, isDeviceId, listView, removeDevice, renameDevice, restartBridge, setComputer, startPairing,
 } from '../services/devices.js';
 
 export const routes = [
@@ -65,6 +65,19 @@ export const routes = [
       if (renamed === 'write_failed') return sendJson(res, 500, { error: 'write_failed' });
       if (!renamed) return sendJson(res, 404, { error: 'Unknown device' });
       sendJson(res, 200, renamed);
+    },
+  },
+  {
+    // { on }: this device is one of the user's other computers, and may sync this PC's projects and pull its code
+    method: 'POST',
+    path: '/api/devices/:id/computer',
+    handler: async (req, res, params) => {
+      const body = (await readJson(req, 4096)) || {};
+      if (typeof body.on !== 'boolean') return sendJson(res, 400, { error: 'on must be true or false' });
+      const r = isDeviceId(params.id) ? setComputer(params.id, body.on) : null;
+      if (r === 'write_failed') return sendJson(res, 500, { error: 'write_failed' });
+      if (!r) return sendJson(res, 404, { error: 'Unknown device' });
+      sendJson(res, 200, r);
     },
   },
 ];

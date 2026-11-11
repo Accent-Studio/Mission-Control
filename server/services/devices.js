@@ -7,9 +7,8 @@
 // In memory only: the open pairing code, which bridge is connected, and which phones are online right now.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { DATA_DIR } from '../config.js';
+import { DATA_DIR, MACHINE_NAME, ROOT } from '../config.js';
 import { publish } from '../lib/events.js';
 import { setDeviceLookup } from '../lib/bridgeAuth.js';
 
@@ -103,6 +102,9 @@ function readFile() {
       name: cleanName(d.name),
       pairedAt: typeof d.pairedAt === 'string' ? d.pairedAt : new Date().toISOString(),
       lastSeen: typeof d.lastSeen === 'string' ? d.lastSeen : null,
+      // another computer of the user's (its Mission Control paired here through mc-link), allowed at this PC to sync
+      // this PC's projects (lib/remote-policy.js, COMPUTER_OK). Never set by a pairing itself.
+      ...(d.computer === true ? { computer: true } : {}),
     });
   }
   return byId;
@@ -239,7 +241,7 @@ setDeviceLookup({
   get(id) {
     syncFromFile();
     const d = devices.get(id);
-    return d ? { id: d.id, name: d.name } : null;
+    return d ? { id: d.id, name: d.name, computer: !!d.computer } : null;
   },
   touch(id) {
     markSeen(id);
@@ -277,6 +279,23 @@ export function renameDevice(id, name) {
   }
   changed('renamed', { id });
   return { id: d.id, name: d.name };
+}
+
+// Marks a device as one of the user's other computers, or takes that back. Called at the PC only (remote-policy.js).
+export function setComputer(id, on) {
+  syncFromFile();
+  const d = devices.get(id);
+  if (!d) return null;
+  const was = !!d.computer;
+  if (on) d.computer = true;
+  else delete d.computer;
+  if (!saveNow()) {
+    if (was) d.computer = true;
+    else delete d.computer;
+    return 'write_failed';
+  }
+  changed('computer', { id });
+  return { id: d.id, name: d.name, computer: !!d.computer };
 }
 
 // ---- The bridge and its control stream ----
@@ -343,6 +362,16 @@ export function attachControl(res) {
     controlStreams.delete(res);
     changed('bridge');
   };
+}
+
+// What the status window shows about the phone bridge.
+export function bridgeStatus() {
+  return { online: bridgeOnline(), startedAt: bridge.startedAt, version: bridge.version, seenAt: bridge.seenAt };
+}
+
+// A new build of the bridge waits in bridge/run (it is used from the bridge's next start)
+export function bridgeUpdateWaits() {
+  return fs.existsSync(path.join(ROOT, 'bridge', 'run', process.platform === 'win32' ? 'mc-bridge.new.exe' : 'mc-bridge.new'));
 }
 
 export function restartBridge() {
@@ -428,7 +457,7 @@ export function tryPair({ endpointId, code, deviceName }) {
   burnPairing('used');
   sendControl({ type: 'add', id: endpointId });
   changed('paired', { id: endpointId, name: device.name });
-  return { ok: true, serverName: os.hostname() };
+  return { ok: true, serverName: MACHINE_NAME };
 }
 
 // ---- Removing ----
@@ -467,6 +496,7 @@ export function listView({ remote = false } = {}) {
     name: d.name,
     pairedAt: d.pairedAt,
     lastSeen: d.lastSeen,
+    computer: !!d.computer,
     online: bridgeOnline() && presence.has(d.id),
   }));
   const view = { pairing: currentPairing(), devices: list };

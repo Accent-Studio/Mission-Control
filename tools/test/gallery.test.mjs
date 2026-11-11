@@ -2,7 +2,7 @@
 // first (my pasted pictures, pictures I sent while Claude worked, files Claude sent with SendUserFile), and leaves out
 // pictures Claude only looked at with a tool and anything from a helper (sidechain). A picture I sent while Claude
 // worked also shows on its message in the thread.
-// Run: node --test "tools/test/*.test.mjs"        (no npm packages; the server uses a free port and its own data folder)
+// Run: npm test (2 test files at a time)        (no npm packages; the server uses a free port and its own data folder)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';

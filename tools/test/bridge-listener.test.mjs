@@ -1,5 +1,5 @@
 // Tests for the phone bridge listener (second port), the bridge secret, device identity and the remote policy.
-// Run: node --test "tools/test/*.test.mjs"        (no npm packages; every server uses free ports and its own data folder)
+// Run: npm test (2 test files at a time)        (no npm packages; every server uses free ports and its own data folder)
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -79,9 +79,15 @@ describe('bridge listener: auth, Host, Origin, X-MC', () => {
   test('right secret with a known device: normal answers, req.mcDevice set, secret not leaked', async () => {
     const r = await bridgeReq(s, { path: '/api/whoami' });
     assert.equal(r.status, 200);
-    assert.deepEqual(r.json, { remote: true, device: { id: KNOWN_DEVICE, name: 'Test Phone' } });
+    assert.deepEqual({ remote: r.json.remote, device: r.json.device }, { remote: true, device: { id: KNOWN_DEVICE, name: 'Test Phone' } });
+    assert.equal(r.json.role, 'pc');
     assert.ok(!r.text.includes(fs.readFileSync(s.secretFile, 'utf8').trim()));
-    const page = await bridgeReq(s, { path: '/' });
+    // a phone opens Mission Control 2 straight away, never the old home page first
+    const home = await bridgeReq(s, { path: '/' });
+    assert.equal(home.status, 302);
+    assert.equal(home.headers.location, '/v2/');
+    assert.equal((await bridgeReq(s, { path: '/index.html' })).headers.location, '/v2/');
+    const page = await bridgeReq(s, { path: '/v2/' });
     assert.equal(page.status, 200);
     assert.match(page.headers['content-type'], /text\/html/);
     const data = await bridgeReq(s, { path: '/api/projects' });
@@ -122,7 +128,7 @@ describe('bridge listener: auth, Host, Origin, X-MC', () => {
     const ok = await bridgeReq(s, { method: 'HEAD', path: '/api/whoami' });
     assert.equal(ok.status, 200);
     assert.equal(ok.text, '');
-    const page = await bridgeReq(s, { method: 'HEAD', path: '/' });
+    const page = await bridgeReq(s, { method: 'HEAD', path: '/v2/' });
     assert.equal(page.status, 200);
     assert.equal(page.text, '');
     assert.equal((await bridgeReq(s, { method: 'HEAD', path: '/api/whoami', hdr: { device: null } })).status, 403);
@@ -153,7 +159,7 @@ describe('local listener behaves as before and ignores forged bridge headers', (
     const real = fs.readFileSync(s.secretFile, 'utf8').trim();
     const r = await localReq(s, { path: '/api/whoami', headers: { 'X-MC-Device': KNOWN_DEVICE, 'X-MC-Bridge': real } });
     assert.equal(r.status, 200);
-    assert.deepEqual(r.json, { remote: false, device: null });
+    assert.deepEqual({ remote: r.json.remote, device: r.json.device }, { remote: false, device: null });
   });
 
   test('a forged device does not put the policy on a local caller', async () => {
@@ -237,16 +243,16 @@ describe('remote policy', () => {
     });
     const table = JSON.parse(text.split('\n').find((l) => l.startsWith('ROUTES ')).slice(7));
     assert.ok(table.length > 20, `only ${table.length} routes found`);
-    const { unclassifiedRoutes, REMOTE_OK, PC_ONLY } = await import('../../server/lib/remote-policy.js');
+    const { unclassifiedRoutes, REMOTE_OK, COMPUTER_OK, PC_ONLY } = await import('../../server/lib/remote-policy.js');
     assert.deepEqual(unclassifiedRoutes(table), []);
     // The other way round: a policy entry that no route has any more is stale (device routes live in another file).
     const have = new Set(table.map((r) => `${r.method.toUpperCase()} ${r.path}`));
-    const stale = [...REMOTE_OK, ...PC_ONLY].filter((k) => !have.has(k) && !k.includes('/api/devices/'));
+    const stale = [...REMOTE_OK, ...COMPUTER_OK, ...PC_ONLY].filter((k) => !have.has(k) && !k.includes('/api/devices/'));
     assert.deepEqual(stale, []);
   });
 
   test('the walk really fails when a route is missing (unit)', async () => {
-    const { unclassifiedRoutes, REMOTE_OK, PC_ONLY } = await import('../../server/lib/remote-policy.js');
+    const { unclassifiedRoutes, REMOTE_OK, COMPUTER_OK, PC_ONLY } = await import('../../server/lib/remote-policy.js');
     const missing = unclassifiedRoutes([
       { method: 'GET', path: '/api/anything' },
       { method: 'HEAD', path: '/api/anything' },
@@ -256,12 +262,13 @@ describe('remote policy', () => {
       { method: 'delete', path: '/api/other-new-thing' },
     ]);
     assert.deepEqual(missing, ['POST /api/brand-new-thing', 'DELETE /api/other-new-thing']);
-    for (const key of REMOTE_OK) assert.ok(!PC_ONLY.has(key), `${key} is in both lists`);
+    for (const key of REMOTE_OK) assert.ok(!PC_ONLY.has(key) && !COMPUTER_OK.has(key), `${key} is in two lists`);
+    for (const key of COMPUTER_OK) assert.ok(!PC_ONLY.has(key), `${key} is in two lists`);
   });
 
   test('every PC-only and phone-ok entry is a real shape: METHOD /api/...', async () => {
-    const { REMOTE_OK, PC_ONLY } = await import('../../server/lib/remote-policy.js');
-    for (const key of [...REMOTE_OK, ...PC_ONLY]) assert.match(key, /^(POST|PUT|DELETE|PATCH) \/api\/\S+$/, key);
+    const { REMOTE_OK, COMPUTER_OK, PC_ONLY } = await import('../../server/lib/remote-policy.js');
+    for (const key of [...REMOTE_OK, ...COMPUTER_OK, ...PC_ONLY]) assert.match(key, /^(POST|PUT|DELETE|PATCH) \/api\/\S+$/, key);
   });
 
   const pcOnly = (method, p, body = {}) => bridgeReq(s, { method, path: p, body, hdr: { post: true } });
@@ -269,7 +276,7 @@ describe('remote policy', () => {
   test('PC-only routes answer 403 pc_only for a device', async () => {
     const cases = [
       ['POST', '/api/processes/4294967290/kill', { confirm: true }],
-      ['POST', '/api/server/restart', { confirm: true }],
+      ['POST', '/api/server/restart', { confirm: true, all: true }], // the server alone may restart from a phone
       ['PUT', '/api/projects/fixture/settings', { jobs: [] }],
       ['POST', '/api/projects/fixture/checks/dev/launch', {}],
       ['POST', '/api/voice/start', {}],
@@ -342,6 +349,11 @@ describe('remote policy', () => {
     assert.equal(remoteAllowed('GET', { path: '/api/anything' }), true);
     assert.equal(remoteAllowed('HEAD', { path: '/api/anything' }), true);
     assert.equal(remoteAllowed('POST', { path: '/api/never-heard-of-it' }), false);
+    // a linked computer may sync; a phone may not, and neither may set who is a linked computer
+    assert.equal(remoteAllowed('POST', { path: '/api/sync/remote' }, { id: 'x', name: 'Phone' }), false);
+    assert.equal(remoteAllowed('POST', { path: '/api/sync/remote' }, { id: 'x', name: 'Work', computer: true }), true);
+    assert.equal(remoteAllowed('POST', { path: '/api/devices/:id/computer' }, { id: 'x', name: 'Work', computer: true }), false);
+    assert.equal(remoteAllowed('POST', { path: '/api/sync/machines/sync' }, { id: 'x', name: 'Work', computer: true }), false);
   });
 });
 

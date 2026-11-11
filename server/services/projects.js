@@ -5,6 +5,8 @@ import { spawn } from 'node:child_process';
 import { getProject, loadCatalog } from './catalog.js';
 import * as git from './git.js';
 import { clientCount, publish } from '../lib/events.js';
+import { isLocalAbs } from '../lib/localPath.js';
+import { isNoteText } from './library.js';
 
 const TTL_MS = 15000;
 // File systems that round to two seconds would otherwise make a fresh build look older.
@@ -548,7 +550,7 @@ export function fixOf(project, key) {
   if (!run) return null;
   const args = def.build && typeof def.build.args === 'string' ? def.build.args.trim() : '';
   // Match the job that runs the very same script, in this project or in the project that owns the script.
-  const want = path.resolve(/^[A-Za-z]:[\\/]/.test(run) ? run : path.join(project.folder, run)).toLowerCase();
+  const want = path.resolve(isLocalAbs(run) ? run : path.join(project.folder, run)).toLowerCase();
   const owners = [project, ...loadCatalog().filter((p) => p.id !== project.id)];
   let job = null;
   let own = false;
@@ -599,6 +601,8 @@ const FILE_TYPES = {
   '.md': 'text/markdown; charset=utf-8',
   '.markdown': 'text/markdown; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
+  '.html': 'text/plain; charset=utf-8', // its text; GET /api/projects/:id/file?view=page shows it as a page
+  '.htm': 'text/plain; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -615,12 +619,13 @@ const BAD_PATH_CHARS = /[\u0000-\u001f:<>"|?*]/;
 // error is 'forbidden' (outside the folder, wrong type, blocked name) or 'missing'.
 // Checked twice: on the text the caller sent, then on the real path after links and 8.3 short names are resolved.
 // folder: the root the path is inside, the project folder unless a library root (a notes folder) is named.
-export function resolveProjectFile(project, rel, folder = project.folder) {
+// anyText: a notes folder, where any text file is served (as text/plain), whatever its extension.
+export function resolveProjectFile(project, rel, folder = project.folder, { anyText = false } = {}) {
+  const typeOf = (p) => FILE_TYPES[path.extname(p).toLowerCase()] || (anyText && isNoteText(path.basename(p)) ? 'text/plain; charset=utf-8' : null);
   if (!folder) return { error: 'missing' };
   if (typeof rel !== 'string' || !rel || rel.length > 1024 || BAD_PATH_CHARS.test(rel)) return { error: 'forbidden' };
   if (/^[\\/]/.test(rel)) return { error: 'forbidden' };
-  const type = FILE_TYPES[path.extname(rel).toLowerCase()];
-  if (!type) return { error: 'forbidden' };
+  if (!typeOf(rel)) return { error: 'forbidden' };
 
   const segments = [];
   for (const seg of rel.split(/[\\/]+/)) {
@@ -644,7 +649,7 @@ export function resolveProjectFile(project, rel, folder = project.folder) {
   const realSegments = inside.split(path.sep);
   if (realSegments.some((s) => BLOCKED_SEGMENT.test(s))) return { error: 'forbidden' };
   // A link inside the project may point at a file of another type.
-  const realType = FILE_TYPES[path.extname(real).toLowerCase()];
+  const realType = typeOf(real);
   if (!realType) return { error: 'forbidden' };
 
   let st;

@@ -1,13 +1,15 @@
-// Local paths that Claude writes in a conversation ("D:\x\notes.md", `server/config.js:12`), opened from a link: a text
-// file is read for the page's viewer, a folder or any other file is shown in Windows Explorer.
+// Local paths that Claude writes in a conversation ("D:\x\notes.md", "/Users/me/notes.md", `server/config.js:12`), opened
+// from a link: a text file is read for the page's viewer, a folder or any other file is shown in Windows Explorer, or in
+// the Finder on macOS.
 //
-// Safety: only an absolute local path on a drive letter is ever used (never a network path, which would make Windows
-// send the user's credentials to another machine). Reading is limited to the places Mission Control already works in
+// Safety: only an absolute local path is ever used: on Windows one on a drive letter, elsewhere one from the root, and
+// never a network path (\\server or //server, which would make Windows send the user's credentials to another machine). Reading is limited to the places Mission Control already works in
 // (the discovery roots, the project folders, the notes folder, the open drives and Claude's own folder), never a
 // blocked name (.git, .ssh, .env, keys and secrets), only text, and at most READ_MAX bytes. Both checks run on the
-// path as written and again on the real path, so a link or junction cannot lead out. Explorer is started with an
-// argument array and no shell.
+// path as written and again on the real path, so a link or junction cannot lead out. Explorer, open and the rest are
+// started with an argument array and no shell.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { CLAUDE_HOME, DATA_DIR, DEFAULT_CWD, DISCOVERY_ROOTS, EXTRA_PROJECTS, NOTES_ROOT, OPEN_DRIVES, ROOT } from '../config.js';
@@ -20,12 +22,21 @@ const SNIFF = 8192;
 const BLOCKED_SEGMENT = /^(\.git|\.svn|\.hg|\.ssh|\.aws|\.gnupg|\.azure|\.kube)$|^\.env|secret|^id_(rsa|ed25519|ecdsa)|\.(pem|key|pfx|p12|jks|keystore)$|^keystore\.properties$/i;
 const BAD_CHARS = /[\u0000-\u001f<>"|?*]/;
 const DRIVE_PATH = /^[A-Za-z]:[\\/]/;
+const IS_WIN = process.platform === 'win32';
+// An absolute local path on this computer: a drive path on Windows, a path from the root elsewhere (not //server).
+const isAbs = (p) => typeof p === 'string' && (IS_WIN ? DRIVE_PATH.test(p) : /^\/(?!\/)/.test(p));
 // Files shown in the viewer as Markdown; any other text file is shown as plain text.
 const MARKDOWN = /\.(md|markdown|mdx)$/i;
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
-const norm = (p) => path.resolve(p).replace(/[\\/]+$/, '').toLowerCase();
-const isInside = (p, root) => p === root || p.startsWith(root + path.sep);
+// Windows and macOS compare names without case (their usual disks do); Linux compares them as written.
+const FOLD_CASE = IS_WIN || process.platform === 'darwin';
+const norm = (p) => {
+  const r = path.resolve(p);
+  const t = r.replace(/[\\/]+$/, '') || r; // "/" stays "/"
+  return FOLD_CASE ? t.toLowerCase() : t;
+};
+const isInside = (p, root) => p === root || p.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
 
 function realOf(p) {
   try {
@@ -45,7 +56,7 @@ function readRoots() {
   }
   const out = new Set();
   for (const r of list) {
-    if (typeof r !== 'string' || !DRIVE_PATH.test(r)) continue;
+    if (!isAbs(r)) continue;
     out.add(norm(r));
     const real = realOf(r);
     if (real) out.add(norm(real));
@@ -62,7 +73,7 @@ function inPrivateData(p) {
 function readAllowed(abs) {
   const p = norm(abs);
   if (inPrivateData(p)) return false;
-  if (OPEN_DRIVES.some((d) => p.startsWith(d + ':'))) return true;
+  if (IS_WIN && OPEN_DRIVES.some((d) => p.startsWith(d + ':'))) return true;
   return readRoots().some((root) => isInside(p, root));
 }
 
@@ -71,42 +82,46 @@ function stripLine(p) {
   return p.replace(/:\d+(?::\d+)?$/, '');
 }
 
+// What a link carries, without file:// in front and without a line number; "~/x" is the home folder outside Windows.
+function cleanOf(raw) {
+  if (typeof raw !== 'string' || !raw.trim() || raw.length > 1024) throw fail(400, 'No path');
+  const p = stripLine(raw.trim().replace(/^file:\/\//i, '').replace(/^\/(?=[A-Za-z]:[\\/])/, ''));
+  return !IS_WIN && /^~\//.test(p) ? path.join(os.homedir(), p.slice(2)) : p;
+}
+
 // Turns what the link carries into an absolute path, or throws a 400. base: the conversation's folder, for a relative path.
 export function resolvePath(raw, base) {
-  if (typeof raw !== 'string' || !raw.trim() || raw.length > 1024) throw fail(400, 'No path');
-  let p = stripLine(raw.trim().replace(/^file:\/\/\/?/i, ''));
-  if (BAD_CHARS.test(p.slice(2)) || /^[\\/]{2}/.test(p)) throw fail(400, 'Not a local path');
-  if (!DRIVE_PATH.test(p)) {
-    if (/^[\\/]/.test(p) || typeof base !== 'string' || !DRIVE_PATH.test(base) || BAD_CHARS.test(base.slice(2))) {
-      throw fail(400, 'This path has no folder to start from');
-    }
+  let p = cleanOf(raw);
+  if (BAD_CHARS.test(p.replace(/^[A-Za-z]:/, '')) || /^[\\/]{2}/.test(p)) throw fail(400, 'Not a local path');
+  if (!isAbs(p)) {
+    if (/^[\\/]|^[A-Za-z]:/.test(p) || !goodBase(base)) throw fail(400, 'This path has no folder to start from');
     p = path.join(base, p);
   }
   p = path.resolve(p);
-  if (!DRIVE_PATH.test(p)) throw fail(400, 'Not a local path');
+  if (!isAbs(p)) throw fail(400, 'Not a local path');
   return p;
 }
 
 // The relative part of what a link carries ("docs/plan.md" from "docs/plan.md:12"), or null when it is absolute.
 function relativeOf(raw) {
-  if (typeof raw !== 'string' || !raw.trim() || raw.length > 1024) throw fail(400, 'No path');
-  const p = stripLine(raw.trim().replace(/^file:\/\/\/?/i, ''));
-  if (DRIVE_PATH.test(p)) return null;
-  if (/^[\\/]/.test(p) || BAD_CHARS.test(p) || /(^|[\\/])\.\.([\\/]|$)/.test(p)) throw fail(400, 'Not a local path');
+  const p = cleanOf(raw);
+  if (isAbs(p)) return null;
+  if (/^[\\/]|^[A-Za-z]:/.test(p) || BAD_CHARS.test(p) || /(^|[\\/])\.\.([\\/]|$)/.test(p)) throw fail(400, 'Not a local path');
   return p;
 }
-const goodBase = (b) => typeof b === 'string' && DRIVE_PATH.test(b) && !BAD_CHARS.test(b.slice(2));
+const goodBase = (b) => isAbs(b) && !BAD_CHARS.test(b.replace(/^[A-Za-z]:/, ''));
 
-// Project folders that hold this relative path, those inside the conversation's folder first (a conversation in a parent
+// Project folders (and the notes folder) that hold this relative path, those inside the conversation's folder first (a conversation in a parent
 // folder often names a file of one of its projects). At most 12: { path, project }.
 function projectMatches(rel, base) {
   const folders = [];
   try {
-    for (const p of loadCatalog()) if (p && typeof p.folder === 'string' && DRIVE_PATH.test(p.folder)) folders.push({ folder: p.folder, name: p.name || p.id });
+    for (const p of loadCatalog()) if (p && isAbs(p.folder)) folders.push({ folder: p.folder, name: p.name || p.id });
   } catch {
     // no catalog
   }
   for (const x of EXTRA_PROJECTS) folders.push({ folder: x.folder, name: x.name });
+  if (isAbs(NOTES_ROOT)) folders.push({ folder: NOTES_ROOT, name: 'Notes' }); // "01-Acme/Map.html" written from the notes folder
   const b = goodBase(base) ? norm(base) : null;
   folders.sort((x, y) => (b && isInside(norm(y.folder), b) ? 1 : 0) - (b && isInside(norm(x.folder), b) ? 1 : 0));
   const out = [];
@@ -123,7 +138,7 @@ function projectMatches(rel, base) {
 }
 
 // What a path is: { path, kind: 'file' | 'folder' | 'missing' | 'choice', name, size, view: 'markdown' | 'text' | null,
-// readable }. A relative path that is not in the base folder is looked for in the project folders: one match is used,
+// readable }. A relative path that is not in the base folder is looked for in the project folders and the notes folder: one match is used,
 // several come back as kind 'choice' with { choices: [{ path, project }] } for the page to offer.
 export function pathInfo(raw, base) {
   const rel = relativeOf(raw);
@@ -134,7 +149,7 @@ export function pathInfo(raw, base) {
   if (found.length === 1) return describe(found[0].path);
   if (found.length > 1) return { path: rel, name: path.basename(rel) || rel, kind: 'choice', choices: found, size: 0, view: null, readable: false };
   if (here) return here;
-  throw fail(404, 'Not found in this conversation\'s folder or in any project');
+  throw fail(404, 'Not found in this conversation\'s folder, in any project or in the notes');
 }
 
 function describe(abs) {
@@ -180,11 +195,27 @@ export function readPathText(raw, base) {
   return { ...info, text: fs.readFileSync(realOf(info.path) || info.path, 'utf8').replace(/^\uFEFF/, '') };
 }
 
-// Shows a folder, or a file selected in its folder, in Windows Explorer. MC_NO_EXPLORER=1 (tests) only reports it.
+// Starts a program with no shell and no window of its own, and lets it run on after the request.
+function launch(cmd, args) {
+  const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true });
+  child.on('error', () => {});
+  child.unref();
+}
+
+// Shows a folder, or a file selected in its folder, in Windows Explorer or the Finder (another system: its file manager,
+// on the folder). MC_NO_EXPLORER=1 (tests) only reports it.
 export function revealPath(raw, base) {
   const info = pathInfo(raw, base);
   if (info.kind === 'missing') throw fail(404, 'Not found');
   if (info.kind === 'choice') throw fail(409, 'Several projects have this path');
+  if (!IS_WIN) {
+    if (process.env.MC_NO_EXPLORER !== '1') {
+      // "open -R" selects the file in a Finder window and brings the Finder to the front.
+      if (process.platform === 'darwin') launch('open', info.kind === 'folder' ? [info.path] : ['-R', info.path]);
+      else launch('xdg-open', [info.kind === 'folder' ? info.path : path.dirname(info.path)]);
+    }
+    return { ok: true, path: info.path, kind: info.kind };
+  }
   // Written out verbatim in the form Explorer documents (explorer /select,"C:\a b\c.txt"); the path can hold no quote (BAD_CHARS).
   const arg = info.kind === 'folder' ? `"${info.path}"` : `/select,"${info.path}"`;
   if (process.env.MC_NO_EXPLORER !== '1') {
@@ -201,4 +232,42 @@ export function revealPath(raw, base) {
     raise.unref();
   }
   return { ok: true, path: info.path, kind: info.kind };
+}
+
+// Opens a folder or a file in VS Code on this computer: its "code" command on Windows and Linux, the app itself on macOS
+// (its "code" command is only there once it has been installed from VS Code).
+export function openInCode(raw, base) {
+  const info = pathInfo(raw, base);
+  if (info.kind === 'missing') throw fail(404, 'Not found');
+  if (info.kind === 'choice') throw fail(409, 'Several projects have this path');
+  if (process.env.MC_NO_EXPLORER !== '1') {
+    if (IS_WIN) launch('cmd.exe', ['/d', '/c', 'code', info.path]);
+    else if (process.platform === 'darwin') launch('open', ['-a', 'Visual Studio Code', info.path]);
+    else launch('code', [info.path]);
+  }
+  return { ok: true, path: info.path };
+}
+
+// A file for a browser tab (a web page from a conversation, and the styles, scripts and images it links to): on Windows
+// GET /local/<drive>/<path> ("C:\a\b.html" is /local/C/a/b.html), elsewhere GET /local/<path from the root>
+// ("/Users/me/b.html" is /local/Users/me/b.html). The same places and names as the viewer reads; returns the real path, or
+// throws 403 or 404.
+export function localFile(urlPath) {
+  const m = IS_WIN ? /^\/local\/([A-Za-z])\/(.+)$/.exec(urlPath) : /^\/local\/()(.+)$/.exec(urlPath);
+  if (!m) throw fail(404, 'Not found');
+  let rel;
+  try {
+    rel = decodeURIComponent(m[2]);
+  } catch {
+    throw fail(404, 'Not found');
+  }
+  if (BAD_CHARS.test(rel) || rel.includes(':') || /^[\\/]/.test(rel) || /(^|[\\/])\.\.([\\/]|$)/.test(rel)) throw fail(404, 'Not found');
+  const abs = IS_WIN ? path.resolve(`${m[1]}:\\`, rel) : path.resolve('/', rel);
+  const real = realOf(abs);
+  if (!real || !fs.statSync(real).isFile()) throw fail(404, 'Not found');
+  const segs = real.split(/[\\/]+/).concat(abs.split(/[\\/]+/));
+  if (!readAllowed(abs) || !readAllowed(real) || segs.some((s) => BLOCKED_SEGMENT.test(s))) {
+    throw fail(403, 'Mission Control only opens files inside your project folders');
+  }
+  return real;
 }

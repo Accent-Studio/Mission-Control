@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "test": "node --test --test-concurrency=2 \"tools/test/*.test.mjs\""
   }
 }

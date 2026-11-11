@@ -1,7 +1,7 @@
 {
   "name": "mission-control-phone",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.8",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,8 +9,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@fontsource/montserrat": "^5.2.5",
-    "@fontsource/rajdhani": "^5.2.5",
+    "@fontsource/inter": "^5",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-barcode-scanner": "2.5.1"
   },

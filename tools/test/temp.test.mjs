@@ -1,5 +1,5 @@
 // Tests for the temp folder on the System page (server/routes/temp.js): the listing, deleting one item, and refusing
-// everything else. Run: node --test "tools/test/*.test.mjs"
+// everything else. Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';

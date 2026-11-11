@@ -1,6 +1,6 @@
 // Tests for "open in Claude Desktop": the detector (server/services/elsewhere.js) and the 409 guard on POST /api/chat.
 // The process list is a JSON file (MC_FAKE_PROCESSES), so nothing here looks at the real processes, and Claude is the
-// FAKE CLI in tools/fakeclaude. Run: node --test "tools/test/*.test.mjs"
+// FAKE CLI in tools/fakeclaude. Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -152,6 +152,18 @@ after(async () => {
 });
 const pc = (s, method, p, body) => localReq(s, { method, path: p, body, headers: method === 'GET' ? {} : { 'X-MC': '1' } });
 
+// The conversation list, once it holds every one of `ids`. The server keeps its scan of the transcripts for a few seconds,
+// and on a slow start that scan can run before the test has written them.
+async function listWith(s, ids) {
+  const t0 = Date.now();
+  for (;;) {
+    const list = (await pc(s, 'GET', '/api/sessions')).json;
+    if (Array.isArray(list) && ids.every((id) => list.some((x) => x.id === id))) return list;
+    if (Date.now() - t0 > 10000) throw new Error('timed out waiting for the conversations in the list');
+    await sleep(100);
+  }
+}
+
 async function boot() {
   const dataDir = makeDataDir('mc-elsewhere');
   seedFixture(dataDir);
@@ -184,7 +196,7 @@ describe('server', () => {
     s.setProcs([APP, desk(1, `--resume=${named}`), mcChild(mine)]);
 
     // the list never waits for the process list: the first answer has only what the transcripts say (c), the refresh follows
-    const first = (await pc(s, 'GET', '/api/sessions')).json;
+    const first = await listWith(s, [open, mine, named]);
     assert.equal(first.find((x) => x.id === open).elsewhere, 'Claude Desktop');
     assert.equal(first.find((x) => x.id === named).elsewhere, undefined);
     await sleep(400);
@@ -243,7 +255,7 @@ describe('server', () => {
     const file = path.join(s.dataDir, 'claude-home', 'projects', 'proj', id + '.jsonl');
     const lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean);
     fs.writeFileSync(file, [lines[0], '{"type":"assistant","entrypoint":"cli","timestamp":', 'not json at all', lines[1], '{"broken":'].join('\n') + '\n');
-    const list = (await pc(s, 'GET', '/api/sessions')).json;
+    const list = await listWith(s, [id]);
     assert.equal(list.find((x) => x.id === id).elsewhere, 'Claude Desktop');
     assert.equal((await pc(s, 'POST', '/api/chat', { prompt: 'hi', sessionId: id })).status, 409);
   });

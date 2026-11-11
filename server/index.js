@@ -1,6 +1,7 @@
 // Mission Control server entry point. It makes sure the port is free before the server itself (app.js) loads, because
 // loading it already takes the runner over and starts timers (Send later, At 5 min left). A second Mission Control started
 // while one runs must stop here, before it can take the runner from the real one or send anything twice.
+import './lib/serverLog.js'; // first: the Console module's Server log tab gets every line from the start
 import net from 'node:net';
 import { HOST, PORT } from './config.js';
 

@@ -2,8 +2,11 @@
 // names its own. One small `claude -p` call per new conversation: the newest Haiku, its own two-line system prompt, no
 // tools, no MCP servers, no settings, nothing saved to the history, so it costs a few hundred tokens and never shows up as
 // a conversation itself. The project name is left out (the list shows it as a tag); when the name needs it to make
-// sense, the project's short form is used (Mission Control is MC, MetaHuman Optimizer is MHO).
+// sense, the project's short form is used (Mission Control is MC, Photo Sorter Pro is PSP).
 // The name is stored as autoTitle in .data/sessions-meta.json, once; a rename of my own always wins over it.
+// After that the conversation's own Claude keeps it current: when the subject has moved for good (not for a quick aside),
+// it renames the conversation with Mission Control's conversation_title tool (services/mcp.js), and the name it had goes
+// to pastTitles.
 // Off when MC_AUTO_TITLE=off (the tests turn it off unless they test it).
 import { spawn, execFile } from 'node:child_process';
 import { DATA_DIR } from '../config.js';
@@ -11,6 +14,7 @@ import { resolveClaude } from '../lib/claudeExe.js';
 import { publish } from '../lib/events.js';
 import { loadCatalog, getProject } from './catalog.js';
 import { getMeta, setAutoTitle } from './sessionMeta.js';
+import { KEEP_DAYS } from './keepTranscripts.js';
 
 const TIMEOUT_MS = 60000;
 const MAX_QUEUE = 8;
@@ -19,7 +23,7 @@ const queue = [];
 let busy = false;
 const asked = new Set(); // session ids already queued in this server's life
 
-// "Mission Control" -> "MC", "MetaHuman Optimizer" -> "MHO", "Comfy-N-Chill" -> "CNC"
+// "Mission Control" -> "MC", "Photo Sorter Pro" -> "PSP", "Rock-N-Roll" -> "RNR"
 export function acronym(name) {
   const parts = String(name || '').split(/[\s\-_.]+/).filter(Boolean);
   let out = '';
@@ -63,12 +67,16 @@ function haiku() {
     .catch(() => 'haiku');
 }
 
+// Without the user's settings, Claude Code would fall back to its 30-day cleanup when it starts, and delete every
+// conversation not used for 30 days. This keeps them, as the user's own settings do.
+const KEEP_TRANSCRIPTS = JSON.stringify({ cleanupPeriodDays: KEEP_DAYS });
+
 async function nameOne({ sessionId, prompt, projectId }) {
   const entry = await resolveClaude();
   const model = await haiku();
   const p = projectId ? getProject(projectId) : null;
   const input = (p ? `Project: ${p.name} (${acronym(p.name)})\n\n` : '') + 'First message:\n' + prompt.slice(0, PROMPT_MAX);
-  const args = [...entry.pre, '-p', '--model', model, '--output-format', 'text', '--no-session-persistence', '--tools=', '--strict-mcp-config', '--setting-sources=', '--disable-slash-commands', '--system-prompt', systemPrompt()];
+  const args = [...entry.pre, '-p', '--model', model, '--output-format', 'text', '--no-session-persistence', '--tools=', '--strict-mcp-config', '--setting-sources=', '--settings', KEEP_TRANSCRIPTS, '--disable-slash-commands', '--system-prompt', systemPrompt()];
   const text = await new Promise((resolve, reject) => {
     let child;
     try {

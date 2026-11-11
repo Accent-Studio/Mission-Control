@@ -10,10 +10,11 @@ import { startRun, hasLiveSession } from './runs.js';
 import { getUsage } from './usage.js';
 import { elsewhereFor, isUuid } from './sessions.js';
 import { isLocked } from './sessionMeta.js';
+import { pcCall, pcName, pcOnline, pcProjectKnown, pcUpload } from './pcLink.js';
 
 const FILE = path.join(DATA_DIR, 'delayed.json');
 const KINDS = ['time', 'timer', 'reset'];
-const MAX_AHEAD_MS = 6 * 24 * 3600e3; // attachments are kept 7 days (uploads.js), so a later send could lose its files
+const MAX_AHEAD_MS = 360 * 24 * 3600e3; // attachments are kept a year (uploads.js), so a later send could lose its files
 const RESET_MARGIN_MS = 60e3; // send a minute after the window resets, so the CLI sees the new window
 const RETRY_MS = 60e3; // too many runs at once, or a conversation being taken over after a restart: try again a minute later
 const MAX_RETRIES = 30;
@@ -72,6 +73,7 @@ function publicItem(it) {
     createdAt: it.createdAt,
     sessionId: it.req.sessionId || null,
     projectId: it.req.projectId || null,
+    ...(it.req.chat ? { chat: true } : {}),
     preview: it.preview,
     text: it.req.prompt,
     atts: it.atts || [],
@@ -114,6 +116,7 @@ async function fire(it) {
   changed();
   const r = it.req;
   try {
+    if (r.pc) return await firePc(it);
     // The same guard as a send from the page: a conversation open in Claude Desktop would split in two.
     if (isUuid(r.sessionId) && r.elsewhereOk !== true && !hasLiveSession(r.sessionId)) {
       const where = await elsewhereFor(r.sessionId, { waitMs: ELSEWHERE_WAIT_MS });
@@ -127,6 +130,8 @@ async function fire(it) {
       model: r.model,
       mode: r.mode,
       effort: r.effort,
+      chat: r.chat,
+      folder: r.folder,
     });
     items = load().filter((x) => x !== it);
     changed();
@@ -149,6 +154,25 @@ function str(v, max = 200) {
   return typeof v === 'string' && v.length <= max ? v : undefined;
 }
 
+// A new conversation in a project of the linked PC (req.pc: its id there): it starts there, through the link, as from the
+// page. With that PC off it waits, and goes out the minute that PC is on again.
+async function firePc(it) {
+  const r = it.req;
+  if (!pcOnline()) {
+    it.status = 'waiting';
+    it.at = new Date(Date.now() + RETRY_MS).toISOString();
+    it.error = `Waits for ${pcName() || 'the other PC'} to be on`;
+    return changed();
+  }
+  const body = { prompt: r.prompt, projectId: r.pc, ...(r.model ? { model: r.model } : {}), ...(r.mode ? { mode: r.mode } : {}), ...(r.effort ? { effort: r.effort } : {}) };
+  if (r.attachments && r.attachments.length) body.attachments = await pcUpload(r.attachments);
+  const out = await pcCall('POST', '/api/chat', { json: body, timeout: 60e3 });
+  if (out.status !== 200) throw fail(out.status, (out.json && out.json.error) || `${pcName() || 'The other PC'} answered ${out.status}`);
+  items = load().filter((x) => x !== it);
+  changed();
+  publish('delayed.sent', { id: it.id, runId: out.json && out.json.runId, sessionId: null, projectId: r.projectId || null, pc: true });
+}
+
 // body: { kind: 'time'|'timer'|'reset', at?: ISO time (time and timer), req: what the page would send to POST /api/chat, atts?: chips to show }
 export function addDelayed(body) {
   if (!body || typeof body !== 'object') throw fail(400, 'Body must be a JSON object');
@@ -165,7 +189,7 @@ export function addDelayed(body) {
     if (!Number.isFinite(at)) throw fail(400, 'at must be a time');
   }
   if (at < Date.now() + 5000) throw fail(400, 'That time has already passed');
-  if (at > Date.now() + MAX_AHEAD_MS) throw fail(400, 'A message can wait 6 days at most (attached files are kept 7 days)');
+  if (at > Date.now() + MAX_AHEAD_MS) throw fail(400, 'A message can wait 360 days at most (attached files are kept a year)');
 
   const q = body.req;
   if (!q || typeof q !== 'object') throw fail(400, 'req is required');
@@ -173,16 +197,22 @@ export function addDelayed(body) {
   if (!prompt || !prompt.trim()) throw fail(400, 'The message is empty');
   if (q.sessionId !== undefined && !isUuid(q.sessionId)) throw fail(400, 'sessionId must be a uuid');
   if (q.sessionId && isLocked(q.sessionId)) throw fail(409, 'This conversation is locked. Unlock it to send.');
+  // pc: a project of the linked PC, by its id there (projectId is then the page's own id for it, to show the wait)
+  const pc = !q.sessionId && q.chat !== true ? str(q.pc) : undefined;
+  if (pc && !pcProjectKnown(pc)) throw fail(400, `${pcName() || 'The other PC'} has no project ${pc}`);
   const attachments = Array.isArray(q.attachments) ? q.attachments.filter((a) => typeof a === 'string' && a.length <= 100).slice(0, 20) : undefined;
   const req = {
     prompt,
     attachments: attachments && attachments.length ? attachments : undefined,
     sessionId: q.sessionId || undefined,
-    projectId: q.sessionId ? undefined : str(q.projectId),
+    projectId: q.sessionId || q.chat === true ? undefined : str(q.projectId),
+    chat: !q.sessionId && q.chat === true ? true : undefined,
+    folder: q.sessionId || q.chat === true || q.projectId ? undefined : str(q.folder, 300),
     model: str(q.model),
     mode: str(q.mode),
     effort: str(q.effort),
     elsewhereOk: q.elsewhereOk === true || undefined,
+    pc,
   };
   const atts = Array.isArray(body.atts)
     ? body.atts.slice(0, 20).map((a) => ({ id: str(a && a.id, 100), name: str(a && a.name, 300), kind: str(a && a.kind, 20), size: Number(a && a.size) || 0, src: str(a && a.src, 300) || '' }))

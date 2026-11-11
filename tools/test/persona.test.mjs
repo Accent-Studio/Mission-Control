@@ -1,5 +1,5 @@
 // Tests for the Com Link persona (its memory tags) and the start over and end conversation phrases.
-// Run: node --test "tools/test/*.test.mjs"
+// Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';

@@ -1,6 +1,6 @@
 // Local paths in conversations: what a path is, a text file's contents for the viewer, and Show in Explorer.
 import { readJson, sendJson } from '../lib/http.js';
-import { pathInfo, readPathText, revealPath } from '../services/paths.js';
+import { openInCode, pathInfo, readPathText, revealPath } from '../services/paths.js';
 
 export const routes = [
   {
@@ -20,6 +20,15 @@ export const routes = [
     handler: async (req, res) => {
       const body = await readJson(req);
       sendJson(res, 200, revealPath(body && body.path, body && body.base));
+    },
+  },
+  {
+    // Opens VS Code on the PC (PC_ONLY in lib/remote-policy.js)
+    method: 'POST',
+    path: '/api/path/code',
+    handler: async (req, res) => {
+      const body = await readJson(req);
+      sendJson(res, 200, openInCode(body && body.path, body && body.base));
     },
   },
 ];

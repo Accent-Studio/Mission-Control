@@ -1,5 +1,5 @@
 // Tests for the Usage page's numbers: GET /api/usage/stats sums the transcripts (usageIndex.js) over a range and prices them
-// (pricing.js). Run: node --test "tools/test/*.test.mjs"
+// (pricing.js). Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';

@@ -1,0 +1,48 @@
+/* Mission Control 2: styles for the wake port. */
+/* Settings, Train a wake word: the phrase, size and Train on one line, then near misses beside your voice clips, then the run */
+.wk-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:calc(14px*var(--k));padding-bottom:calc(4px*var(--k))}
+.wk-f{display:flex;flex-direction:column;gap:calc(6px*var(--k));min-width:0}
+.wk-lb{font-size:calc(14px*var(--k));font-weight:500;color:var(--text-3)}
+.wk-phrase{width:calc(320px*var(--k));max-width:100%}
+.wk-phrase input{font:inherit;font-size:calc(15px*var(--k))}
+.wk-phrase:has(input[aria-invalid="true"]){border-color:var(--fail)}
+.wk-size{width:calc(250px*var(--k));max-width:100%}
+.wk-go{display:flex;align-items:center;gap:calc(10px*var(--k))}
+.wkt .btn:disabled,.wkt .ibtn:disabled,.wkt .dsel:disabled{opacity:.45;cursor:default}
+.wkt .ibtn:disabled:hover{background:none;color:var(--text-2)}
+.wkt input:disabled{opacity:.55}
+.wk-cols{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);border-top:1px solid var(--line);margin-top:calc(14px*var(--k))}
+.wk-col{padding:calc(14px*var(--k)) calc(20px*var(--k)) 0 0;display:flex;flex-direction:column;gap:calc(12px*var(--k));min-width:0}
+.wk-col + .wk-col{border-left:1px solid var(--line);padding:calc(14px*var(--k)) 0 0 calc(20px*var(--k))}
+.wk-hd{display:flex;align-items:center;gap:calc(10px*var(--k));min-height:calc(26px*var(--k))}
+.wk-hd b{font-weight:600;font-size:calc(16px*var(--k))}
+.wk-chips{display:flex;flex-wrap:wrap;align-items:center;gap:calc(6px*var(--k));min-height:calc(31px*var(--k))}
+.wk-chip{display:inline-flex;align-items:center;gap:2px;height:calc(31px*var(--k));padding:0 2px 0 calc(11px*var(--k));border:1px solid var(--line-2);border-radius:var(--r-sm);font-size:calc(15px*var(--k))}
+.wk-chip .ibtn,.wk-clip .ibtn{width:calc(27px*var(--k));height:calc(27px*var(--k))}
+.wk-add{display:flex;align-items:center;gap:calc(8px*var(--k))}
+.wk-add .input{flex:1;max-width:calc(280px*var(--k));height:calc(36px*var(--k))}
+.wk-add input{font:inherit;font-size:calc(15px*var(--k))}
+.wk-rec{display:flex;align-items:center;gap:calc(14px*var(--k));flex-wrap:wrap}
+.wk-meter{flex:1;min-width:calc(140px*var(--k));max-width:calc(320px*var(--k))}
+.wk-meter > i{width:0}
+.wk-t{font-size:calc(13px*var(--k));color:var(--text-2);min-width:calc(150px*var(--k))}
+.wk-clips{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(108px*var(--k)),1fr));gap:calc(6px*var(--k));max-height:calc(220px*var(--k));overflow-y:auto}
+.wk-clip{display:flex;align-items:center;gap:2px;padding:1px 1px 1px calc(10px*var(--k));border:1px solid var(--line-2);border-radius:var(--r-sm);color:var(--text-2)}
+.wk-clip b{flex:1;font-weight:500;font-size:calc(14px*var(--k))}
+.wk-clip.on{border-color:var(--hi);color:var(--text)}
+.wk-none{grid-column:1/-1}
+.wk-run{border-top:1px solid var(--line);margin-top:calc(16px*var(--k));padding-top:calc(16px*var(--k));display:flex;flex-direction:column;gap:calc(12px*var(--k))}
+.wk-run:empty{display:none}
+.wk-rt{display:flex;align-items:center;gap:calc(12px*var(--k));flex-wrap:wrap;font-size:calc(16px*var(--k))}
+.wk-rt b{font-weight:600}
+.wk-st{display:grid;grid-template-columns:minmax(calc(150px*var(--k)),calc(200px*var(--k))) calc(20px*var(--k)) minmax(0,1fr) calc(70px*var(--k));gap:calc(9px*var(--k)) calc(12px*var(--k));align-items:center;max-width:calc(780px*var(--k))}
+.wk-st .nm{font-size:calc(15px*var(--k));color:var(--text-2)}
+.wk-st .nm.on{color:var(--text);font-weight:600}
+.wk-st .ic{display:grid;place-items:center;color:var(--text-2)}
+.wk-st .pc{text-align:right;font-size:calc(13px*var(--k));color:var(--text-2)}
+.wk-msg{font-family:var(--mono);font-size:calc(13px*var(--k));color:var(--text-3);overflow-wrap:anywhere}
+.wk-res{display:flex;align-items:center;gap:calc(12px*var(--k));flex-wrap:wrap;font-size:calc(15px*var(--k))}
+.wk-res code{font-family:var(--mono);font-size:calc(13px*var(--k));color:var(--text-2);overflow-wrap:anywhere}
+.btn.wk-danger{background:var(--fail);border-color:var(--fail);color:var(--fail-ink)}
+.btn.wk-danger:hover{filter:brightness(1.15)}
+@media (max-width:1100px){.wk-cols{grid-template-columns:1fr}.wk-col{padding-right:0}.wk-col + .wk-col{border-left:0;border-top:1px solid var(--line);padding-left:0;margin-top:calc(14px*var(--k))}}

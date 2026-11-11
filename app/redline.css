@@ -403,6 +403,12 @@ a.psun:focus-visible{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--white)}
 
 /* controls that only make sense at the PC: hidden once api.js sets data-remote on <html> (a phone) */
 [data-remote] .pc-only{display:none !important}
+/* only in the phone app: its own pages (the pairing screen) are at the app's address */
+html:not([data-remote]) .phone-only{display:none !important}
+/* the hub: the Talk page only, no PC buttons, no voice (it runs on a PC's graphics card) */
+/* one page only, so no tab row (on a phone, one tab alone would fill the width as a giant square) */
+[data-hub] .pc-only,[data-hub] [data-cl-mic],[data-hub] nav.rail{display:none !important}
+html[data-hub]{--railh:0px}
 
 /* ---------- local paths in Claude's text, and the viewer they open (redline.js MC.viewer) ---------- */
 a.md-path{cursor:pointer}
@@ -429,3 +435,10 @@ html.mcv-open,html.mcv-open body{overflow:hidden}
 .mcv-pick small{font:11px/1.4 var(--mono);color:var(--w3);overflow-wrap:anywhere}
 .mcv-pick a{color:var(--white);text-decoration:underline;text-underline-offset:3px}
 .mcv-pick a:hover{color:var(--red-2)}
+
+/* pull to refresh on a phone (MC.pull in api.js): the room the content moved by, and the spinner in it while it loads */
+.pullgap{flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.pullgap[hidden]{display:none}
+.pullspin{display:none;width:22px;height:22px;border-radius:50%;border:3px solid rgba(226,233,240,.14);border-top-color:var(--red);animation:pullspin .8s linear infinite}
+.pullgap.on .pullspin{display:block}
+@keyframes pullspin{to{transform:rotate(360deg)}}

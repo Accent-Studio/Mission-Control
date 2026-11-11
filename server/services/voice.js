@@ -30,7 +30,7 @@ let levelTimer = null;
 let started = false;
 const seenWakeIds = new Set(); // ids of wake dictations already handled (newest 100)
 const WAKE_IDS_CAP = 100;
-const WAKE_TEXT_MAX = 4000; // characters; a longer wake dictation is dropped
+const WAKE_TEXT_MAX = 100000; // characters; a longer wake dictation is not sent, and the tab says so
 let wake = null; // BlitzVoice's last wake status (what GET /wake and the wake_state event carry), null when unknown
 const wakeRoutes = new Map(); // wake dictation id -> { target }: the tab named when the wake word was heard, so partials and the text agree
 const WAKE_ROUTES_CAP = 100;
@@ -575,6 +575,7 @@ const NUM_PREFS = { listenSilenceSec: [30, 5, 600], hidePanelSec: [0, 0, 3600] }
 const CHOICE_PREFS = {
   comlinkEffort: ['medium', ['default', 'low', 'medium', 'high', 'xhigh', 'max']],
   comlinkMode: ['auto', ['default', 'acceptEdits', 'plan', 'auto']],
+  comlinkLook: ['hal', ['hal', 'clawd']], // the Com Link's face on every page: the HAL eye or Clawd, Claude's pixel crab
 };
 const MODEL_RE = /^[A-Za-z0-9._[\]-]{0,80}$/;
 // The assistant's name, shown on every page: 1 to 24 letters, digits, spaces, dots, apostrophes and hyphens.
@@ -768,7 +769,7 @@ export function speakableText(input) {
 
 // ---- A phone's voice: its recording is transcribed here, and a reply comes back as a WAV (nothing plays on the PC) ----
 
-export const PHONE_WAV_MAX = 4 * 1024 * 1024; // bytes of a phone recording
+export const PHONE_WAV_MAX = 40 * 1024 * 1024; // bytes of a phone recording: 20 minutes at 16kHz 16-bit (the bridge carries 48 MB)
 export const TTS_MAX = 4000; // characters of a reply read out for a phone
 const PHONE_WAIT_MS = 60000;
 
@@ -838,7 +839,7 @@ export function resetWavSupport() {
 // Sends a phone's WAV to BlitzVoice. Resolves { status, body } with body { text } on success.
 export async function voiceTranscribe(wav) {
   const key = linkKey();
-  const r = await voiceCall('POST', '/transcribe', wav, { contentType: 'audio/wav', timeout: PHONE_WAIT_MS });
+  const r = await voiceCall('POST', '/transcribe', wav, { contentType: 'audio/wav', timeout: PHONE_WAIT_MS + Math.round(wav.length / 32000) * 500 }); // a long recording takes longer
   const newBuild = r.status === 200 || (r.status === 409 && !!r.body && (r.body.error === 'no_link_model' || r.body.error === 'busy'));
   if (key && r.bv && newBuild && key === linkKey()) {
     wavLinks.add(key);

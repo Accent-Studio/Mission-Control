@@ -21,6 +21,7 @@ import json
 import os
 import re
 import shutil
+from datetime import datetime
 import subprocess
 import sys
 import threading
@@ -231,7 +232,16 @@ def run(args):
     out_path = Path(args.out) if args.out else ROOT / "models" / f"{name}.onnx"
     run_dir = ROOT / "runs" / name
     if run_dir.exists():
-        shutil.rmtree(run_dir)
+        # Retraining keeps the earlier run: it moves to runs/<name>-<when it ended>, with a copy of the model it made.
+        when = datetime.fromtimestamp(run_dir.stat().st_mtime).strftime("%Y-%m-%d-%H%M%S")
+        old = ROOT / "runs" / f"{name}-{when}"
+        n = 2
+        while old.exists():
+            old = ROOT / "runs" / f"{name}-{when}-{n}"
+            n += 1
+        run_dir.rename(old)
+        if out_path.exists():
+            shutil.copy2(out_path, old / out_path.name)
     run_dir.mkdir(parents=True)
     _log_file = open(run_dir / "train.log", "a", encoding="utf-8")
     log(f"phrase={args.phrase!r} preset={args.preset} name={name} out={out_path}")

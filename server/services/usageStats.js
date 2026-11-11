@@ -6,6 +6,8 @@ import { allSessionRows } from './sessions.js';
 import { getProject } from './catalog.js';
 import { costOf, savedOf, familyOf, priceFor } from './pricing.js';
 import { planHistory } from './usage.js';
+import { localModels } from '../lib/localModels.js';
+import { ELECTRICITY } from '../config.js';
 
 const HOUR_MS = 3600e3;
 const HEATMAP_MS = 371 * 24 * HOUR_MS; // the activity grid always shows the last 53 weeks
@@ -159,5 +161,7 @@ export async function usageStats({ from = 0, to = Date.now() + HOUR_MS } = {}) {
       .map(([id, p]) => ({ id, name: id ? (getProject(id) || {}).name || id : null, ...p }))
       .sort((a, b) => b.cost - a.cost),
     plan: planHistory(from, to),
+    // local models are priced by their electricity: the page names them and can show the cost in the local currency
+    local: { ids: localModels().map((m) => m.id), currency: ELECTRICITY.currency, perDollar: ELECTRICITY.perDollar, pricePerKWh: ELECTRICITY.pricePerKWh },
   };
 }

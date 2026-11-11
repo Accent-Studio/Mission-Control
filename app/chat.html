@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="redline.css">
 <link rel="stylesheet" href="md.css">
 <style>
-.wrap{grid-column:1/-1;display:grid;grid-template-columns:300px minmax(0,1fr) 300px;gap:22px;height:calc(100vh - 150px);min-height:640px}
+.wrap{grid-column:1/-1;display:grid;grid-template-columns:300px minmax(0,1fr) 390px;gap:22px;height:calc(100vh - 150px);min-height:640px}
 .lcol{display:flex;flex-direction:column;gap:18px;min-height:0;min-width:0}
 .lcol > .fr{flex:none}
 .lcol > .eyecol{flex:1 1 auto;min-height:0;overflow:hidden}
@@ -113,6 +113,14 @@
 .ttl select{background:#0f0f12;color:var(--white);border:1px solid var(--line-2);font:600 12px var(--sans);padding:3px 6px;max-width:150px}
 .ctx[hidden]{display:none}
 .sesspanel{display:flex;flex-direction:column;overflow:hidden}
+/* one tab per computer, and one for the plain chats: the open tab is white with a bar under it (a shape, not only a color) */
+.stabs{display:flex;gap:2px;padding:0 18px;flex:none;border-bottom:1px solid var(--line-3)}
+.stabs button{display:inline-flex;align-items:center;gap:7px;min-width:0;background:transparent;border:0;border-bottom:2px solid transparent;color:var(--w3);font:600 12px var(--sans);letter-spacing:.03em;padding:8px 10px 7px;margin-bottom:-1px;cursor:pointer}
+.stabs button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stabs button svg{width:14px;height:14px;flex:none}
+.stabs button:hover{color:var(--white)}
+.stabs button.on{color:var(--white);border-bottom-color:var(--white)}
+.stabs button:focus-visible{outline:1px solid var(--line-2);outline-offset:-2px}
 .thread .ttl h3{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto}
 .thread .ttl .id{white-space:nowrap;flex:none}
 @media (max-width:1100px){.wrap{grid-template-columns:1fr;height:auto}.msgs{max-height:none}}
@@ -168,6 +176,10 @@
 .kask .act{padding:3px 10px;font-size:11.5px}
 /* the At 5 min left pill in the list: orange outline and a flame, plus the word, so it is not color alone */
 .c-warm{color:#e8a050;border:1px solid rgba(224,138,44,.55);padding:0 6px;font-size:10.5px}
+/* a conversation whose cache runs out within 5 min with nothing planned pulses amber, and its chip says so */
+.sess.cache-end{animation:cachePulse 1.6s ease-in-out infinite;box-shadow:inset 3px 0 0 #f0a043;padding-left:9px}
+@keyframes cachePulse{0%,100%{background:rgba(240,160,67,.04)}50%{background:rgba(240,160,67,.2)}}
+@media (prefers-reduced-motion:reduce){.sess.cache-end{animation:none;background:rgba(240,160,67,.14)}}
 .sess .lockm{color:var(--white)}
 /* a locked conversation: one bar instead of the message box and its options */
 .lockbar{display:flex;align-items:center;gap:10px;border:1px solid var(--line-2);background:rgba(0,0,0,.18);padding:9px 12px;font:600 12.5px var(--sans);color:var(--w2)}
@@ -321,6 +333,20 @@ button:focus-visible,textarea:focus-visible,.sess:focus-visible,.runrow:focus-vi
 .dkl .tm:not(:empty)::before{content:" // ";white-space:pre}
 .elnote{border-left:3px solid var(--red);padding:6px 0 6px 10px;margin-bottom:8px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}
 .elnote[hidden]{display:none}
+.hubband{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;border:1px solid var(--line-2);padding:8px 10px;margin-bottom:8px;font:12px/1.45 var(--sans);color:var(--w2)}
+.hubband b{font:700 11px var(--mono);letter-spacing:.12em;color:var(--white)}
+.hubband span{flex:1 1 200px;min-width:0}
+.hubband .hbpc{flex:none;display:inline-flex;align-items:center;gap:8px}
+/* another PC's code conversation: where it runs, the question before a message waits for it, and the messages waiting */
+.waitbar{border-left:3px solid #4a8fe0;padding:6px 0 6px 10px;margin-bottom:8px;display:flex;flex-direction:column;gap:6px}
+.waitbar[hidden]{display:none}
+.waitbar .wt{font:600 12px/1.45 var(--sans);color:var(--white)}
+.waitbar .wq{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}
+.waitbar .wq span{font:600 12px/1.45 var(--sans);color:var(--white);flex:1 1 260px;min-width:0}
+.waitbar .wq .elb{display:flex;gap:8px;flex:none}
+.waitbar .drow{border-left-color:#e08a2c}
+.waitbar .drow.ok{border-left-color:#2f7d3a}
+.waitbar .drow.ok .dw{color:var(--w2)}
 .elnote span{font:600 12px/1.45 var(--sans);color:var(--white);flex:1 1 260px;min-width:0}
 .elnote .elb{display:flex;gap:8px;flex:none}
 .ttl .stags{flex:0 1 auto;flex-wrap:nowrap;overflow:hidden}
@@ -430,7 +456,9 @@ button:focus-visible,textarea:focus-visible,.sess:focus-visible,.runrow:focus-vi
 .qopt .qlab{display:flex;flex-direction:column;gap:2px;min-width:0}
 .qopt .qlab b{font-weight:600;font-size:13.5px}
 .qopt .qlab small{font-size:12px;color:var(--w2);line-height:1.4}
-.qother{display:block;width:100%;margin-top:6px;padding:7px 11px;color:var(--white);font:400 13px var(--sans)}
+.qother{display:block;width:100%;margin-top:6px;padding:7px 11px;color:var(--white);font:400 13px var(--sans);line-height:1.4;resize:none;overflow-y:hidden;box-sizing:border-box}
+.qkept{margin-top:10px;padding-top:8px;border-top:1px solid var(--line, rgba(255,255,255,.12))}
+.qkept pre{white-space:pre-wrap;font:400 13px var(--sans);margin:6px 0}
 .perm.ask .qans{margin-top:4px;font-size:13.5px;color:var(--white);padding-left:10px;border-left:2px solid var(--field-line)}
 .perm.ask.fin .pq .pw{margin-left:10px}
 .pw{display:inline-block;font:600 11.5px var(--sans);padding:1px 8px;margin-left:8px;white-space:nowrap;vertical-align:1px}
@@ -472,12 +500,6 @@ button:focus-visible,textarea:focus-visible,.sess:focus-visible,.runrow:focus-vi
   .eyecol canvas[data-eye]{height:0;flex:1 1 0}
   .wrap[data-ptab=conv],.wrap[data-ptab=sess]{margin:-8px -14px 0;height:calc(100dvh - var(--railh) - 60px - env(safe-area-inset-bottom))}
   .wrap[data-ptab=conv] .composer{padding:0}
-  /* pull to refresh: the room the content moved by, and the spinner in it while it loads */
-  .pullgap{flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
-  .pullgap[hidden]{display:none}
-  .pullspin{display:none;width:22px;height:22px;border-radius:50%;border:3px solid rgba(226,233,240,.14);border-top-color:var(--red);animation:pullspin .8s linear infinite}
-  .pullgap.on .pullspin{display:block}
-  @keyframes pullspin{to{transform:rotate(360deg)}}
   .wrap[data-ptab=conv] .msgs,.wrap[data-ptab=sess] .sesspanel .body{overscroll-behavior-y:contain}
   /* the keyboard is open: no tab bar, its room goes to the conversation and the box */
   html.kb .ctabs{display:none}
@@ -531,7 +553,7 @@ button:focus-visible,textarea:focus-visible,.sess:focus-visible,.runrow:focus-vi
           <div class="body" id="usageBody"><div class="empty">Loading usage...</div></div>
         </section>
         <section class="fr cachep" id="cachep" aria-label="Cache and context">
-          <div class="body" id="cacheBody"><div id="kCache"></div><div class="kl kw" id="expRow" hidden title="Sent once, 5 min before the cache runs out (1 min for a 5 min cache). Handoff: Claude writes what is half done, the gaps, what to do next, and a prompt to continue in a new conversation. Compact: sums up the conversation while the cache is still warm. Then it is back to None."><label for="expSel">At 5 min left</label><select id="expSel"><option value="none">None</option><option value="handoff">Handoff</option><option value="compact">Compact</option></select><span class="kwn" id="expWhat"></span></div><div id="kCtx"></div></div>
+          <div class="body" id="cacheBody"><div id="kCache"></div><div class="kl kw" id="expRow" hidden title="Sent 5 min before the cache runs out (1 min for a 5 min cache). Compact, the default: sums up the conversation while the cache is still warm, every time. Handoff: Claude writes what is half done, the gaps, what to do next, and a prompt to continue in a new conversation, once, then it is back to Compact. None: the cache runs out, and the conversation pulses in the list just before."><label for="expSel">At 5 min left</label><select id="expSel"><option value="none">None</option><option value="handoff">Handoff</option><option value="compact">Compact</option></select><span class="kwn" id="expWhat"></span></div><div id="kCtx"></div></div>
         </section>
       </div>
 
@@ -543,6 +565,7 @@ button:focus-visible,textarea:focus-visible,.sess:focus-visible,.runrow:focus-vi
           <div class="vlive" id="voiceLive" role="status" hidden></div>
           <div class="elnote" id="elNote" role="alert" hidden><span>Open in Claude Desktop. Close it there first, or the conversation splits in two.</span><div class="elb"><button type="button" class="act red" id="elSend">Send anyway</button><button type="button" class="act" id="elCancel">Cancel</button></div></div>
           <div class="dlist" id="dList" aria-label="Messages waiting to be sent" hidden></div>
+          <div class="waitbar" id="waitBar" role="status" hidden></div>
           <div class="lockbar" id="lockBar" hidden><span class="lk"></span><span>Locked. This conversation is read only.</span><button type="button" class="act" id="unlockBtn">Unlock</button></div>
           <div class="talkbox"><div class="attrow" id="attRow" aria-label="Attached files"></div><div class="tbwrap"><textarea rows="1" id="prompt" class="md-in" placeholder="Start a new conversation"></textarea></div><div class="tbbar"><span class="tbtools"><button type="button" class="clipbtn" id="clipBtn" aria-label="Attach files" title="Attach files, or drop them here, or paste a picture"></button><input type="file" id="fileIn" multiple hidden><button type="button" class="tallbtn" id="tallBtn" aria-pressed="false" aria-label="Taller message box" title="Taller message box"></button></span><span class="tbsend"><button type="button" class="timebtn" id="timeBtn" aria-label="Send later" aria-haspopup="dialog" aria-expanded="false" aria-controls="dPop" title="Send later"></button><button type="button" aria-label="Send" id="sendBtn" class="sendbtn">Send</button></span></div></div>
           <div class="dpop" id="dPop" role="dialog" aria-label="Send later" hidden></div>
@@ -556,6 +579,7 @@ button:focus-visible,textarea:focus-visible,.sess:focus-visible,.runrow:focus-vi
       <div class="side">
         <section class="fr sesspanel" aria-label="Sessions" style="flex:1">
           <div class="ttl"><h3>Sessions</h3><span class="right"><select id="pfilter" aria-label="Filter by project"><option value="">All projects</option></select></span></div>
+          <div class="stabs" id="stabs" role="tablist" aria-label="Which conversations"></div>
           <div class="body" style="padding-top:4px;overflow-y:auto;min-height:0"><div id="runs"></div><button class="act red newbtn" id="newBtn">New conversation</button><div id="sess"></div></div>
         </section>
         <section class="fr ctx" id="lastrun" aria-label="Last run" >
@@ -623,6 +647,8 @@ MC.init('chat');
     clock: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 4.2V8L10.6 9.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
     lock: '<svg viewBox="0 0 12 12"><rect x="2" y="5.2" width="8" height="5.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3.9 5.2V3.6a2.1 2.1 0 0 1 4.2 0V5.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>',
     unlock: '<svg viewBox="0 0 12 12"><rect x="2" y="5.2" width="8" height="5.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3.9 5.2V3.6a2.1 2.1 0 0 1 4.1-.6" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>',
+    pc: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 14H10.5M8 11V14" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>',
+    chat: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2.5H14V11H6.5L3.5 13.8V11H2Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M5 6.8H11" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>',
     warm: '<svg viewBox="0 0 10 10"><path d="M5 1C5.6 3 7.8 3.8 7.8 6.2A2.8 2.8 0 0 1 2.2 6.2C2.2 4.9 3 4.2 3.6 3.6C3.7 4.6 4.2 5 4.6 5C4.3 3.6 4.6 2.2 5 1Z" fill="currentColor"/></svg>'
   };
   /* the lock in a list row and the conversation header: a shape, not a color, so it reads in grayscale */
@@ -634,10 +660,17 @@ MC.init('chat');
   var LS_KEY = 'mc.chat.opts';
   function readPrefs() { try { var p = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); return p && typeof p === 'object' ? p : {}; } catch (e) { return {}; } }
   function writePrefs(p) { try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch (e) {} }
+  /* the list's open tab: 'code' (this computer's code conversations), 'chat' (plain chats) or 'm:<id>' (another PC's code
+     conversations, read only, from the hub), remembered in this browser */
+  var TAB_KEY = 'mc-sess-tab';
+  function readTab() { try { var v = localStorage.getItem(TAB_KEY) || ''; return v === 'chat' || /^m:/.test(v) ? v : 'code'; } catch (e) { return 'code'; } }
+  function machineOfTab(t) { return /^m:/.test(t || '') ? t.slice(2) : null; }
 
   var st = {
     projects: [], sessions: [], runs: [], filter: '',
+    tab: readTab(), kinds: {}, sessTok: 0, // kinds: sessionId -> 'chat' | 'code' for a conversation that is not in the list
     archived: [], archivedCount: 0, showArchived: false, // archived conversations: hidden until "Show archived" is clicked
+    sessLimit: 50, sessMore: false, // how many conversations the list shows (Show more adds 50), and whether there are more
     sel: null,            // selected session id, or null for a new conversation
     pages: null, pa: 0, pb: 0, cursor: null, hasMore: false, olderBusy: false, olderErr: false, chain: 0, edgeQ: false, // pages: null while loading, else oldest first
     loadErr: null, loading: false, token: 0,
@@ -671,11 +704,20 @@ MC.init('chat');
 
   function projName(id) { var p = st.projects.filter(function (x) { return x.id === id; })[0]; return p ? p.name : null; }
   function sessProject(s) {
+    if (s && s.kind === 'chat') return 'Chat';
+    if (s && s.readOnly) return s.projectName || 'No project'; /* another PC's project, by the name it has there */
     var pid = s.project && typeof s.project === 'object' ? s.project.id : s.project;
     return (pid && projName(pid)) || (s.project && s.project.name) || base(s.cwd) || 'Unknown';
   }
   /* st.extra holds the open conversation when it is in neither list (an archived one that is hidden) */
   function byId(id) { return (st.sessions || []).concat(st.archived || []).filter(function (x) { return x.id === id; })[0] || (st.extra && st.extra[id]) || null; }
+  /* A plain chat has no project and no file tools (server/lib/chats.js). A new one has a draft key that starts with c-. */
+  function newIsChat() { return /^c-/.test(st.newKey || ''); }
+  function openKind() {
+    if (!st.sel) return newIsChat() ? 'chat' : 'code';
+    var s = byId(st.sel), k = (s && s.kind) || st.kinds[st.sel];
+    return k === 'chat' ? 'chat' : 'code';
+  }
   /* a relative path in Claude's text opens from the open conversation's folder (redline.js MC.openPath) */
   MC.pathBase = function () { var s = st.sel ? byId(st.sel) : null; return (s && s.cwd) || ''; };
 
@@ -684,35 +726,39 @@ MC.init('chat');
   function optList(listKey) { return st.opts && Array.isArray(st.opts[listKey]) ? st.opts[listKey].filter(function (o) { return o && o.id != null; }) : []; }
   function optValue(key, listKey) {
     var list = optList(listKey); if (!list.length) return '';
-    var want = st.prefs[key];
-    return list.some(function (o) { return String(o.id) === String(want); }) ? String(want) : String(list[0].id);
+    var has = function (v) { return v != null && list.some(function (o) { return String(o.id) === String(v); }); };
+    /* nothing remembered: the server's default (Opus 5.5 for the model), else the first on the list */
+    var dflt = st.opts && st.opts.defaults ? st.opts.defaults[key] : null;
+    return has(st.prefs[key]) ? String(st.prefs[key]) : has(dflt) ? String(dflt) : String(list[0].id);
   }
-  /* Model for an existing conversation: its own model is preselected (exact id match), otherwise "Default", which keeps the
-     session's model. The remembered choice (prefs) only applies to new conversations. */
-  function hasDefaultModel() { return optList('models').some(function (o) { return String(o.id) === 'default'; }); }
-  function defaultModelId() { return hasDefaultModel() ? 'default' : ''; }
+  /* Model for an existing conversation: its own model, the one its transcript last answered with. One the list no longer
+     offers gets an option of its own (optsHtml). The remembered choice (prefs) only applies to new conversations. */
   function ownModelRaw(id) { var s = st.stats[id], m = byId(id); return (s && typeof s.model === 'string' && s.model) || (m && typeof m.model === 'string' && m.model) || ''; }
-  function ownModel(id) {
-    var raw = ownModelRaw(id);
-    return raw && optList('models').some(function (o) { return String(o.id) === raw; }) ? raw : defaultModelId();
+  function ownModel(id) { return ownModelRaw(id) || optValue('model', 'models'); }
+  /* "claude-opus-4-6" reads "Opus 4.6" */
+  function modelName(id) {
+    var m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?(\[1m\])?$/.exec(id || '');
+    return m ? m[1][0].toUpperCase() + m[1].slice(1) + ' ' + m[2] + (m[3] ? '.' + m[3] : '') + (m[4] ? ' 1M' : '') : id;
   }
   function modelValue() {
     if (st.sel) { var p = st.pick[st.sel]; return p !== undefined ? p : ownModel(st.sel); }
     return optValue('model', 'models');
   }
-  /* A real model switch: the user picked something other than the conversation's own model or Default. */
+  /* A real model switch: the user picked something other than the conversation's own model. */
   function switchingModel() {
     if (!st.sel) return false;
     var p = st.pick[st.sel];
-    return p !== undefined && p !== '' && p !== defaultModelId() && p !== ownModel(st.sel);
+    return p !== undefined && p !== '' && p !== ownModel(st.sel);
   }
   function renderModelNote() { $('modelNote').hidden = !switchingModel(); }
+  function optKeys() { return openKind() === 'chat' ? OPT_KEYS.filter(function (k) { return k[0] !== 'mode'; }) : OPT_KEYS; }
   function optsHtml() {
-    return OPT_KEYS.map(function (k) {
+    return optKeys().map(function (k) {
       var list = optList(k[1]);
       var tip = st.opts ? '' : (st.optErr ? 'Could not load the options from the server' : 'Loading options');
-      var inner = list.length ? list.map(function (o) { return '<option value="' + esc(o.id) + '">' + esc(o.label || o.id) + '</option>'; }).join('') : '<option value="">Default</option>';
-      if (list.length && k[0] === 'model' && st.sel && !hasDefaultModel()) inner = '<option value="">Default</option>' + inner;
+      var inner = list.length ? list.map(function (o) { return '<option value="' + esc(o.id) + '">' + esc(o.label || o.id) + '</option>'; }).join('') : '<option value="">Loading</option>';
+      var own = list.length && k[0] === 'model' && st.sel ? ownModelRaw(st.sel) : '';
+      if (own && !list.some(function (o) { return String(o.id) === own; })) inner = '<option value="' + esc(own) + '">' + esc(modelName(own)) + '</option>' + inner;
       return '<span class="opt"><span>' + k[2] + '</span><select id="sel_' + k[0] + '" data-opt="' + k[0] + '" aria-label="' + k[2].toLowerCase() + '"' + (list.length ? '' : ' disabled title="' + esc(tip) + '"') + '>' + inner + '</select></span>';
     }).join('');
   }
@@ -723,7 +769,7 @@ MC.init('chat');
   async function loadOptions() {
     try { var o = await MC.api.get('/api/chat/options'); st.opts = o && typeof o === 'object' ? o : null; st.optErr = !st.opts; }
     catch (e) { st.opts = null; st.optErr = true; }
-    renderComposer();
+    renderComposer(); renderTabs(); /* the tab names this computer */
   }
 
   /* ---------- sessions list ---------- */
@@ -735,9 +781,9 @@ MC.init('chat');
     return has(st.sessions) || has(st.archived) || !!(st.extra && st.extra[sid]);
   }
   function renderRuns() {
-    var running = st.runs.filter(runLive).filter(function (r) { return !inList(r.sessionId); });
+    var running = st.runs.filter(runLive).filter(function (r) { return !inList(r.sessionId) && (r.chat ? 'chat' : 'code') === st.tab; });
     $('runs').innerHTML = running.length ? '<div class="rlbl">RUNNING NOW</div>' + running.map(function (r) {
-      var pn = r.projectId ? projName(r.projectId) : 'No project';
+      var pn = r.chat ? 'Chat' : r.projectId ? projName(r.projectId) : 'No project';
       return '<div class="runrow" data-run="' + esc(r.runId) + '"><b>' + esc(r.promptPreview || 'Run') + '</b>' + MC.chip('live', 'Running') + '<small>' + esc(pn) + ' // started ' + esc(ago(r.startedAt)) + '</small></div>';
     }).join('') : '';
   }
@@ -766,10 +812,11 @@ MC.init('chat');
     var editing = st.editing && st.editing.where === 'row' && st.editing.id === s.id;
     var title = editing ? '<input class="ren" maxlength="120" value="' + esc(s.title || '') + '" aria-label="Conversation title" placeholder="Empty uses Claude\'s title">' : '<b title="' + esc(titleTip(s) + (s.locked ? ' (locked, read only)' : '')) + '">' + (s.pinned ? ICON.pin : '') + (s.locked ? ICON.lockMark : '') + esc(s.title || 'Untitled') + '</b>';
     var extra = (s.titleSource === 'mc' ? ' // renamed' : '') + (s.archived ? ' // archived' : '');
-    return '<div class="sess ' + (s.id === st.sel ? 'on' : '') + '" data-id="' + esc(s.id) + '" tabindex="0"' + (s.id === st.sel ? ' aria-current="true"' : '') + (editing ? '' : ' draggable="true"') + ' data-pin="' + (s.pinned ? 1 : 0) + '">' + title + (live ? MC.chip('live', 'Running') : '') + expChip(s) + (s.elsewhere
+    var ending = cacheEndingSoon(s.id);
+    return '<div class="sess ' + (s.id === st.sel ? 'on' : '') + (ending ? ' cache-end' : '') + '" data-id="' + esc(s.id) + '" tabindex="0"' + (s.id === st.sel ? ' aria-current="true"' : '') + (editing ? '' : ' draggable="true"') + ' data-pin="' + (s.pinned ? 1 : 0) + '">' + title + (live ? MC.chip('live', 'Running') : '') + (ending ? endChip(s.id) : expChip(s)) + (s.elsewhere
       ? '<small class="dkl"><span class="dk">' + esc(s.elsewhere) + '</span><span class="pn">' + esc(sessProject(s)) + '</span><span class="tm">' + (ago(s.lastAt) ? esc(ago(s.lastAt)) : '') + esc(extra) + '</span></small>'
       : '<small>' + esc(sessProject(s)) + (ago(s.lastAt) ? ' // ' + esc(ago(s.lastAt)) : '') + esc(extra) + '</small>') + '<div class="stags">' + tagChips(s, sessProject(s)) + '</div>' +
-      '<button class="dots" type="button" data-menu="' + esc(s.id) + '" aria-label="Menu for ' + esc(s.title || 'this conversation') + '" aria-haspopup="menu">' + ICON.dots + '</button></div>';
+      (s.readOnly ? '' : '<button class="dots" type="button" data-menu="' + esc(s.id) + '" aria-label="Menu for ' + esc(s.title || 'this conversation') + '" aria-haspopup="menu">' + ICON.dots + '</button>') + '</div>';
   }
   /* ---------- new conversations not sent yet: one row each above the list, from the server, so every device sees them ---------- */
   st.newDrafts = [];
@@ -784,7 +831,7 @@ MC.init('chat');
     var title = d.preview || files || 'New conversation';
     return '<div class="sess draft' + (on ? ' on' : '') + '" data-draft="' + esc(d.key) + '" tabindex="0" role="button"' + (on ? ' aria-current="true"' : '') + '>' +
       '<b title="' + esc(d.preview || title) + '">' + esc(title) + '</b>' + MC.chip('idle', 'Draft') +
-      '<small>' + esc(d.project ? (projName(d.project) || d.project) : 'No project') + (files && d.preview ? ' // ' + esc(files) : '') + ' // ' + esc(ago(new Date(d.at).toISOString())) + '</small>' +
+      '<small>' + esc(/^c-/.test(d.key) ? 'Chat' : d.project ? (projName(d.project) || d.project) : 'No project') + (files && d.preview ? ' // ' + esc(files) : '') + ' // ' + esc(ago(new Date(d.at).toISOString())) + '</small>' +
       '<button class="dots" type="button" data-ddel="' + esc(d.key) + '" aria-label="Discard this draft" title="Discard this draft">' + ICON.x + '</button></div>';
   }
   /* the x on a draft row: the draft is emptied on the server (its row goes on every device); the box clears if it is open here */
@@ -793,22 +840,33 @@ MC.init('chat');
     unsent[k] = { text: '', atts: [], project: '' }; pushSoon(k, 0);
     st.newDrafts = st.newDrafts.filter(function (d) { return d.key !== k; }); renderSessions();
   }
+  /* on the hub: where you are, and whether each PC is on. A phone can go back to its PC from here. */
+  function hubBand() {
+    if (!MC.hub) return '';
+    var pcs = (st.machines || []).map(function (m) {
+      return '<span class="hbpc">' + MC.chip(m.online ? 'ok' : 'idle', esc(m.name) + (m.online ? ' is on' : ' is off')) +
+        (m.online && MC.remote ? ' <a class="act" href="http://tauri.localhost/#open=main">Open ' + esc(m.name) + '</a>' : '') + '</span>';
+    }).join('');
+    return '<div class="hubband"><b>HUB</b><span>Chats run here. Code conversations are read from your PCs; a message for one waits for its PC.</span>' + pcs + '</div>';
+  }
+  Promise.resolve(MC.whoami).then(function () { if (MC.hub) { if (st.tab === 'code') setSessTab('chat'); else { renderTabs(); renderSessions(); } } });
   function renderSessions(force) {
     var el = $('sess');
     if (st.editing && st.editing.where === 'row' && !force) { st.pendingRender = true; return; }
     st.pendingRender = false;
-    var note = st.notice ? '<div class="notice">' + esc(st.notice) + '</div>' : '';
+    var note = hubBand() + (st.notice ? '<div class="notice">' + esc(st.notice) + '</div>' : '');
     if (st.sessErr) { el.innerHTML = note + '<div class="empty">Server offline. Could not load sessions.</div>'; keepMenu(); return; }
     if (!st.sessions) { el.innerHTML = note + '<div class="empty">Loading sessions...</div>'; keepMenu(); return; }
     var runIds = st.runs.filter(function (r) { return runLive(r) && r.sessionId; }).map(function (r) { return r.sessionId; });
     var pinned = st.sessions.filter(function (s) { return s.pinned; }), rest = st.sessions.filter(function (s) { return !s.pinned; });
     var h = note;
-    var drafts = (st.newDrafts || []).filter(function (d) { return !st.filter || d.project === st.filter || (!st.sel && d.key === st.newKey); }); /* the open one always shows */
+    var drafts = (st.newDrafts || []).filter(function (d) { return (/^c-/.test(d.key) ? 'chat' : 'code') === st.tab && (st.tab === 'chat' || !st.filter || d.project === st.filter || (!st.sel && d.key === st.newKey)); }); /* the open one always shows */
     if (drafts.length) h += '<div class="rlbl" style="margin-top:4px">DRAFTS</div>' + drafts.map(draftRowHtml).join('') + '<div class="rlbl" style="margin-top:10px">CONVERSATIONS</div>';
-    if (!st.sessions.length) h += '<div class="empty">' + (st.archivedCount ? 'No sessions to show.' : 'No sessions yet.') + '</div>';
+    if (!st.sessions.length) h += '<div class="empty">' + (st.tab === 'chat' ? (st.archivedCount ? 'No chats to show.' : 'No chats yet. Press New chat to talk to Claude without a project.') : st.archivedCount ? 'No sessions to show.' : 'No sessions yet.') + '</div>';
     if (pinned.length) h += '<div class="rlbl" style="margin-top:4px">PINNED</div>' + pinned.map(function (s) { return rowHtml(s, runIds); }).join('');
     if (pinned.length && rest.length) h += '<div class="rlbl" style="margin-top:10px">OTHERS</div>';
     h += rest.map(function (s) { return rowHtml(s, runIds); }).join('');
+    if (st.sessMore) h += '<button type="button" class="archtog" data-sessmore>Show more</button>'; /* older conversations, 50 at a time */
     /* one quiet line at the end of the list brings the archived conversations back, and takes them away again */
     if (st.archivedCount || st.showArchived) {
       h += '<button type="button" class="archtog" data-archtoggle aria-expanded="' + (st.showArchived ? 'true' : 'false') + '">' + (st.showArchived ? 'Hide archived' : 'Show archived (' + st.archivedCount + ')') + '</button>';
@@ -827,17 +885,57 @@ MC.init('chat');
     clearTimeout(st.noticeT);
     if (msg) st.noticeT = setTimeout(function () { st.notice = ''; renderSessions(); }, 6000);
   }
+  /* the tabs above the list: this computer's code conversations, each other PC's (read only, from the hub), and the plain chats */
+  function renderTabs() {
+    var name = (st.opts && st.opts.machine) || 'This PC';
+    /* the hub has no projects, and its Claude must not get file tools on that server: chats, and the PCs' conversations to read */
+    var tabs = MC.hub ? [] : [['code', ICON.pc, name, 'Code conversations on ' + name]];
+    if (MC.hub && st.tab === 'code') st.tab = 'chat';
+    (st.machines || []).forEach(function (m) {
+      tabs.push(['m:' + m.id, ICON.pc, m.online ? m.name : m.name + ' (off)', 'Code conversations on ' + m.name + ', read only' + (m.online ? '' : '. ' + m.name + ' is off: this is the last copy it sent')]);
+    });
+    if (machineOfTab(st.tab) && !(st.machines || []).some(function (m) { return 'm:' + m.id === st.tab; }) && st.machinesLoaded) { st.tab = MC.hub ? 'chat' : 'code'; }
+    tabs.push(['chat', ICON.chat, 'Chats', 'Plain chats with Claude: no project, no files, web search only']);
+    $('stabs').innerHTML = tabs.map(function (t) {
+      var on = st.tab === t[0];
+      return '<button type="button" role="tab" data-stab="' + t[0] + '" aria-selected="' + on + '"' + (on ? ' class="on"' : '') + ' title="' + esc(t[3]) + '">' + t[1] + '<span>' + esc(t[2]) + '</span></button>';
+    }).join('');
+    $('pfilter').style.display = st.tab === 'code' ? '' : 'none'; /* chats have no project, and another PC's list is short */
+    $('newBtn').textContent = st.tab === 'chat' ? 'New chat' : 'New conversation';
+    $('newBtn').style.display = machineOfTab(st.tab) ? 'none' : ''; /* a new conversation starts here, never on the other PC */
+  }
+  function setSessTab(k) {
+    k = k === 'chat' || machineOfTab(k) ? k : 'code';
+    if (st.tab === k) return;
+    st.tab = k; try { localStorage.setItem(TAB_KEY, k); } catch (e) {}
+    st.sessions = null; st.archived = []; st.archivedCount = 0; st.showArchived = false; st.sessLimit = 50;
+    renderTabs(); renderSessions(); renderRuns(); loadSessions();
+  }
   async function loadSessions() {
+    var tok = ++st.sessTok, tab = st.tab;
+    if (machineOfTab(tab)) {
+      try {
+        var rl = (await MC.api.get('/api/sessions?limit=' + (st.sessLimit + 1) + '&machine=' + encodeURIComponent(machineOfTab(tab)))) || [];
+        if (tok !== st.sessTok) return;
+        st.sessMore = rl.length > st.sessLimit;
+        st.sessions = rl.slice(0, st.sessLimit); st.sessErr = false; st.archivedCount = 0; st.archived = []; st.showArchived = false;
+      } catch (e) { st.sessErr = true; }
+      renderSessions(); renderHeader(); renderRuns(); renderComposer();
+      return;
+    }
     try {
-      var pf = st.filter ? '&project=' + encodeURIComponent(st.filter) : '';
-      var list = await MC.api.get('/api/sessions?limit=50&archived=hide' + pf);
+      var pf = (st.filter && tab !== 'chat' ? '&project=' + encodeURIComponent(st.filter) : '') + '&kind=' + tab;
+      var list = await MC.api.get('/api/sessions?limit=' + (st.sessLimit + 1) + '&archived=hide' + pf); /* one more than shown: is there more? */
+      if (tok !== st.sessTok) return; /* the tab changed meanwhile: a newer load is on its way */
       list = (list || []).slice();
+      st.sessMore = list.length > st.sessLimit;
+      list = list.slice(0, st.sessLimit);
       /* The server sorts pinned first and then by the saved order. An older server sends neither, so sort by last activity. */
       if (!list.some(function (s) { return s.pinned != null || s.order != null; })) list.sort(function (a, b) { return String(b.lastAt).localeCompare(String(a.lastAt)); });
       st.sessions = list;
       st.sessErr = false;
       try {
-        var ac = await MC.api.get('/api/sessions/archived-count' + (st.filter ? '?project=' + encodeURIComponent(st.filter) : ''));
+        var ac = await MC.api.get('/api/sessions/archived-count?kind=' + tab + (st.filter && tab !== 'chat' ? '&project=' + encodeURIComponent(st.filter) : ''));
         st.archivedCount = ac && isNum(ac.count) ? ac.count : 0;
         st.archived = st.showArchived && st.archivedCount ? ((await MC.api.get('/api/sessions?limit=200&archived=only' + pf)) || []) : [];
       } catch (e) { st.archivedCount = 0; st.archived = []; } /* an older server has no archive: nothing is hidden */
@@ -1130,7 +1228,7 @@ MC.init('chat');
         return '<button type="button" class="qopt' + (on ? ' on' : '') + '" data-qopt="' + qi + ':' + oi + '" aria-pressed="' + on + '"' + (it.busy ? ' disabled' : '') + '><span class="qmark" aria-hidden="true">' + (q.multiSelect ? (on ? '&#9632;' : '&#9633;') : (on ? '&#9679;' : '&#9675;')) + '</span><span class="qlab"><b>' + esc(o.label) + '</b>' + (o.description ? '<small>' + esc(o.description) + '</small>' : '') + '</span></button>';
       }).join('');
       return '<div class="qq" role="group" aria-label="' + esc(q.question) + '">' + head + '<div class="qopts">' + opts + '</div>' +
-        '<input class="in qother" data-qother="' + qi + '" maxlength="2000" placeholder="Other: write your own answer" value="' + esc((it.other && it.other[qi]) || '') + '"' + (it.busy ? ' disabled' : '') + '></div>';
+        '<textarea class="in qother" data-qother="' + qi + '" rows="1" maxlength="20000" placeholder="Other: write your own answer"' + (it.busy ? ' disabled' : '') + '>' + esc((it.other && it.other[qi]) || '') + '</textarea></div>';
     }).join('');
     if (it.state === 'pending') {
       return '<div class="perm ask" role="group" aria-label="Claude asks" ' + a + '><div class="pq"><span class="pk">Claude asks</span></div>' + qs + '<div class="pb">' +
@@ -1139,8 +1237,35 @@ MC.init('chat');
         (it.err ? '<div class="pe">' + esc(it.err) + '</div>' : '') + '</div>';
     }
     var word = it.state === 'allowed' ? '<span class="pw ok">Answered</span>' : it.state === 'denied' ? '<span class="pw no">Skipped</span>' : '<span class="pw cl">Closed</span>';
-    return '<div class="perm ask fin" ' + a + '><div class="pq"><span class="pk">Claude asked</span>' + word + '</div>' + qs + (it.note ? '<div class="pnote">' + esc(String(it.note).slice(0, 200)) + '</div>' : '') + '</div>';
+    /* closed before an answer went: what was picked and typed stays, to copy or send as a message */
+    var kept = it.state !== 'allowed' && !it.keptDone && qdHasText(it) ? '<div class="qkept"><div class="pnote">What you wrote was not sent:</div><pre>' + esc(keptText(it)) + '</pre><div class="pb"><button type="button" class="act red" data-qk="send">Send as a message</button><button type="button" class="act" data-qk="copy">Copy</button><button type="button" class="act" data-qk="drop">Dismiss</button></div></div>' : '';
+    return '<div class="perm ask fin" ' + a + '><div class="pq"><span class="pk">Claude asked</span>' + word + '</div>' + qs + (it.note ? '<div class="pnote">' + esc(String(it.note).slice(0, 200)) + '</div>' : '') + kept + '</div>';
   }
+  /* answers being written: kept in this browser on every keystroke (the same store as Mission Control 2), and the server hears
+     of the typing now and then, so the question's countdown starts again */
+  var QD_KEY = 'mc.askDrafts', QD_KEEP = 30 * 864e5, QT = {};
+  function qdAll() { var o; try { o = JSON.parse(localStorage.getItem(QD_KEY) || '{}'); } catch (e) { o = {}; } return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; }
+  function qdWrite(o) { try { localStorage.setItem(QD_KEY, JSON.stringify(o)); } catch (e) {} }
+  function qdHasText(it) { return !!it.questions && it.questions.some(function (q, qi) { return askAnswered(it, q, qi).length > 0; }); }
+  function qdSave(r, it) {
+    var o = qdAll(), now = Date.now();
+    Object.keys(o).forEach(function (k) { if (!(now - (o[k].at || 0) < QD_KEEP)) delete o[k]; });
+    if (!qdHasText(it)) delete o[it.requestId];
+    else o[it.requestId] = { at: now, runId: r.runId, sid: r.sessionId || r.key || '', questions: it.questions.map(function (q) { return q.question; }), other: it.other, pick: it.pick, closed: it.state !== 'pending', note: it.note || '' };
+    qdWrite(o);
+  }
+  function qdDrop(rid) { var o = qdAll(); if (o[rid]) { delete o[rid]; qdWrite(o); } }
+  function keptText(it) { return it.questions.map(function (q, qi) { var a = askAnswered(it, q, qi); return a.length ? q.question + '\n' + a.join(', ') : ''; }).filter(Boolean).join('\n\n'); }
+  function typingSoon(r, it) {
+    var t = QT[it.requestId] || (QT[it.requestId] = { timer: 0, last: 0 });
+    clearTimeout(t.timer);
+    t.timer = setTimeout(function () {
+      t.last = Date.now(); if (it.state !== 'pending') return;
+      var draft = {}; it.questions.forEach(function (q, qi) { var v = String((it.other && it.other[qi]) || ''); if (v) draft[q.question] = v.slice(0, 20000); });
+      MC.api.post('/api/runs/' + encodeURIComponent(r.runId) + '/permission/typing', { requestId: it.requestId, draft: draft }).catch(function () {});
+    }, Date.now() - t.last > 20000 ? 300 : 1500);
+  }
+  function fitQ(root) { root.querySelectorAll('textarea.qother').forEach(function (t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 2, 420) + 'px'; t.style.overflowY = t.scrollHeight > 420 ? 'auto' : 'hidden'; }); }
   function permHtml(it, runId) {
     if (it.questions && it.questions.length) return askHtml(it, runId);
     var head = '<div class="pq"><span class="pk">Claude wants to run:</span> <b>' + esc(it.tool) + '</b>' + (it.summary ? ' <code title="' + esc(it.summary) + '">' + esc(it.summary.slice(0, 400)) + '</code>' : '') + '</div>';
@@ -1222,10 +1347,10 @@ MC.init('chat');
       else if (!totalMsgs() && !recShows(rec)) h += '<div class="empty">This session has no messages to show.</div>';
       else h += st.pages.slice(st.pa, st.pb).map(chunkHtml).join('');
     } else if (!recShows(rec)) {
-      h += '<div class="empty">New conversation. Pick a project below (or none), then type a message. Or choose a session on the right to continue it.</div>';
+      h += '<div class="empty">' + (newIsChat() ? 'New chat. Type a message to talk to Claude, like on claude.ai. No project and no files here; Claude can search the web.' : 'New conversation. Pick a project below (or none), then type a message. Or choose a session on the right to continue it.') + '</div>';
     }
     $('hist').innerHTML = h;
-    $('liveBox').innerHTML = rec ? liveHtml(rec) : '';
+    $('liveBox').innerHTML = rec ? liveHtml(rec) : ''; fitQ($('liveBox'));
     renderEdges();
     if (near || recShows(rec)) box.scrollTop = box.scrollHeight;
     renderHeader(); renderComposer(); renderLastRun(); renderStrip();
@@ -1240,7 +1365,7 @@ MC.init('chat');
       var fc = fa.closest('[data-rid]'), fsel = fa.dataset.pact ? '[data-pact="' + fa.dataset.pact + '"]' : fa.dataset.qother != null ? '[data-qother="' + fa.dataset.qother + '"]' : fa.dataset.qopt ? '[data-qopt="' + fa.dataset.qopt + '"]' : null;
       if (fc && fsel) fk = [fc.dataset.rid, fsel, typeof fa.selectionStart === 'number' ? [fa.selectionStart, fa.selectionEnd] : null];
     }
-    $('liveBox').innerHTML = rec ? liveHtml(rec) : '';
+    $('liveBox').innerHTML = rec ? liveHtml(rec) : ''; fitQ($('liveBox'));
     if (fk) { var cards = $('liveBox').querySelectorAll('[data-rid]'); for (var ci = 0; ci < cards.length; ci++) if (cards[ci].dataset.rid === fk[0]) { var fb = cards[ci].querySelector(fk[1]); if (fb && !fb.disabled) { fb.focus(); if (fk[2]) try { fb.setSelectionRange(fk[2][0], fk[2][1]); } catch (e) {} } } }
     if (near) $('msgs').scrollTop = $('msgs').scrollHeight;
     renderHeader(); renderComposer();
@@ -1333,15 +1458,15 @@ MC.init('chat');
       if (!headEdit) $('thTitle').textContent = (s && s.title) || 'Session';
       $('thSub').textContent = s ? ('SESSION // ' + sessProject(s).toUpperCase()) : 'SESSION // ' + st.sel.slice(0, 8);
     } else {
-      if (!headEdit) $('thTitle').textContent = 'New conversation';
+      if (!headEdit) $('thTitle').textContent = newIsChat() ? 'New chat' : 'New conversation';
       var pid = $('newProj') ? $('newProj').value : '';
-      $('thSub').textContent = pid ? 'PROJECT // ' + (projName(pid) || pid).toUpperCase() : 'NO PROJECT';
+      $('thSub').textContent = newIsChat() ? 'CHAT' : pid ? 'PROJECT // ' + (projName(pid) || pid).toUpperCase() : 'NO PROJECT';
     }
     var tag = $('thTag');
     if (s && s.titleSource && !headEdit) { tag.hidden = false; var ut = userTitled(s); tag.textContent = ut ? 'Your title' : s.titleSource === 'prompt' ? 'First message' : 'Auto title'; tag.title = ut ? 'This conversation has a title that was set by you' : s.titleSource === 'prompt' ? 'No title yet, so the first message is shown. Rename it to set your own.' : 'Claude chose this title. Rename it to set your own.'; }
     if (!s && st.menu && st.menu.where === 'head') closeMenu();
     else tag.hidden = true;
-    $('thMenu').hidden = !s;
+    $('thMenu').hidden = !s; $('thMenu').style.display = s && s.readOnly ? 'none' : ''; /* another PC's conversation: nothing to change here */
     var tg = $('thTags'), tgh = s ? tagChips(s, '') : ''; if (tg.dataset.h !== tgh) { tg.dataset.h = tgh; tg.innerHTML = tgh; }
     var running = rec && isBusyState(rec.status);
     $('thChip').innerHTML = running ? MC.chip('live', 'Running') : '';
@@ -1357,20 +1482,29 @@ MC.init('chat');
     var running = rec && isBusyState(rec.status);
     renderStrip(); /* Compact waits while Claude works */
     /* a locked conversation: the message box and its options give way to one bar with Unlock (what was typed stays in the draft) */
-    var lk = !!(st.sel && isLocked(st.sel)), cmp = $('lockBar').parentNode;
+    var lk = !!(st.sel && isLocked(st.sel) && !remoteOf(st.sel)), cmp = $('lockBar').parentNode; /* another PC's conversation keeps its message box: a message waits for that PC */
+    renderWait();
     if (cmp.classList.contains('locked') !== lk) { cmp.classList.toggle('locked', lk); $('lockBar').hidden = !lk; if (lk) closeDpop(false); }
+    if (lk) { /* another PC's conversation says where it runs, and has nothing to unlock */
+      var ro = byId(st.sel), rm = ro && ro.readOnly ? ro.machine || {} : null;
+      $('lockBar').children[1].textContent = rm ? 'Read only. This conversation runs on ' + (rm.name || 'another PC') + '.' + (rm.online === false ? ' ' + (rm.name || 'It') + ' is off: this is the last copy it sent.' : '') : 'Locked. This conversation is read only.';
+      $('unlockBtn').style.display = rm ? 'none' : '';
+    }
     var row = $('crow');
     var keep = st.draftProject || ''; /* the open new conversation's project comes from its draft, not from the list as it was */
     var left;
+    var isChat = openKind() === 'chat';
     if (st.sel) {
       var s = byId(st.sel);
-      left = '<span>CONTINUING IN</span><b style="color:var(--white);font-weight:600">' + esc(s ? sessProject(s) : 'this session') + '</b>';
+      left = '<span>CONTINUING IN</span><b style="color:var(--white);font-weight:600">' + esc(isChat ? 'Chat' : s ? sessProject(s) : 'this session') + '</b>';
+    } else if (isChat) {
+      left = '<span>CHAT</span><b style="color:var(--white);font-weight:600" title="No project and no files. Claude can search the web and read web pages.">No project, web search only</b>';
     } else {
       left = '<span>PROJECT</span><select id="newProj"><option value="">No project</option>' + st.projects.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join('') + '</select>';
     }
     left += '<span style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap">' + optsHtml() + '</span>';
     var stop = running ? '<button class="stopbtn" id="stopBtn" type="button" aria-label="Stop Claude">&#9632; Stop</button>' : '';
-    var sig = (st.sel || '') + '|' + (running ? 1 : 0) + '|' + st.projects.length + '|' + (st.sessions ? st.sessions.length : -1) + '|' + (st.opts ? 1 : st.optErr ? 2 : 0) + '|' + (st.sel ? ownModel(st.sel) : '');
+    var sig = (st.sel || '') + '|' + (isChat ? 'c' : '') + '|' + (running ? 1 : 0) + '|' + st.projects.length + '|' + (st.sessions ? st.sessions.length : -1) + '|' + (st.opts ? 1 : st.optErr ? 2 : 0) + '|' + (st.sel ? ownModel(st.sel) : '');
     if (row.dataset.sig !== sig) {
       row.dataset.sig = sig;
       row.innerHTML = left + stop;
@@ -1381,7 +1515,7 @@ MC.init('chat');
     $('sendBtn').disabled = !!st.sending || attUploading(); /* a message sent while Claude works joins the reply at once */
     $('sendBtn').title = attUploading() ? 'Waiting for the upload to finish' : 'Send (Ctrl+Enter)';
     if (MC.setVoice) { var want = running ? 'thinking' : 'idle'; if (MC.voice && MC.voice.state !== want && (want === 'thinking' || MC.voice.state === 'thinking')) MC.setVoice(want); }
-    $('prompt').placeholder = running ? 'Claude is working. Your message joins the reply.' : st.sel ? 'Reply in this session' : 'Start a new conversation';
+    $('prompt').placeholder = running ? 'Claude is working. Your message joins the reply.' : st.sel ? (isChat ? 'Reply in this chat' : 'Reply in this session') : isChat ? 'Start a new chat' : 'Start a new conversation';
   }
 
   function renderLastRun() {
@@ -1537,20 +1671,97 @@ MC.init('chat');
     renderExp();
     armExpiry(ci);
   }
-  /* ---------- At 5 min left: what the server sends once before the cache runs out (expiryAction.js) ----------
-     None lets the cache run out. Handoff runs the handoff skill (work half done, gaps, what next, a prompt to continue in a
-     new conversation). Compact sends /compact while the cache is still warm, cheaper than a cold one. Both are real work on
-     the warm cache. After it went out the choice is back to None. */
+  /* ---------- At 5 min left: what the server sends before the cache runs out (expiryAction.js) ----------
+     Compact, the default, sends /compact while the cache is still warm, cheaper than a cold one, every time. Handoff runs
+     the handoff skill (work half done, gaps, what next, a prompt to continue in a new conversation) once, then it is back
+     to Compact. None lets the cache run out. One-off tasks, Com Link chats and terminal conversations start on None. */
   var EXP_NAMES = { handoff: 'Handoff', compact: 'Compact' };
-  /* the list row holds the choice (fresh after every list load, and set by the events and the drop-down); st.warm only adds the details */
+  /* the list row holds the action in force (fresh after every list load, and set by the events and the drop-down); st.warm only adds the details */
   function expAction(s) { return (s && s.expiryAction) || null; }
-  function expChip(s) { var a = expAction(s); return a ? '<span class="chip c-warm" title="At 5 min left: ' + EXP_NAMES[a] + ', once, before the cache runs out. Change it in the cache panel.">' + ICON.warm + EXP_NAMES[a] + '</span>' : ''; }
+  /* only Handoff gets a chip: Compact is on nearly everywhere, so a chip for it would be noise */
+  function expChip(s) { var a = expAction(s); return a === 'handoff' ? '<span class="chip c-warm" title="At 5 min left: Handoff, once, before the cache runs out. Change it in the cache panel.">' + ICON.warm + EXP_NAMES[a] + '</span>' : ''; }
+  /* conversations whose cache runs out within 5 min with nothing planned (id -> expiresAt ms), told by the server */
+  var cacheEndMap = {};
+  function cacheEndingSoon(id) { var e = cacheEndMap[id]; if (e && e > Date.now()) return true; if (e) delete cacheEndMap[id]; return false; }
+  function endChip(id) { return '<span class="chip c-warm" title="The cache runs out at ' + esc(clockOf(new Date(cacheEndMap[id]).toISOString())) + ' and nothing is planned. Pick Compact or Handoff in the cache panel, or send a message.">' + ICON.warm + 'Cache ending</span>'; }
+  function markCacheEnding(list) {
+    (list || []).forEach(function (x) {
+      if (!x || typeof x.id !== 'string') return;
+      var t = Date.parse(x.expiresAt);
+      if (!(t > Date.now())) { delete cacheEndMap[x.id]; return; }
+      cacheEndMap[x.id] = t;
+      setTimeout(renderSessions, t - Date.now() + 500); /* the pulse stops when the cache has run out */
+    });
+    renderSessions();
+  }
   function isLocked(id) { var s = id ? byId(id) : null; return !!(s && s.locked); }
+  /* another PC's code conversation (read from the hub): its machine { id, name }, or null. Is that PC on now? */
+  function remoteOf(id) { var s = id ? byId(id) : null; return s && s.readOnly && s.machine ? s.machine : null; }
+  function remoteOnline(m) { var x = (st.machines || []).find(function (y) { return y.id === m.id; }); return x ? !!x.online : !!m.online; }
+
+  /* ---------- messages that wait for another PC ---------- */
+  /* What is typed for another PC's code conversation is kept as its draft, there too (through the hub). Send asks first, then
+     the message waits on the hub, and that PC runs it when it is on; the answer shows here once that PC posts it. */
+  st.waits = {}; st.waitAsk = null;
+  function renderWait() {
+    var bar = $('waitBar'), m = st.sel ? remoteOf(st.sel) : null;
+    $('timeBtn').style.display = m ? 'none' : ''; /* Send later sends from this computer: not for a conversation that runs elsewhere */
+    if (!m) { if (!bar.hidden) { bar.hidden = true; bar.innerHTML = ''; bar.dataset.h = ''; } return; }
+    var name = m.name || 'its PC', on = remoteOnline(m);
+    var h = '<div class="wt">' + (on ? 'This conversation runs on ' + esc(name) + '. A message goes there, and the answer shows here when Claude is done.'
+      : 'This conversation runs on ' + esc(name) + ', and ' + esc(name) + ' is off. What you type is kept for ' + esc(name) + '. A message you send waits until ' + esc(name) + ' is on.') + '</div>';
+    if (st.waitAsk === st.sel) {
+      h += '<div class="wq"><span>' + (on ? 'Send this to ' + esc(name) + '?' : esc(name) + ' is off. Send this automatically when ' + esc(name) + ' is back on?') + '</span>' +
+        '<div class="elb"><button type="button" class="act red" id="waitYes">' + (on ? 'Send to ' + esc(name) : 'Send when ' + esc(name) + ' is on') + '</button><button type="button" class="act" id="waitNo">Cancel</button></div></div>';
+    }
+    (st.waits[st.sel] || []).filter(function (x) { return x.state !== 'canceled'; }).slice(-5).forEach(function (x) {
+      var bad = x.state === 'failed', ok = x.state === 'sent';
+      var what = bad ? '<b>Not sent</b>' : ok ? 'Sent to ' + esc(name) : x.state === 'taken' ? 'Going to ' + esc(name) + '...' : 'Waiting for ' + esc(name);
+      h += '<div class="drow' + (bad ? ' bad' : ok ? ' ok' : '') + '" data-wid="' + esc(x.sendId) + '"><span class="dw">' + what + '</span><span class="dt" title="' + esc(x.text || '') + '">' + esc(String(x.text || '').replace(/\s+/g, ' ').slice(0, 140)) + (x.files ? ' (+' + x.files + (x.files > 1 ? ' files)' : ' file)') : '') + '</span>' +
+        '<span class="db">' + (x.state === 'waiting' ? '<button type="button" class="act" data-wcancel>Cancel</button>' : '') + '</span>' + (bad && x.error ? '<span class="de">' + esc(x.error) + '</span>' : '') + '</div>';
+    });
+    if (bar.dataset.h !== h) { bar.dataset.h = h; bar.innerHTML = h; }
+    bar.hidden = false;
+  }
+  $('waitBar').addEventListener('click', async function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.id === 'waitYes') { sendWaiting(); return; }
+    if (b.id === 'waitNo') { st.waitAsk = null; renderWait(); return; }
+    var row = e.target.closest('[data-wid]');
+    if (row && b.hasAttribute('data-wcancel')) {
+      var id = st.sel; b.disabled = true;
+      try { var x = await MC.api.post('/api/waiting/' + encodeURIComponent(id) + '/' + encodeURIComponent(row.dataset.wid) + '/cancel', {}); st.waits[id] = (st.waits[id] || []).map(function (y) { return y.sendId === x.sendId ? x : y; }); }
+      catch (err) { setNotice('Could not cancel: ' + errText(err)); }
+      renderWait();
+    }
+  });
+  MC.events.on('waiting', function (d) { if (!d || !d.id) return; st.waits[d.id] = d.sends || []; if (d.id === st.sel) renderWait(); });
+  async function sendWaiting() {
+    var sel = st.sel, m = sel ? remoteOf(sel) : null; if (!m || st.sending) return;
+    var box = $('prompt'), text = box.value.trim();
+    if (attUploading()) { attNote('Wait for the upload to finish, then send.'); return; }
+    var ready = st.att.filter(function (a) { return a.status === 'ready'; });
+    if (!text && !ready.length) { st.waitAsk = null; renderWait(); return; }
+    var prompt = text || (ready.length > 1 ? 'See the attached files.' : 'See the attached file.');
+    var ids = ready.map(function (a) { return a.id; }), backup = st.att;
+    st.waitAsk = null; st.sending = true; attNote('');
+    ids.forEach(function (x) { sentAtt[x] = 1; });
+    st.att = []; box.value = ''; st.tall = false; fitPrompt(); renderAtt(); saveDraftNow(); pushSoon(draftKey(), 0);
+    renderComposer();
+    try {
+      var x = await MC.api.post('/api/waiting/' + encodeURIComponent(sel), ids.length ? { prompt: prompt, attachments: ids } : { prompt: prompt });
+      if (!(st.waits[sel] || []).some(function (y) { return y.sendId === x.sendId; })) st.waits[sel] = (st.waits[sel] || []).concat([x]);
+    } catch (e) {
+      backup.forEach(function (a) { if (a.id) delete sentAtt[a.id]; });
+      if (!box.value) { box.value = text; fitPrompt(); } if (!st.att.length) { st.att = backup; renderAtt(); }
+      setNotice('Could not send: ' + errText(e));
+    } finally { st.sending = false; renderComposer(); }
+  }
   /* #expRow is written once in the page and never redrawn, so an open list is never closed by a redraw */
   var expRow = $('expRow');
   function renderExp() {
     var s = st.sel ? byId(st.sel) : null, w = st.warm[st.sel] || null, a = expAction(s), what = '', bad = false;
-    expRow.hidden = !s || isLocked(st.sel);
+    expRow.hidden = !s || isLocked(st.sel) || s.kind === 'chat'; /* a chat can run neither Compact nor Handoff */
     var sel = expRow.querySelector('select'), open = false;
     try { open = sel.matches(':open'); } catch (e) { open = false; } /* an older browser has no :open */
     if (!open) sel.value = a || 'none';
@@ -1568,9 +1779,10 @@ MC.init('chat');
   }
   expRow.querySelector('select').addEventListener('change', async function () {
     var id = st.sel, s = byId(id); if (!id || !s || isLocked(id)) return;
-    var was = expAction(s), want = this.value === 'none' ? null : this.value;
+    var was = expAction(s), pick = this.value, want = pick === 'none' ? null : pick;
+    if (want) delete cacheEndMap[id];
     st.warm[id] = Object.assign({}, st.warm[id] || {}, { action: want, last: null }); s.expiryAction = want; renderExp(); renderSessions();
-    try { st.warm[id] = await MC.api.post('/api/sessions/' + encodeURIComponent(id) + '/expiry-action', { action: want || 'none' }); }
+    try { st.warm[id] = await MC.api.post('/api/sessions/' + encodeURIComponent(id) + '/expiry-action', { action: pick }); s.expiryAction = st.warm[id].action || null; }
     catch (e) { st.warm[id] = Object.assign({}, st.warm[id], { action: was }); s.expiryAction = was; setNotice('Could not change At 5 min left: ' + errText(e)); }
     renderExp(); renderSessions();
   });
@@ -1581,6 +1793,8 @@ MC.init('chat');
     if (st.sel === d.id) renderExp();
     renderSessions();
   });
+  MC.events.on('cache-ending', function (d) { markCacheEnding([d]); });
+  MC.api.get('/api/sessions/cache-ending').then(markCacheEnding).catch(function () { /* the next event brings it */ });
   /* One timeout aimed at the exact second the cache runs out, so "Expired" shows at zero and not a tick later. */
   function armExpiry(ci) {
     clearTimeout(st.expT);
@@ -1620,8 +1834,12 @@ MC.init('chat');
         st.pages = [{ id: ++pgSeq, msgs: Array.isArray(s && s.messages) ? s.messages : [] }];
         st.pa = 0; st.pb = 1; st.cursor = s && s.cursor != null ? s.cursor : null; st.hasMore = !!(s && s.hasMore) && st.cursor != null;
         applyLive(id, s);
+        if (s && Array.isArray(s.sends)) { st.waits[id] = s.sends; if (s.machine && byId(id)) byId(id).machine = s.machine; }
+        var stab = s && (s.machine ? 'm:' + s.machine.id : s.kind); /* another PC's conversation lives in that PC's tab */
+        if (stab) { st.kinds[id] = s.kind; if (st.sel === id && stab !== st.tab) setSessTab(stab); renderComposer(); renderHeader(); } /* opened from an address or another page: the list shows its tab */
         if (s && s.title && st.sessions && !byId(id)) {
-          var row = { id: id, title: s.title, cwd: s.cwd, lastAt: new Date().toISOString() };
+          var row = { id: id, title: s.title, cwd: s.cwd, kind: s.kind, lastAt: new Date().toISOString() };
+          if (s.readOnly) { row.readOnly = true; row.locked = true; row.machine = s.machine; }
           if (s.archived) { row.archived = true; (st.extra || (st.extra = {}))[id] = row; renderHeader(); renderComposer(); }
           else { st.sessions.unshift(row); renderSessions(); }
           renderRuns();
@@ -1725,6 +1943,7 @@ MC.init('chat');
     var was = draftKey();
     st.sel = id || null;
     if (!st.sel && newKey) st.newKey = newKey;
+    if (!st.sel) setSessTab(newIsChat() ? 'chat' : 'code');
     rememberConv(draftKey());
     if (!draftReady || was !== draftKey()) loadDraft();
     renderSessions(); /* the open draft is marked in the list */
@@ -1785,14 +2004,22 @@ MC.init('chat');
     var qs = Array.isArray(p.questions) ? p.questions.filter(function (q) { return q && typeof q.question === 'string' && Array.isArray(q.options); }) : null;
     r.items.push({ kind: 'perm', requestId: id, tool: String(p.tool || 'a tool').slice(0, 80), summary: String(p.summary || '').replace(/\s+/g, ' ').trim(), input: p.input && typeof p.input === 'object' ? p.input : null, suggestions: Array.isArray(p.suggestions) ? p.suggestions : [], state: 'pending',
       questions: qs && qs.length ? qs : null, pick: {}, other: {} });
+    var it = r.items[r.items.length - 1];
+    if (it.questions) {
+      var kd = qdAll()[id];
+      if (kd) { it.other = kd.other && typeof kd.other === 'object' ? kd.other : {}; it.pick = kd.pick && typeof kd.pick === 'object' ? kd.pick : {}; }
+      else if (p.draft && typeof p.draft === 'object') it.questions.forEach(function (q, qi) { if (typeof p.draft[q.question] === 'string') it.other[qi] = p.draft[q.question]; });
+    }
     if (r.status === 'idle') r.status = 'working';
   }
-  function resolvePerm(r, id, behavior, msg) {
+  function resolvePerm(r, id, behavior, msg, expired) {
     var it = r.items.filter(function (i) { return i.kind === 'perm' && i.requestId === String(id); })[0]; if (!it) return;
     if (it.state !== 'pending' && it.state !== 'closed') return;
-    it.state = behavior === 'allow' ? (it.always ? 'always' : 'allowed') : behavior === 'deny' ? 'denied' : 'closed';
+    it.state = behavior === 'allow' ? (it.always ? 'always' : 'allowed') : behavior === 'deny' && !expired ? 'denied' : 'closed';
     it.busy = false; it.err = '';
-    if (typeof msg === 'string' && msg && behavior !== 'allow') it.note = msg;
+    if (expired) it.note = 'It closed after waiting a long time with no answer.';
+    else if (typeof msg === 'string' && msg && behavior !== 'allow') it.note = msg;
+    if (it.questions) { if (it.state === 'allowed' || it.skipped) qdDrop(it.requestId); else if (qdHasText(it)) qdSave(r, it); }
   }
   async function loadPending(runId) {
     if (!runId || /^err/.test(runId)) return;
@@ -1810,7 +2037,7 @@ MC.init('chat');
       if (!it.questions || !askReady(it)) return;
       answers = {}; it.questions.forEach(function (q, qi) { answers[q.question] = askAnswered(it, q, qi).join(', '); });
     }
-    it.busy = true; it.err = ''; it.always = mode === 'always'; if (st.view === runId) renderLive();
+    it.busy = true; it.err = ''; it.always = mode === 'always'; it.skipped = mode === 'deny'; if (st.view === runId) renderLive();
     try {
       var body = { requestId: rid, behavior: mode === 'deny' ? 'deny' : 'allow' };
       if (mode === 'always') body.always = true;
@@ -1819,13 +2046,13 @@ MC.init('chat');
       await MC.api.post('/api/runs/' + encodeURIComponent(runId) + '/permission', body);
       resolvePerm(r, rid, body.behavior);
     } catch (e) {
-      it.busy = false; it.always = false; it.answers = null; /* not taken: the card must not show them as given */
-      if (e.status === 404 || e.status === 409) { it.state = 'closed'; it.note = 'This question is no longer open.'; }
+      it.busy = false; it.always = false; it.answers = null; it.skipped = false; /* not taken: the card must not show them as given */
+      if (e.status === 404 || e.status === 409) { it.state = 'closed'; it.note = 'This question is no longer open.'; if (it.questions && qdHasText(it)) qdSave(r, it); }
       else it.err = 'Could not send your answer: ' + errText(e);
     }
     if (st.view === runId) renderLive();
   }
-  function closePerms(r) { r.items.forEach(function (i) { if (i.kind === 'perm' && i.state === 'pending') { i.state = 'closed'; i.note = 'The run ended before this was answered.'; } }); }
+  function closePerms(r) { r.items.forEach(function (i) { if (i.kind === 'perm' && i.state === 'pending') { i.state = 'closed'; i.note = 'The run ended before this was answered.'; if (i.questions && qdHasText(i)) qdSave(r, i); } }); }
 
   /* While the saved conversation is being read, live events wait and are applied after it. That read can rebuild the live
      turn from the server's account of it, and an event applied before would be lost in the rebuild. Every release is
@@ -1873,7 +2100,7 @@ MC.init('chat');
     if (d.sent && String(d.sent.text || '').indexOf(HANDOFF_MARK) === 0) return; /* the handoff asked at 5 min left: its echo comes back as a notice line */
     if (d.sent) { addUser(r, d.sent.text, d.sent.attachments, 'event', d.at); if (vis) renderLive(); return; }
     if (d.permission && d.permission.requestId) { addPerm(r, d.permission); if (vis) renderLive(); return; }
-    if (d.permissionDone != null) { resolvePerm(r, d.permissionDone, d.behavior, d.message); if (vis) renderLive(); return; }
+    if (d.permissionDone != null) { resolvePerm(r, d.permissionDone, d.behavior, d.message, !!d.expired); if (vis) renderLive(); return; }
     if (Array.isArray(d.images)) { if (d.images.length) r.items.push({ kind: 'img', media: d.images }); if (vis) renderLive(); return; }
     if (d.turnDone) {
       r.sessionId = d.sessionId || r.sessionId; r.turnOpen = false;
@@ -2010,6 +2237,12 @@ MC.init('chat');
     var wk = typeof wakeText === 'string';
     var box = $('prompt'), text = wk ? wakeText.trim() : box.value.trim();
     if (st.sending) return;
+    var rmt = st.sel ? remoteOf(st.sel) : null;
+    if (rmt) { /* it runs on another PC: the message waits for it, after a question */
+      if (wk) { voiceNote('Not sent: this conversation runs on ' + (rmt.name || 'another PC') + '. Type the message instead.', text); return; }
+      if (!text && !st.att.some(function (a) { return a.status === 'ready'; })) return;
+      st.waitAsk = st.sel; renderWait(); return;
+    }
     if (st.sel && isLocked(st.sel)) { if (wk) voiceNote(how === 'compact' ? 'Compact was not sent: the conversation is locked.' : 'Not sent: the conversation is locked.', text); return; }
     if (!wk) {
       if (attUploading()) { attNote('Wait for the upload to finish, then send.'); return; }
@@ -2064,6 +2297,7 @@ MC.init('chat');
       if (force) req.elsewhereOk = true;
       try {
         var r = await MC.api.post('/api/chat', req);
+        if (r.relayed) { setNotice('Claude is thinking about this chat on ' + r.to + '. Your message went there, and the answer shows here when Claude is done.'); return; }
         var x = rec(r.runId);
         x.sessionId = sel || x.sessionId; x.own = true;
         if (r.joined) { if (x.status === 'starting') x.status = 'working'; }
@@ -2095,8 +2329,8 @@ MC.init('chat');
   function chatReq(prompt, ids) {
     var req = { prompt: prompt };
     if (ids.length) req.attachments = ids;
-    if (st.sel) req.sessionId = st.sel; else if ($('newProj') && $('newProj').value) req.projectId = $('newProj').value;
-    OPT_KEYS.forEach(function (k) {
+    if (st.sel) req.sessionId = st.sel; else if (newIsChat()) req.chat = true; else if ($('newProj') && $('newProj').value) req.projectId = $('newProj').value;
+    optKeys().forEach(function (k) {
       if (k[0] === 'model' && st.sel) { if (switchingModel()) req.model = st.pick[st.sel]; return; } /* continuing: only an explicit switch sends a model */
       var v = optValue(k[0], k[1]); if (v !== '') req[k[0]] = v;
     });
@@ -2641,13 +2875,14 @@ MC.init('chat');
       step('starting');
       var rec;
       try {
-        rec = await MC.audio.record({ signal: ac.signal, openMs: 12000, maxSec: 120, skipMs: 260,
+        rec = await MC.audio.record({ signal: ac.signal, openMs: 12000, skipMs: 260,
           onLevel: function (v) {
             if (tok !== P.tok || P.step !== 'recording') return;
             P.lv = Math.min(1, v * 2.5); V.live = P.lv; V.liveAt = performance.now();
             var lv = document.querySelector('#cmic .lv i'); if (lv) lv.style.width = Math.round(Math.sqrt(P.lv) * 100) + '%';
           },
-          onLimit: function () { if (tok === P.tok && P.step === 'recording') { voiceNote('That is the two minute limit, so it was sent.'); send(); } } });
+          onLimit: function () { if (tok === P.tok && P.step === 'recording') { voiceNote('That is the 20-minute limit, so it was written out.'); send(); } },
+          onSilence: function () { if (tok === P.tok && P.step === 'recording') { voiceNote('Nothing was said for a minute, so it was written out.'); send(); } } });
       } catch (e) {
         if (tok === P.tok) { P.ac = null; step('idle'); if (!e || e.name !== 'AbortError') { voiceNote(micText(e)); sound('cancel'); } }
         return;
@@ -2669,7 +2904,7 @@ MC.init('chat');
       var rec = P.rec; if (!rec || P.step !== 'recording') return;
       P.rec = null;
       var tok = P.tok, ac = new AbortController(), late = false; P.job = ac;
-      var timer = setTimeout(function () { late = true; ac.abort(); }, 70000);
+      var timer = setTimeout(function () { late = true; ac.abort(); }, 70000 + Math.round(rec.seconds() * 600)); /* a long recording takes longer to write out */
       step('sending'); sound('send');
       var text = '', fail = '';
       try {
@@ -2923,7 +3158,7 @@ MC.init('chat');
 
   /* ---------- the draft: what is typed and attached stays until it is sent ----------
      Kept per conversation (plus one for a new conversation) on the server, shared by every device: a phone can attach
-     screenshots and the PC go on typing. Files are kept once uploaded (the server's copies, kept 7 days). Only the server keeps
+     screenshots and the PC go on typing. Files are kept once uploaded (the server's copies, kept a year). Only the server keeps
      drafts: the page asks for one when a conversation opens, and a change reaches the server a moment after the last key.
      A change made on another device comes as an event and is taken here, unless something typed here has not reached the
      server yet: then the words typed here stay and the other device's files are added to them.
@@ -2934,13 +3169,13 @@ MC.init('chat');
   /* each new conversation has its own draft key until it is sent ("n-<random id>"), so several can wait in the list */
   function freshNewKey() {
     var u = window.crypto && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, function () { return (Math.random() * 16 | 0).toString(16); });
-    return 'n-' + u.toLowerCase();
+    return (st.tab === 'chat' ? 'c-' : 'n-') + u.toLowerCase(); /* c-: a new plain chat */
   }
   st.newKey = freshNewKey();
   function draftKey() { return st.sel || st.newKey; }
   /* the conversation (or new conversation draft) used last in this browser, opened again when the page opens without one in its address */
   var LAST_CONV = 'mc-last-conv';
-  function lastConv() { try { var v = localStorage.getItem(LAST_CONV) || ''; return /^(n-)?[0-9a-f-]{36}$/i.test(v) ? v : ''; } catch (e) { return ''; } }
+  function lastConv() { try { var v = localStorage.getItem(LAST_CONV) || ''; return /^([nc]-)?[0-9a-f-]{36}$/i.test(v) ? v : ''; } catch (e) { return ''; } }
   function rememberConv(id) { try { if (id) localStorage.setItem(LAST_CONV, id); else localStorage.removeItem(LAST_CONV); } catch (e) {} }
   function readyAtts() { return st.att.filter(function (a) { return a.status === 'ready' && a.id; }).map(function (a) { return { id: a.id, name: a.name, kind: a.kind, size: a.size }; }); }
   function attsFromDraft(d) {
@@ -2949,12 +3184,12 @@ MC.init('chat');
     }) : [];
   }
   var sameDraft = function (a, b) { return !!a && !!b && a.text === b.text && JSON.stringify(a.atts || []) === JSON.stringify(b.atts || []) && (a.project || '') === (b.project || ''); };
-  var isNewKey = function (k) { return k === 'new' || /^n-/.test(k); };
+  var isNewKey = function (k) { return k === 'new' || /^[nc]-/.test(k); };
   /* the box changed: it goes to the server a moment after the last change (a new conversation's project choice too) */
   function saveDraftNow() {
     clearTimeout(draftT); if (!draftReady) return;
     var k = draftKey(), now = { text: $('prompt').value, atts: readyAtts() };
-    if (isNewKey(k)) now.project = st.draftProject || '';
+    if (isNewKey(k)) now.project = /^c-/.test(k) ? '' : st.draftProject || ''; /* a chat has no project */
     if (!(k in known) && !unsent[k] && !now.text.trim() && !now.atts.length) return; /* not loaded yet: an empty box must not wipe the server's draft */
     if (sameDraft(now, unsent[k] || known[k])) return;
     unsent[k] = now; tries[k] = 0; pushSoon(k);
@@ -3089,10 +3324,12 @@ MC.init('chat');
   /* Enter only makes a new line: a message goes out with the Send button, on the PC and on the phone */
   /* New conversation: a fresh draft, unless the one open is already a new conversation with nothing in it */
   $('newBtn').onclick = function () {
-    var reuse = !st.sel && !$('prompt').value.trim() && !st.att.length;
+    var reuse = !st.sel && !$('prompt').value.trim() && !st.att.length && newIsChat() === (st.tab === 'chat'); /* New chat never reuses a code draft, nor the other way */
     st.view = null; select(null, reuse ? st.newKey : freshNewKey()); $('prompt').focus();
   };
-  $('pfilter').onchange = function () { st.filter = this.value; loadSessions(); };
+  $('pfilter').onchange = function () { st.filter = this.value; st.sessLimit = 50; loadSessions(); };
+  $('stabs').onclick = function (e) { var b = e.target.closest('[data-stab]'); if (b) setSessTab(b.dataset.stab); };
+  renderTabs();
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t || !t.dataset || !t.dataset.opt) return;
     if (t.dataset.opt === 'model' && st.sel) { st.pick[st.sel] = t.value; renderModelNote(); return; } /* not remembered: it applies to this conversation only */
@@ -3126,6 +3363,7 @@ MC.init('chat');
       card.querySelectorAll('[data-qopt^="' + qi + ':"]').forEach(function (b) { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); var m = b.querySelector('.qmark'); if (m) m.innerHTML = '&#9675;'; });
     }
     var send = card.querySelector('[data-pact="answers"]'); if (send) send.disabled = !askReady(it);
+    if (it.state === 'pending') { fitQ(card); qdSave(r, it); typingSoon(r, it); }
   });
   document.addEventListener('focusout', function (e) {
     if (e.target && e.target.classList && e.target.classList.contains('ren') && st.editing) endRename(true);
@@ -3151,10 +3389,20 @@ MC.init('chat');
           var cur = qit.pick[qi] || [];
           if (q.multiSelect) qit.pick[qi] = cur.indexOf(lab) >= 0 ? cur.filter(function (x) { return x !== lab; }) : cur.concat([lab]);
           else { qit.pick[qi] = cur[0] === lab ? [] : [lab]; qit.other[qi] = ''; }
-          renderLive();
+          qdSave(qr, qit); typingSoon(qr, qit); renderLive();
           var again = $('liveBox').querySelector('[data-rid="' + CSS.escape(qit.requestId) + '"] [data-qopt="' + qo.dataset.qopt + '"]'); if (again) again.focus();
         }
       }
+      return;
+    }
+    var qk = e.target.closest('[data-qk]');
+    if (qk) { /* the words of a question that closed first: send them as a message, copy them, or let them go */
+      var kc = qk.closest('[data-rid]'), kr = kc && st.store[kc.dataset.prun];
+      var kit = kr && kr.items.filter(function (i) { return i.kind === 'perm' && i.requestId === kc.dataset.rid; })[0]; if (!kit) return;
+      var kdone = function () { qdDrop(kit.requestId); kit.keptDone = true; renderLive(); };
+      if (qk.dataset.qk === 'copy') { if (navigator.clipboard) navigator.clipboard.writeText(keptText(kit)); return; }
+      if (qk.dataset.qk === 'drop') { kdone(); return; }
+      send('My answer to your question (it closed before I could send it):\n\n' + keptText(kit)); kdone();
       return;
     }
     var pa = e.target.closest('[data-pact]');
@@ -3179,7 +3427,8 @@ MC.init('chat');
     if (dx) { discardDraft(dx.dataset.ddel); return; }
     var dr = e.target.closest('[data-draft]');
     if (dr) { st.view = null; select(null, dr.dataset.draft); $('prompt').focus(); return; }
-    var t = e.target.closest('[data-id],[data-run],[data-more],[data-retry],[data-latest],[data-archtoggle],#stopBtn'); if (!t) return;
+    var t = e.target.closest('[data-id],[data-run],[data-more],[data-retry],[data-latest],[data-archtoggle],[data-sessmore],#stopBtn'); if (!t) return;
+    if (t.hasAttribute('data-sessmore')) { st.sessLimit += 50; t.disabled = true; t.textContent = 'Loading'; loadSessions(); return; }
     if (t.hasAttribute('data-archtoggle')) { st.showArchived = !st.showArchived; if (!st.showArchived) st.archived = []; loadSessions(); renderSessions(); return; }
     if (t.id === 'stopBtn') {
       var r = st.view && st.store[st.view];
@@ -3216,6 +3465,16 @@ MC.init('chat');
   setInterval(function () { if (!document.hidden) paintLiveTurns(); }, 1000);
   MC.events.on('usage', function (d) { if (takeUsage(d)) renderUsage(); });
   MC.events.on('sessions.changed', function () { clearTimeout(st.chgT); st.chgT = setTimeout(loadSessions, 250); });
+  /* the other PCs, for their tabs: from the hub, when this PC has one (hubSync.js) */
+  async function loadMachines() {
+    try { var d = await MC.api.get('/api/machines'); st.machines = (d && d.machines) || []; } catch (e) { return; }
+    st.machinesLoaded = true;
+    var was = st.tab; renderTabs();
+    if (st.tab !== was) { try { localStorage.setItem(TAB_KEY, st.tab); } catch (e) {} loadSessions(); } /* its PC is gone from the hub */
+    else if (machineOfTab(st.tab)) loadSessions();
+  }
+  MC.events.on('machines.changed', function () { clearTimeout(st.mchT); st.mchT = setTimeout(loadMachines, 500); });
+  loadMachines();
   MC.events.on('session.stats', function (d) {
     if (!d || !d.sessionId) return;
     st.stats[d.sessionId] = d;
@@ -3234,45 +3493,9 @@ MC.init('chat');
   document.addEventListener('visibilitychange', function () { if (!document.hidden) { tickCache(); if (st.usage && !st.usageBusy) renderUsage(); } });
   setInterval(function () { loadRuns(); }, 15000);
 
-  /* ---------- phone: pull the conversation list down from its top, or the conversation up from its bottom, to load it again ----------
-     The content follows the finger by half the distance. Let go past AT and a small spinner turns while it loads, for at most
-     PULL_MAX: a link to the PC that dropped never leaves it turning. */
-  function pullRefresh(box, edge, run) {
-    if (!box) return;
-    var AT = 64, HOLD = 44, PULL_MAX = 12000, y0 = null, d = 0, busy = 0;
-    var gap = document.createElement('div'); gap.className = 'pullgap'; gap.hidden = true;
-    gap.innerHTML = '<i class="pullspin" role="status" aria-label="Refreshing"></i>';
-    function atEdge() { return edge === 'top' ? box.scrollTop <= 0 : box.scrollTop + box.clientHeight >= box.scrollHeight - 2; }
-    function show(px, spin) {
-      if (edge === 'top') { if (box.firstChild !== gap) box.insertBefore(gap, box.firstChild); } else if (box.lastChild !== gap) box.appendChild(gap);
-      gap.hidden = !px; gap.style.height = px + 'px'; gap.classList.toggle('on', !!spin);
-      if (px && edge === 'bottom') box.scrollTop = box.scrollHeight;
-    }
-    function end() {
-      if (y0 == null) return;
-      y0 = null;
-      if (d < AT) { d = 0; show(0); return; }
-      d = 0; show(HOLD, true);
-      var me = ++busy, stop = function () { if (busy === me) { busy = 0; show(0); } };
-      setTimeout(stop, PULL_MAX);
-      Promise.resolve().then(run).catch(function () {}).then(stop);
-    }
-    box.addEventListener('touchstart', function (e) {
-      y0 = !busy && phoneMQ.matches && e.touches.length === 1 && atEdge() ? e.touches[0].clientY : null; d = 0;
-    }, { passive: true });
-    box.addEventListener('touchmove', function (e) {
-      if (y0 == null) return;
-      var dy = (e.touches[0].clientY - y0) * (edge === 'top' ? 1 : -1);
-      if (dy <= 0) { if (d) { d = 0; show(0); } else y0 = null; return; } /* the usual direction: it just scrolls */
-      if (e.cancelable) e.preventDefault();
-      d = Math.min(130, dy / 2);
-      show(d);
-    }, { passive: false });
-    box.addEventListener('touchend', end);
-    box.addEventListener('touchcancel', function () { y0 = null; d = 0; if (!busy) show(0); });
-  }
-  pullRefresh($('sess').parentNode, 'top', function () { return Promise.all([loadSessions(), loadRuns(), loadNewDrafts()]); });
-  pullRefresh($('msgs'), 'bottom', function () { if (st.sel) return Promise.all([loadSession(st.sel), loadRuns()]); });
+  /* pull to refresh (MC.pull): down on the list, up at the end of a conversation */
+  MC.pull.box($('sess').parentNode, 'top', function () { return Promise.all([loadSessions(), loadRuns(), loadNewDrafts()]); });
+  MC.pull.box($('msgs'), 'bottom', function () { if (st.sel) return Promise.all([loadSession(st.sel), loadRuns()]); });
 
   (async function boot() {
     st.sessions = null; renderSessions(); renderThread(); renderUsage(); fitPrompt();
@@ -3280,7 +3503,7 @@ MC.init('chat');
        A phone shows the conversation list, or the conversation when the address names one (with the list one Back away). */
     var inUrl = new URLSearchParams(location.search).get('session'), q = inUrl || lastConv();
     st.booting = true;
-    if (/^n-/.test(q)) select(null, q); /* the last thing open was a new conversation draft */
+    if (/^[nc]-/.test(q)) select(null, q); /* the last thing open was a new conversation draft */
     else {
       if (!inUrl && q) st.bootLast = q;
       if (q) select(q);

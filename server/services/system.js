@@ -19,9 +19,48 @@ const PROC_SCRIPT =
 
 let snap = null; // newest successful process list: { at, list }
 
+// '[[dd-]hh:]mm:ss' from ps (the time since a process started) in seconds, or null.
+function etimeSeconds(t) {
+  const m = /^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/.exec(String(t || '').trim());
+  return m ? ((Number(m[1] || 0) * 24 + Number(m[2] || 0)) * 60 + Number(m[3])) * 60 + Number(m[4]) : null;
+}
+
+// macOS and Linux: the same list from ps, in the shape the PowerShell script gives (two calls: the program path may
+// hold spaces, so it comes on its own line per process).
+async function psProcesses() {
+  const [a, b] = await Promise.all([
+    run('ps', ['-axww', '-o', 'pid=,ppid=,rss=,etime=,args='], { timeoutMs: 20000 }),
+    run('ps', ['-axww', '-o', 'pid=,comm='], { timeoutMs: 20000 }),
+  ]);
+  const exe = new Map();
+  for (const line of b.stdout.split('\n')) {
+    const m = /^\s*(\d+)\s+(.*)$/.exec(line);
+    if (m) exe.set(Number(m[1]), m[2].trim());
+  }
+  const now = Date.now();
+  const out = [];
+  for (const line of a.stdout.split('\n')) {
+    const m = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(line);
+    if (!m) continue;
+    const pid = Number(m[1]);
+    const comm = exe.get(pid) || '';
+    const secs = etimeSeconds(m[4]);
+    out.push({
+      ProcessId: pid,
+      ParentProcessId: Number(m[2]),
+      Name: comm.split('/').pop() || m[5].split(' ')[0].split('/').pop(),
+      ExecutablePath: comm.startsWith('/') ? comm : null,
+      CommandLine: m[5],
+      WorkingSetSize: Number(m[3]) * 1024,
+      Started: secs === null ? null : new Date(now - secs * 1000).toISOString(),
+    });
+  }
+  return out;
+}
+
 export function getProcesses(fresh = false) {
   const load = async () => {
-    const r = await runPS(PROC_SCRIPT, { timeoutMs: 20000 });
+    const r = process.platform === 'win32' ? await runPS(PROC_SCRIPT, { timeoutMs: 20000 }) : { json: await psProcesses() };
     const list = Array.isArray(r.json) ? r.json : r.json ? [r.json] : [];
     if (!list.length) throw new Error('process list is empty');
     const mapped = list.map((p) => ({

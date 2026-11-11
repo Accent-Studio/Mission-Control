@@ -29,6 +29,12 @@ name = "mc-bridge"
 path = "src/main.rs"
 required-features = ["bridge"]
 
+[[bin]]
+name = "mc-link"
+path = "src/link_main.rs"
+# A PC's link to the hub: the phone's client side, run by Mission Control's server.
+required-features = ["client"]
+
 [[example]]
 name = "spike"
 # The example doubles as the spike test suite, so `cargo test` runs it.

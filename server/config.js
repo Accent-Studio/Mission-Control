@@ -33,12 +33,26 @@ const object = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {})
 export const DISCOVERY_ROOTS = process.env.MC_DISCOVERY_ROOTS
   ? process.env.MC_DISCOVERY_ROOTS.split(';').map((s) => s.trim()).filter(Boolean)
   : strings(local.discoveryRoots).length ? strings(local.discoveryRoots) : [path.dirname(ROOT)];
+// The root folders as .data/config.json lists them now: the runner adds them to its own list, which it read at its start,
+// so a root folder added from the project tree (services/roots.js) works without restarting it.
+export function savedDiscoveryRoots() {
+  return process.env.MC_DISCOVERY_ROOTS ? [] : strings(readLocalConfig().discoveryRoots);
+}
 // The folder a conversation starts in when no project is chosen.
 export const DEFAULT_CWD = typeof local.defaultCwd === 'string' && local.defaultCwd.trim() ? local.defaultCwd.trim() : DISCOVERY_ROOTS[0];
 // Drives on which Claude may work in any folder, not only inside the discovery roots and projects (for example ["D:"]).
 export const OPEN_DRIVES = strings(local.openDrives).map((d) => d.slice(0, 1).toLowerCase()).filter((d) => /^[a-z]$/.test(d));
 // The persona prompt (prompt plus memory) that persona.js writes and runs.js hands to claude with --append-system-prompt-file.
 export const PERSONA_SYSTEM_FILE = path.join(DATA_DIR, 'comlink-system.md');
+// The name of this computer in the Sessions list (its tab), "Home" or "Work" for example. Without it, the computer's own name.
+export const MACHINE_NAME = typeof local.machineName === 'string' && local.machineName.trim() ? local.machineName.trim().slice(0, 40) : os.hostname();
+// "hub" makes this Mission Control the hub: the always-on server the PCs share (the mailbox for their conversations, see
+// services/hub.js). Anything else is a PC. MC_ROLE overrides it (tests).
+export const ROLE = (process.env.MC_ROLE || (typeof local.role === 'string' ? local.role : '')).trim().toLowerCase() === 'hub' ? 'hub' : 'pc';
+// How a PC reaches the hub: .data/hub.json, { url, headers }. No file, no hub (services/hubSync.js).
+export const HUB_LINK_FILE = path.join(DATA_DIR, 'hub.json');
+// Plain chats (no project, no file tools) all run in this one folder, so a transcript recorded here is a chat.
+export const CHATS_DIR = path.join(DATA_DIR, 'chats');
 // Single projects that live outside the discovery roots: { id, name, folder }. Merged like discovered folders.
 export const EXTRA_PROJECTS = process.env.MC_DISCOVERY_ROOTS
   ? []
@@ -58,6 +72,18 @@ export const NOTES_ROOT = process.env.MC_NOTES_ROOT === 'off' ? null
   : typeof local.notesRoot === 'string' && local.notesRoot.trim() ? local.notesRoot.trim() : null;
 export const NOTES_FOLDERS = Object.fromEntries(Object.entries(object(local.notesFolders)).map(([k, v]) => [k, strings(v)]));
 export const NOTES_PROJECT_DIR = typeof local.notesProjectDir === 'string' ? local.notesProjectDir.trim() : '';
+// The notes vaults this machine owns, each a git repo kept in step with its mirror on the hub (services/notesSync.js):
+// [{ id, dir }], id a short name ("notes", "wiki"). MC_NOTES_REPOS (JSON) overrides it (tests).
+const notesRepos = (() => {
+  try {
+    return process.env.MC_NOTES_REPOS ? JSON.parse(process.env.MC_NOTES_REPOS) : process.env.MC_DISCOVERY_ROOTS ? [] : local.notesRepos;
+  } catch {
+    return [];
+  }
+})();
+export const NOTES_REPOS = (Array.isArray(notesRepos) ? notesRepos : [])
+  .filter((r) => r && typeof r.id === 'string' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(r.id) && typeof r.dir === 'string' && r.dir.trim())
+  .map((r) => ({ id: r.id, dir: path.resolve(r.dir.trim()) }));
 // The wake word trainer (waketrainer/ in this repository unless .data/config.json says otherwise).
 export const WAKETRAINER_DIR = typeof local.wakeTrainerDir === 'string' && local.wakeTrainerDir.trim()
   ? local.wakeTrainerDir.trim() : path.join(ROOT, 'waketrainer');
@@ -84,3 +110,15 @@ export const BRIDGE_PORT = process.env.MC_BRIDGE_PORT === 'off' ? null : Number(
 // claude directly), a number moves it (tests use 488xx ports).
 export const RUNNER_HOST = '127.0.0.1';
 export const RUNNER_PORT = process.env.MC_RUNNER_PORT === 'off' ? null : Number(process.env.MC_RUNNER_PORT) || 1702; // 1710 to 1719 belong to BlitzVoice's link
+// Local models (llama.cpp's llama-server) offered in the chat next to Claude's models: "localModels" in .data/config.json,
+// see config.example.json. A conversation on one still runs the claude program, pointed at the gate (server/llmgate),
+// which starts llama-server when needed and turns the chosen effort into its thinking settings.
+export const LOCAL_MODELS = (Array.isArray(local.localModels) ? local.localModels : []).filter((m) => m && typeof m === 'object');
+export const LOCAL_MODELS_DIR = path.join(DATA_DIR, 'local-models'); // the settings file per model and effort, and the logs
+export const GATE_HOST = '127.0.0.1';
+export const GATE_PORT = Number(process.env.MC_GATE_PORT) || 1705; // 1703 and 1704 are the hub and PC links
+// What a local model's work costs in electricity (the Usage page): the price of a kWh, the exchange rate to the page's
+// dollars, and the watts the rest of the PC adds while the model works (the graphics card's own draw is measured).
+const elec = object(local.electricity);
+const pos = (v, d) => (typeof v === 'number' && v > 0 ? v : d);
+export const ELECTRICITY = { pricePerKWh: pos(elec.pricePerKWh, 0.17), currency: typeof elec.currency === 'string' ? elec.currency : 'USD', perDollar: pos(elec.perDollar, 1), otherWatts: pos(elec.otherWatts, 60) };

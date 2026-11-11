@@ -20,6 +20,7 @@ export function handleStream(req, res) {
     Connection: 'keep-alive',
   });
   res.write('retry: 2000\n\n');
+  res.mcComputer = !!((req.mcDevice && req.mcDevice.computer) || (req.mcFull && req.mcFull.computer)); // services/pcLock.js
   clients.add(res);
   req.on('close', () => clients.delete(res));
   for (const fn of connectHooks) {
@@ -50,8 +51,25 @@ export function publish(type, data) {
   }
 }
 
+// To the pages only: the server's own listeners (onPublish) do not hear it. For what another PC's server published,
+// relayed here (services/pcLink.js): this server must not act on it as if it had happened here.
+export function broadcast(type, data) {
+  const msg = `data: ${JSON.stringify({ type, data, ts: Date.now() })}\n\n`;
+  for (const res of clients) res.write(msg);
+}
+
+// Ends the streams of the other computers (this PC was locked for them, services/pcLock.js): each one comes back to the lock.
+export function dropComputers() {
+  for (const res of clients) if (res.mcComputer) { clients.delete(res); res.end(); }
+}
+
 export function clientCount() {
   return clients.size;
+}
+
+// The clients connected right now (runs.js gives the pages that joined while it was still starting what they missed).
+export function connectedClients() {
+  return [...clients];
 }
 
 // Keeps idle connections open and lets dead ones close.

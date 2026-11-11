@@ -1,7 +1,7 @@
 // Tests for sorting the user-side records of a Claude Code transcript: the human's words, notices (task
 // notifications, helper reports) and hidden meta records. The unit part feeds the classifier the exact shapes found
 // in real transcripts (with made-up text); the server part runs them through /api/sessions.
-// Run: node --test "tools/test/*.test.mjs"        (no npm packages; the server uses a free port and its own data folder)
+// Run: npm test (2 test files at a time)        (no npm packages; the server uses a free port and its own data folder)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';

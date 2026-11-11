@@ -2,7 +2,7 @@
 // Runs against the FAKE Claude CLI in tools/fakeclaude. Nothing here starts a real Claude conversation. The runner and the
 // servers of these tests live on ports 488xx (MC_TEST_PORTS), with their own data folders; every process started here is
 // stopped by its exact process id when the tests end.
-// Run: node --test "tools/test/*.test.mjs"
+// Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -25,6 +25,18 @@ const toStop = [];
 const fakePids = new Set();
 
 function killPid(pid) {
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(-pid, 'SIGKILL'); // the runner starts each claude process as the leader of its own group
+    } catch {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        // already gone
+      }
+    }
+    return;
+  }
   try {
     execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
   } catch {
@@ -369,7 +381,7 @@ describe('the runner protocol', () => {
       ['node itself with a script of ours', { cmd: process.execPath, args: ['-e', 'console.log(1)'] }],
       ['the right program with an unknown flag', { args: [...base.args, '--dangerously-skip-permissions'] }],
       ['an unknown flag with a value', { args: [...base.args, '--settings', 'x.json'] }],
-      ['a flag value of the wrong kind', { args: [...base.args, '--permission-mode', 'bypassPermissions'] }],
+      ['a flag value of the wrong kind', { args: [...base.args, '--permission-mode', 'dontAsk'] }],
       ['a resume that is not a session id', { args: [...base.args, '--resume', 'not-a-uuid'] }],
       ['a shell piece in a model name', { args: [...base.args, '--model', 'x & calc'] }],
       ['an argument that is not a string', { args: [...base.args.slice(0, -1), 42] }],
@@ -514,9 +526,12 @@ describe('the runner protocol', () => {
     c.close();
   });
 
-  test('any existing folder on an open drive may be used; a junction that leads out of it, or a folder on C:, may not', { skip: OPEN_DRIVE === 'C' && 'the checkout is on C:' }, async () => {
+  test('any existing folder on an open drive may be used; a junction that leads out of it, or a folder on C:, may not', { skip: (process.platform !== 'win32' && 'drives and junctions are Windows only') || (OPEN_DRIVE === 'C' && 'the checkout is on C:') }, async () => {
     const r = await get();
-    const base = OPEN_DRIVE + ':\\tmp\\mc\\r3';
+    // A folder on the same drive as the checkout: the scratch folder of a Temp folder next to it when there is one,
+    // else tools/test/.tmp (ignored by git). Never a new folder at the root of the drive.
+    const temp = path.join(path.dirname(ROOT), 'Temp', 'scratch');
+    const base = fs.existsSync(temp) ? path.join(temp, 'mc-runner-test') : path.join(ROOT, 'tools', 'test', '.tmp');
     fs.mkdirSync(base, { recursive: true });
     const inV = fs.mkdtempSync(path.join(base, 'cwd-'));
     const junction = path.join(inV, 'out');
@@ -558,11 +573,16 @@ describe('the runner protocol', () => {
         }
       }
       fs.rmSync(inV, { recursive: true, force: true });
+      try {
+        fs.rmdirSync(base); // only when empty: another run may still be using it
+      } catch {
+        // not empty, or already gone
+      }
     }
     assert.ok(fs.existsSync('C:\\Windows\\System32'), 'removing the junction left its target alone');
   });
 
-  test('the claude program may be written another way (case, slashes); what runs is the path the runner resolved itself', async () => {
+  test('the claude program may be written another way (case, slashes); what runs is the path the runner resolved itself', { skip: process.platform !== 'win32' && 'paths are case-sensitive and use / only off Windows' }, async () => {
     const r = await get();
     const { c } = await login(r);
     const req = spawnReq(dataDir, { cmd: claude.cmd.toUpperCase().replace(/\\/g, '/') });
@@ -626,9 +646,12 @@ describe('a restart of the server', () => {
     const common = { FAKE_LOG: log, FAKE_STEP_MS: '350', FAKE_TRANSCRIPT: projDir, ...fakeEnv };
     const runner = await startRunner({ dataDir, port, env: { ...common, ...runnerEnv } });
     assert.ok(!runner.failed, runner.out.text);
+    // The server answers before it has connected to the runner and taken over its runs, so this waits for both.
     const boot = async () => {
       const s = await startServer({ dataDir, bridge: false, env: { PATH: FAKE_PATH, MC_RUNNER_PORT: String(port), ...common, ...serverEnv } });
       toStop.push(s);
+      const hello = await waitFor(() => /\[runner\] connected to the runner \(pid \d+, (\d+) runs?\)/.exec(s.out.text), 'the connection to the runner', 20000);
+      if (Number(hello[1]) > 0) await waitFor(() => /the runs of the runner are taken over/.test(s.out.text), 'the takeover of the runs', 20000);
       return s;
     };
     const w = {
@@ -733,6 +756,25 @@ describe('a restart of the server', () => {
     assert.ok([...all.values()].some((e) => e.turnDone), 'the end of the turn was seen');
     assert.equal(w.lines().filter((l) => l.ev === 'spawn').length, 1, 'one process the whole time');
     l2.stop();
+  });
+
+  test('typing into Claude\'s question moves its deadline, and a restart keeps the later deadline', async () => {
+    const w = await world({}, { serverEnv: { MC_QUESTION_MS: '600000' } });
+    const r = await pc(w.s1, 'POST', '/api/chat', { prompt: 'QUIZ me please' });
+    assert.equal(r.status, 200, r.text);
+    const runId = r.json.runId;
+    const [q] = await waitFor(async () => { const p = await pc(w.s1, 'GET', `/api/runs/${runId}/pending`); return p.json && p.json.length && p.json; }, 'the question');
+    await sleep(400);
+    const t = await pc(w.s1, 'POST', `/api/runs/${runId}/permission/typing`, { requestId: q.requestId, draft: { 'Which layout should the card use?': 'Half an answer' } });
+    assert.equal(t.status, 200, t.text);
+    assert.ok(Date.parse(t.json.deadline) >= Date.parse(q.deadline) + 300, 'the countdown started again');
+    fakePids.add(w.lines().find((l) => l.ev === 'spawn').pid);
+    await sleep(300); // the journal entry reaches the runner
+    await w.s1.stop();
+    const s2 = await w.boot();
+    const [q2] = (await pc(s2, 'GET', `/api/runs/${runId}/pending`)).json;
+    assert.equal(q2.requestId, q.requestId);
+    assert.equal(q2.deadline, t.json.deadline, 'the typing was journaled, so the new server keeps the later deadline');
   });
 
   test('a turn that goes on while the server is away: the page reads it again from the new server and sees every event once', async () => {
@@ -1046,6 +1088,7 @@ describe('a restart of the server', () => {
 
   test('the server says when the running runner is older than its code', async () => {
     const w = await world({}, { runnerEnv: { MC_RUNNER_STAMP: '1000' } });
+    await waitFor(() => /older than its code/.test(w.s1.out.text), 'the line about the older runner', 5000); // it may arrive in a later chunk of the output
     assert.match(w.s1.out.text, /older than its code/);
   });
 

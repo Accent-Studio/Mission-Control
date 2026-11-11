@@ -18,6 +18,7 @@ import { listSessions } from './sessions.js';
 import { listRuns } from './runs.js';
 import { loadCatalog } from './catalog.js';
 import { classifyUserEntry } from './userKinds.js';
+import { isLocalAbs } from '../lib/localPath.js';
 
 const HOME = process.env.MC_CLAUDE_HOME ? path.resolve(process.env.MC_CLAUDE_HOME) : CLAUDE_HOME;
 const PROJECTS_DIR = path.join(HOME, 'projects');
@@ -175,7 +176,7 @@ function touchedPaths(lines) {
       if (m[1] === 'command') {
         for (const w of val.matchAll(WIN_PATH_RE)) out.push({ p: w[0], at: when });
         for (const g of val.matchAll(GIT_PATH_RE)) out.push({ p: g[1].toUpperCase() + ':' + g[0].slice(2), at: when });
-      } else if (/^[A-Za-z]:[\\/]/.test(val)) {
+      } else if (isLocalAbs(val)) {
         out.push({ p: val, at: when });
       }
     }

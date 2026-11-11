@@ -27,7 +27,30 @@ function parseNetstat(text) {
   return out;
 }
 
+// macOS and Linux: lsof -F gives a "p<pid>" line, then an "n<address>:<port>" line per listening socket of that process.
+function parseLsof(text) {
+  const out = [];
+  let pid = null;
+  for (const line of String(text || '').split('\n')) {
+    if (line[0] === 'p') pid = Number(line.slice(1));
+    else if (line[0] === 'n' && Number.isInteger(pid)) {
+      const local = line.slice(1);
+      const i = local.lastIndexOf(':');
+      const port = Number(local.slice(i + 1));
+      if (Number.isInteger(port)) out.push({ port, address: local.slice(0, i).replace(/^\[|\]$/g, ''), pid });
+    }
+  }
+  return out;
+}
+
 export function listening() {
+  if (process.platform !== 'win32') {
+    return cached('listening', 5000, async () => {
+      const r = await run('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-F', 'pn'], { timeoutMs: 10000 });
+      const seen = new Set();
+      return parseLsof(r.stdout).filter((x) => !seen.has(`${x.port}:${x.pid}`) && seen.add(`${x.port}:${x.pid}`));
+    });
+  }
   return cached('listening', 5000, async () => {
     const [v4, v6] = await Promise.all([
       run('netstat', ['-ano', '-p', 'tcp'], { timeoutMs: 10000 }),

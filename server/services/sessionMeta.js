@@ -1,8 +1,14 @@
 // Mission Control's own notes about sessions: a rename, a pin, a sort order, an archive flag.
-// Stored in .data/sessions-meta.json as { [sessionId]: { title?, autoTitle?, pinned?, order?, tags?, archived?, oneOff?, locked?, expiryAction? } }.
+// Stored in .data/sessions-meta.json as { [sessionId]: { title?, autoTitle?, pastTitles?, pinned?, order?, tags?, archived?, oneOff?, comlink?, locked?, expiryAction?, syncHidden? } }.
+// `syncHidden` keeps a Sync button's commit conversation out of every list (sync.js): 'working' while it runs, 'done' after.
+// One left at 'working' by a server that stopped mid-sync is shown again at the next start (showUnfinishedSyncs).
 // `archived` hides the conversation from the Talk page list and the project Sessions tab until the user asks to see it.
 // `locked` keeps it in the list but read only: nothing is sent to it (a message, Compact, Send later, an expiry action) until it is unlocked.
-// `expiryAction` ('handoff' or 'compact') is sent once a little before the prompt cache runs out, then it clears itself (expiryAction.js).
+// `expiryAction` is what is sent a little before the prompt cache runs out (expiryAction.js): 'compact', 'handoff' (once, then
+// it clears itself) or 'none'. Absent means the default, Compact, except for the conversations expiryFor() leaves out.
+// `comlink` marks a Com Link conversation: it gets no default action.
+// `mode` is the permission mode picked for the conversation, or the one it last ran with (absent: Auto): a message that names none,
+// such as one from another PC or the phone, runs with it, so the mode picked for a conversation outlives a restart.
 // `tags` is the manual project list ([] is a valid list: no tags); when it is absent the tags are automatic.
 // The transcript files are never touched for these.
 import path from 'node:path';
@@ -11,10 +17,14 @@ import { readJson, writeJson, busyError } from '../lib/jsonStore.js';
 import { getProject } from './catalog.js';
 
 export const TITLE_MAX = 120;
+const PAST_MAX = 6; // earlier names Claude gave a conversation, kept so the list can show them
 export const EXPIRY_ACTIONS = ['handoff', 'compact'];
+export const EXPIRY_CHOICES = ['none', ...EXPIRY_ACTIONS];
+export const DEFAULT_EXPIRY = 'compact';
 const MAX_ORDER_IDS = 1000;
 const MAX_TAGS = 8;
 const FILE = path.join(DATA_DIR, 'sessions-meta.json');
+const MODE_RE = /^[A-Za-z]{1,30}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function fail(status, message) {
@@ -47,9 +57,16 @@ function sanitize(m) {
   if (m.pinned === true) out.pinned = true;
   if (m.archived === true) out.archived = true;
   if (m.oneOff === true) out.oneOff = true;
+  if (m.comlink === true) out.comlink = true;
+  if (typeof m.mode === 'string' && MODE_RE.test(m.mode)) out.mode = m.mode;
+  if (m.syncHidden === 'working' || m.syncHidden === 'done') out.syncHidden = m.syncHidden;
   if (m.locked === true) out.locked = true;
-  if (EXPIRY_ACTIONS.includes(m.expiryAction)) out.expiryAction = m.expiryAction;
+  if (EXPIRY_CHOICES.includes(m.expiryAction)) out.expiryAction = m.expiryAction;
   if (typeof m.autoTitle === 'string' && m.autoTitle.trim()) out.autoTitle = m.autoTitle.trim().slice(0, TITLE_MAX);
+  if (Array.isArray(m.pastTitles)) {
+    const past = m.pastTitles.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim().slice(0, TITLE_MAX)).slice(-PAST_MAX);
+    if (past.length) out.pastTitles = past;
+  }
   if (Number.isFinite(m.order)) out.order = m.order;
   if (Array.isArray(m.tags)) out.tags = [...new Set(m.tags.filter((t) => typeof t === 'string' && t))].slice(0, MAX_TAGS);
   return Object.keys(out).length ? out : null;
@@ -85,6 +102,47 @@ export function isOneOff(id) {
   return !!(m && m.oneOff);
 }
 
+// What is sent before this conversation's cache runs out: 'compact', 'handoff' or null (nothing). m is its entry here,
+// lastEp its last transcript entry's { entrypoint } when known. With no choice of its own it gets the default, Compact,
+// unless it is locked, a one-off task, a Com Link chat, or was last used in a terminal (entrypoint "cli"): a terminal may
+// still hold it open, and a second process would split the conversation in two.
+export function expiryFor(m, lastEp) {
+  if (!m) m = {};
+  if (m.locked || m.expiryAction === 'none') return null;
+  if (EXPIRY_ACTIONS.includes(m.expiryAction)) return m.expiryAction;
+  if (m.oneOff || m.comlink || (lastEp && lastEp.entrypoint === 'cli')) return null;
+  return DEFAULT_EXPIRY;
+}
+
+// A Com Link conversation, kept on disk like the one-off flag so it survives a restart.
+export function setComlink(id) {
+  const all = load();
+  const key = String(id).toLowerCase();
+  if (!UUID_RE.test(key) || (all[key] && all[key].comlink)) return;
+  all[key] = { ...(all[key] || {}), comlink: true };
+  save();
+}
+
+export function modeOf(id) {
+  const m = load()[String(id).toLowerCase()];
+  return (m && m.mode) || null;
+}
+// Auto is what a conversation with no mode gets (DEFAULT_MODE in runs.js), so it is not written down: only the others are.
+const UNSAVED_MODE = 'auto';
+export function setMode(id, mode) {
+  const all = load();
+  const key = String(id).toLowerCase();
+  if (!UUID_RE.test(key) || !MODE_RE.test(String(mode || ''))) return;
+  const want = mode === UNSAVED_MODE ? undefined : mode;
+  if ((all[key] && all[key].mode) === want) return;
+  const cur = { ...(all[key] || {}) };
+  if (want) cur.mode = want;
+  else delete cur.mode;
+  if (Object.keys(cur).length) all[key] = cur;
+  else delete all[key];
+  save();
+}
+
 export function setOneOff(id, on) {
   const all = load();
   const key = String(id).toLowerCase();
@@ -97,15 +155,42 @@ export function setOneOff(id, on) {
   save();
 }
 
+// 'working', 'done' or null (shown in the lists again).
+export function setSyncHidden(id, value) {
+  const all = load();
+  const key = String(id).toLowerCase();
+  if (!UUID_RE.test(key)) return;
+  const cur = { ...(all[key] || {}) };
+  if (value === 'working' || value === 'done') cur.syncHidden = value;
+  else delete cur.syncHidden;
+  if ((all[key] || {}).syncHidden === cur.syncHidden) return;
+  if (Object.keys(cur).length) all[key] = cur;
+  else delete all[key];
+  save();
+}
+
+// A commit step that was still running when the server stopped: nobody knows how it ended, so it is shown again.
+export function showUnfinishedSyncs() {
+  const all = load();
+  const ids = Object.keys(all).filter((k) => all[k].syncHidden === 'working');
+  for (const k of ids) setSyncHidden(k, null);
+  return ids;
+}
+
 // The short name Mission Control gave a conversation it started (autoTitle.js). A rename of my own (title) always wins
 // over it, and it is set only once: a conversation that already has one keeps it. Returns true when it was stored.
-export function setAutoTitle(id, t) {
+// replace: true is Claude renaming its own conversation (the conversation_title tool, services/mcp.js) because the
+// subject moved: the name it had is kept in pastTitles, the newest last, so the list can still show what it was called.
+export function setAutoTitle(id, t, { replace = false } = {}) {
   const all = load();
   const key = String(id).toLowerCase();
   // eslint-disable-next-line no-control-regex
   const clean = typeof t === 'string' ? t.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, TITLE_MAX) : '';
-  if (!UUID_RE.test(key) || !clean || (all[key] && all[key].autoTitle)) return false;
-  all[key] = { ...(all[key] || {}), autoTitle: clean };
+  const cur = all[key] || {};
+  if (!UUID_RE.test(key) || !clean || (cur.autoTitle && !replace) || cur.autoTitle === clean) return false;
+  const next = { ...cur, autoTitle: clean };
+  if (cur.autoTitle) next.pastTitles = [...(cur.pastTitles || []).filter((x) => x !== cur.autoTitle && x !== clean), cur.autoTitle].slice(-PAST_MAX);
+  all[key] = next;
   save();
   return true;
 }
@@ -124,7 +209,7 @@ export function setMeta(id, patch) {
   if (!hasTitle && !hasPinned && !hasTags && !hasArchived && !hasLocked && !hasAction) throw fail(400, 'Give title, pinned, tags, archived, locked and/or expiryAction');
   if (hasArchived && typeof patch.archived !== 'boolean') throw fail(400, 'archived must be true or false');
   if (hasLocked && typeof patch.locked !== 'boolean') throw fail(400, 'locked must be true or false');
-  if (hasAction && patch.expiryAction !== null && !EXPIRY_ACTIONS.includes(patch.expiryAction)) throw fail(400, `expiryAction must be ${EXPIRY_ACTIONS.join(', ')} or null`);
+  if (hasAction && patch.expiryAction !== null && !EXPIRY_CHOICES.includes(patch.expiryAction)) throw fail(400, `expiryAction must be ${EXPIRY_CHOICES.join(', ')} or null`);
 
   let title;
   if (hasTitle) {
@@ -177,7 +262,7 @@ export function setMeta(id, patch) {
     else delete cur.locked;
   }
   if (hasAction) {
-    if (patch.expiryAction && cur.locked) throw fail(409, 'This conversation is locked. Unlock it first.');
+    if (EXPIRY_ACTIONS.includes(patch.expiryAction) && cur.locked) throw fail(409, 'This conversation is locked. Unlock it first.');
     if (patch.expiryAction) cur.expiryAction = patch.expiryAction;
     else delete cur.expiryAction;
   }

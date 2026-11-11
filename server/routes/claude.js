@@ -1,10 +1,14 @@
 // Claude Code API: sessions, skills, headless chat runs.
+import { hubStatus, otherMachines, remoteCancel, remoteFile, remoteMessages, remoteSend, remoteSends, remoteSessions } from '../services/hubSync.js';
+import { pcName, pcSession, pcStats } from '../services/pcLink.js';
 import { sendJson, notFound, badRequest, readJson } from '../lib/http.js';
 import { getProject } from '../services/catalog.js';
 import {
   listSessions,
   getSessionMessages,
   getSessionStats,
+  getSessionSetup,
+  getContextReport,
   updateSessionMeta,
   updateSessionOrder,
   setSessionArchived,
@@ -19,10 +23,10 @@ import {
 } from '../services/sessions.js';
 import { getUsage, refreshUsage } from '../services/usage.js';
 import { listSkills } from '../services/skills.js';
-import { startRun, listRuns, stopRun, chatOptions, isSessionBusy, sendToRun, answerPermission, pendingFor, releaseSession, takeSessionOffline, hasLiveSession, liveTurnOf } from '../services/runs.js';
+import { startRun, listRuns, stopRun, chatOptions, isSessionBusy, sendToRun, answerPermission, typingPermission, modeFor, setSessionMode, pendingFor, releaseSession, takeSessionOffline, hasLiveSession, liveTurnOf, discoveryRoot } from '../services/runs.js';
 import { isArchived, isLocked } from '../services/sessionMeta.js';
 import { serveFile } from '../services/uploads.js';
-import { expiryStatus, setExpiryAction } from '../services/expiryAction.js';
+import { cacheEnding, expiryStatus, setExpiryAction } from '../services/expiryAction.js';
 
 const BUSY_MS = 2 * 60 * 1000;
 const GUARD_WAIT_MS = Number(process.env.MC_ELSEWHERE_WAIT_MS) > 0 ? Number(process.env.MC_ELSEWHERE_WAIT_MS) : 5000; // the send guard waits this long for a process list, then lets the message through
@@ -32,17 +36,58 @@ function limitOf(url, fallback) {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 }
 
+// kind=chat lists only the plain chats, kind=code only the code conversations; without it, both.
+function kindOf(url) {
+  const k = url.searchParams.get('kind');
+  return k === 'chat' || k === 'code' ? k : null;
+}
+
 export const routes = [
+  {
+    // The other PCs whose code conversations the hub has, for the tabs of the Sessions list: { hub, machines: [...] }
+    method: 'GET',
+    path: '/api/machines',
+    handler: async (req, res) => sendJson(res, 200, { hub: hubStatus(), machines: otherMachines() }),
+  },
+  {
+    // A message for another PC's code conversation: it waits on the hub until that PC runs it. { prompt, attachments }
+    method: 'POST',
+    path: '/api/waiting/:id',
+    handler: async (req, res, params) => {
+      const body = await readJson(req);
+      if (!body || typeof body.prompt !== 'string' || !body.prompt.trim()) return badRequest(res, 'prompt is required');
+      if (body.attachments !== undefined && !Array.isArray(body.attachments)) return badRequest(res, 'attachments must be a list');
+      sendJson(res, 201, await remoteSend(params.id, { prompt: body.prompt, attachments: body.attachments }));
+    },
+  },
+  {
+    method: 'POST',
+    path: '/api/waiting/:id/:sendId/cancel',
+    handler: async (req, res, params) => sendJson(res, 200, await remoteCancel(params.id, params.sendId)),
+  },
   {
     method: 'GET',
     path: '/api/sessions',
     handler: async (req, res, params, url) => {
+      // machine=<id>: another PC's code conversations, from the hub (read only)
+      const machine = url.searchParams.get('machine');
+      if (machine) return sendJson(res, 200, remoteSessions(machine, limitOf(url, 50)));
       const project = url.searchParams.get('project') || null;
       if (project && !getProject(project)) return notFound(res, 'Unknown project');
+      // folder=<root folder>: the conversations started right in that folder (D:\Dev), not in one of its projects
+      const folder = url.searchParams.get('folder') || null;
+      if (folder && !discoveryRoot(folder)) return notFound(res, 'Not a root folder');
       // archived=hide leaves archived conversations out, archived=only lists just those; without it every one is listed
       const a = url.searchParams.get('archived');
-      sendJson(res, 200, await listSessions({ project, limit: limitOf(url, 50), archived: a === 'hide' || a === 'only' ? a : 'all' }));
+      sendJson(res, 200, await listSessions({ project, folder: folder && discoveryRoot(folder), limit: limitOf(url, 50), archived: a === 'hide' || a === 'only' ? a : 'all', kind: kindOf(url) }));
     },
+  },
+  {
+    // The conversations whose cache runs out within 5 min with nothing planned (expiryAction.js), [{ id, expiresAt }].
+    // Before /api/sessions/:id so it is not read as an id.
+    method: 'GET',
+    path: '/api/sessions/cache-ending',
+    handler: async (req, res) => sendJson(res, 200, cacheEnding()),
   },
   {
     // How many archived conversations there are (in a project, when one is given). Before /api/sessions/:id so it is not read as an id.
@@ -51,7 +96,7 @@ export const routes = [
     handler: async (req, res, params, url) => {
       const project = url.searchParams.get('project') || null;
       if (project && !getProject(project)) return notFound(res, 'Unknown project');
-      sendJson(res, 200, { count: await countArchivedSessions(project) });
+      sendJson(res, 200, { count: await countArchivedSessions(project, kindOf(url)) });
     },
   },
   {
@@ -89,7 +134,14 @@ export const routes = [
         }
       }
       if (!s) s = await getSessionMessages(params.id, limit, before === null ? null : before);
-      if (!s) return notFound(res, 'Unknown session');
+      if (!s) {
+        // not this PC's: the PC this one is linked to answers for its own, with the turn in progress (pcLink.js)
+        const p = await pcSession(params.id, url.search);
+        if (p) return sendJson(res, 200, { ...p, readOnly: true, locked: true, link: true, sends: remoteSends(params.id), machine: { ...(p.machine || {}), name: pcName(), online: true } });
+        // another PC's code conversation, read only, from the hub
+        const r = await remoteMessages(params.id, limit, before === null ? null : before);
+        return r ? sendJson(res, 200, r) : notFound(res, 'Unknown session');
+      }
       // The byte mark can fall just after a message that belongs to the turn: one sent while Claude wrote the end of the
       // previous turn is saved before that turn's result is read, so the new mark lands behind it and it is in the saved part
       // and in the live events. The two are matched by message id, and the live one stays.
@@ -99,10 +151,10 @@ export const routes = [
         if (ids.size) s = { ...s, messages: s.messages.filter((m) => !(m.role === 'user' && Array.isArray(m.uuids) && m.uuids.some((k) => ids.has(k)))) };
       }
       const liveOut = live
-        ? { runId: live.runId, state: live.state, upto: live.upto, cut, truncated: live.truncated, events: cut ? live.events : [], turn: live.turn }
+        ? { runId: live.runId, state: live.state, upto: live.upto, cut, truncated: live.truncated, events: cut ? live.events : [], turn: live.turn, tools: live.tools }
         : undefined;
       const where = await elsewhereFor(params.id);
-      sendJson(res, 200, { ...s, archived: isArchived(params.id), locked: isLocked(params.id), ...(where ? { elsewhere: where } : {}), ...(liveOut ? { live: liveOut } : {}) });
+      sendJson(res, 200, { ...s, archived: isArchived(params.id), locked: isLocked(params.id), mode: modeFor(params.id), ...(where ? { elsewhere: where } : {}), ...(liveOut ? { live: liveOut } : {}) });
     },
   },
   {
@@ -134,9 +186,18 @@ export const routes = [
     path: '/api/sessions/:id/stats',
     handler: async (req, res, params) => {
       if (!isUuid(params.id)) return badRequest(res, 'Session id must be a uuid');
-      const s = await getSessionStats(params.id);
+      let s = await getSessionStats(params.id), opt = {};
+      if (!s) {
+        // not this PC's: the PC it runs on, through the link; or the copy the hub has of it
+        const p = await pcStats(params.id);
+        if (p) return sendJson(res, 200, p);
+        const file = await remoteFile(params.id);
+        if (file) { opt = { file }; s = await getSessionStats(params.id, opt); }
+      }
       if (!s) return notFound(res, 'Unknown session');
-      sendJson(res, 200, s);
+      // setup: the tokens the first request carried (system prompt, tools, memory, skills); the rest of the context is messages
+      // context: the last /context report saved in the transcript (its finer split of the setup), or null
+      sendJson(res, 200, { ...s, setup: await getSessionSetup(params.id, opt), context: await getContextReport(params.id, opt) });
     },
   },
   {
@@ -146,6 +207,16 @@ export const routes = [
       const body = await readJson(req);
       if (!body || typeof body !== 'object' || Array.isArray(body)) return badRequest(res, 'Body must be a JSON object');
       sendJson(res, 200, updateSessionOrder(body.ids));
+    },
+  },
+  {
+    // the permission mode picked for a conversation: kept with it, and a Claude running it switches at once
+    method: 'POST',
+    path: '/api/sessions/:id/mode',
+    handler: async (req, res, params) => {
+      const body = await readJson(req, 4096);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) return badRequest(res, 'Body must be a JSON object');
+      sendJson(res, 200, setSessionMode(params.id, body.mode));
     },
   },
   {
@@ -178,13 +249,13 @@ export const routes = [
     },
   },
   {
-    // At 5 min left: what is sent once before the prompt cache runs out (expiryAction.js). GET tells what is planned,
-    // POST { action: 'none' | 'handoff' | 'compact' } sets it.
+    // At 5 min left: what is sent before the prompt cache runs out (expiryAction.js). GET tells what is planned,
+    // POST { action: 'none' | 'handoff' | 'compact' | null } sets it (null: the default, Compact).
     method: 'GET',
     path: '/api/sessions/:id/expiry-action',
     handler: async (req, res, params) => {
       if (!isUuid(params.id)) return badRequest(res, 'Session id must be a uuid');
-      sendJson(res, 200, expiryStatus(params.id));
+      sendJson(res, 200, await expiryStatus(params.id));
     },
   },
   {
@@ -261,6 +332,8 @@ export const routes = [
           effort: body.effort,
           persona: body.persona,
           remote: body.remote, // false for a one-off task: it stays off claude.ai
+          chat: body.chat, // true for a plain chat (no project, no file tools)
+          folder: body.folder, // a new conversation in a root folder (D:\Dev), not in a project
         }),
       );
     },
@@ -303,6 +376,16 @@ export const routes = [
       const body = await readJson(req);
       if (!body || typeof body !== 'object' || Array.isArray(body)) return badRequest(res, 'Body must be a JSON object');
       sendJson(res, 200, answerPermission(params.id, body));
+    },
+  },
+  {
+    // someone is typing an answer to Claude's question: its countdown starts again, and the words are kept with it
+    method: 'POST',
+    path: '/api/runs/:id/permission/typing',
+    handler: async (req, res, params) => {
+      const body = await readJson(req);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) return badRequest(res, 'Body must be a JSON object');
+      sendJson(res, 200, typingPermission(params.id, body));
     },
   },
   {

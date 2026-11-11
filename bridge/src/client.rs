@@ -107,10 +107,15 @@ pub struct ClientConfig {
     pub app_version: String,
     /// Where the "pair again" link on the proxy's pages points (the app's own shell page).
     pub shell_url: Option<String>,
+    /// A second link on the "cannot reach your PC" page: (its words, where it goes), such as "Open the hub" in the app.
+    pub alt_link: Option<(String, String)>,
     /// Longest wait for the PC to answer a dial.
     pub connect_timeout: Duration,
     /// Receives short status lines (no secrets, no paths, no codes).
     pub log: Option<LogFn>,
+    /// mc-link (a PC's link to the hub): requests may prove themselves with `X-MC-Link: <this>` instead of the
+    /// cookie. The caller is Mission Control's own server on the same PC, not a web view. None for the phone.
+    pub link_secret: Option<String>,
 }
 
 impl ClientConfig {
@@ -125,8 +130,10 @@ impl ClientConfig {
             addrs: Vec::new(),
             app_version: env!("CARGO_PKG_VERSION").to_owned(),
             shell_url: None,
+            alt_link: None,
             connect_timeout: Duration::from_secs(20),
             log: None,
+            link_secret: None,
         }
     }
 }
@@ -1080,8 +1087,9 @@ fn html(status: StatusCode, page: String, state: &'static str) -> Response<Body>
 }
 
 /// The proxy's own pages: dark, plain, no color-only meaning.
-fn local_page(title: &str, heading: &str, message: &str, shell: Option<&str>, retry: bool, poll: bool) -> String {
-    let shell_link = shell.map(|u| format!("<a class=\"btn\" href=\"{}\">Pair again</a>", html_escape(u))).unwrap_or_default();
+fn local_page(title: &str, heading: &str, message: &str, shell: Option<&str>, retry: bool, poll: bool, alt: Option<&(String, String)>) -> String {
+    let alt_link = alt.map(|(words, u)| format!("<a class=\"btn\" href=\"{}\">{}</a>", html_escape(u), html_escape(words))).unwrap_or_default();
+    let shell_link = alt_link + &shell.map(|u| format!("<a class=\"btn\" href=\"{}\">Pair again</a>", html_escape(u))).unwrap_or_default();
     let retry_button = if retry { "<button id=\"retry\" type=\"button\">Retry</button>" } else { "" };
     let script = if retry || poll {
         "<script>(function(){var b=document.getElementById('retry');\
@@ -1105,7 +1113,7 @@ button:disabled{{opacity:.5}}</style></head><body><main><h1>{heading}</h1><p cla
 
 impl Proxy {
     fn offline_page(&self, reason: &str) -> Response<Body> {
-        let page = local_page("Cannot reach your PC", "Cannot reach your PC", reason, self.inner.cfg.shell_url.as_deref(), true, true);
+        let page = local_page("Cannot reach your PC", "Cannot reach your PC", reason, self.inner.cfg.shell_url.as_deref(), true, true, self.inner.cfg.alt_link.as_ref());
         html(StatusCode::SERVICE_UNAVAILABLE, page, "offline")
     }
 
@@ -1117,12 +1125,13 @@ impl Proxy {
             self.inner.cfg.shell_url.as_deref(),
             false,
             false,
+            None,
         );
         html(StatusCode::FORBIDDEN, page, "revoked")
     }
 
     fn signed_out_page(&self) -> Response<Body> {
-        let page = local_page("Open the app", "Open Mission Control from the app", "This page was not opened by the app, so it is not allowed to show your PC.", self.inner.cfg.shell_url.as_deref(), false, false);
+        let page = local_page("Open the app", "Open Mission Control from the app", "This page was not opened by the app, so it is not allowed to show your PC.", self.inner.cfg.shell_url.as_deref(), false, false, None);
         let mut r = html(StatusCode::UNAUTHORIZED, page, "signed_out");
         r.headers_mut().insert("cache-control", HeaderValue::from_static("no-store"));
         r
@@ -1142,6 +1151,16 @@ impl Proxy {
             let Some((name, value)) = pair.trim().split_once('=') else { return false };
             name == self.cookie_name && same_secret(value.as_bytes(), self.secret.as_bytes())
         })
+    }
+
+    /// mc-link only: the `X-MC-Link` header holds the link secret (removed before the request leaves, as every X-MC-* is).
+    fn link_ok(&self, headers: &HeaderMap) -> bool {
+        let Some(want) = self.inner.cfg.link_secret.as_deref() else { return false };
+        let mut got = headers.get_all("x-mc-link").iter();
+        match (got.next(), got.next()) {
+            (Some(v), None) => same_secret(v.as_bytes(), want.as_bytes()),
+            _ => false,
+        }
     }
 
     async fn handle(&self, lane: &Lane, req: Request<Incoming>) -> Response<Body> {
@@ -1171,7 +1190,7 @@ impl Proxy {
             return r;
         }
         // 4. The cookie.
-        if !self.cookie_ok(req.headers()) {
+        if !self.cookie_ok(req.headers()) && !self.link_ok(req.headers()) {
             return if nav { self.signed_out_page() } else { plain(StatusCode::UNAUTHORIZED, "unauthorized") };
         }
         lane.authed.store(true, Ordering::Relaxed);
@@ -1335,7 +1354,7 @@ mod tests {
 
     #[test]
     fn pages_escape_the_reason() {
-        let page = local_page("t", "h", "<script>alert(1)</script>", None, true, true);
+        let page = local_page("t", "h", "<script>alert(1)</script>", None, true, true, None);
         assert!(!page.contains("<script>alert"));
         assert!(page.contains("Retry"));
     }

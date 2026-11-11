@@ -1,6 +1,6 @@
 // Tests for the voice assistant: spoken phrases ("send it", "cancel that") on live text, the voice preferences, and the link to
 // BlitzVoice (start options, discard, live words, wake routing) against the FAKE BlitzVoice in tools/fakevoice.
-// Nothing here uses a microphone, a speaker or a real Claude. Run: node --test "tools/test/*.test.mjs"
+// Nothing here uses a microphone, a speaker or a real Claude. Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';

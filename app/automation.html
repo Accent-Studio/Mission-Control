@@ -183,6 +183,7 @@ async function load(){
 }
 load();
 MC.api.get('/api/skills').then(drawSkills).catch(() => drawSkills(null));
+MC.pull.page(() => Promise.all([load(), MC.api.get('/api/skills').then(drawSkills).catch(() => {})]));
 </script>
 </body>
 </html>

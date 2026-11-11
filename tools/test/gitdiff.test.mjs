@@ -1,6 +1,6 @@
 // Tests for GET /api/projects/:id/git/diff, the file changes the project page reader shows: one file at a time, from a
 // commit or not committed yet, and never a secret, a glob match, a whole folder, a raw object or a path through a link.
-// Run: node --test "tools/test/*.test.mjs"        (no npm packages; the server uses a free port and its own data folder)
+// Run: npm test (2 test files at a time)        (no npm packages; the server uses a free port and its own data folder)
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';

@@ -2,6 +2,7 @@
 // Safety: every character of the source is HTML-escaped before any tag is added, so injected markup shows as text.
 // Only http, https and mailto addresses become web links, and images are never loaded (the alt text becomes a link).
 // Local paths become links with class md-path and the path in data-path; the page decides what a click opens.
+// Inline code holding a web address or a local server ("localhost:3000", "192.168.1.20:8080") becomes a web link.
 // GitHub style: headings, paragraphs (soft line breaks kept), emphasis, inline code, fenced code, nested lists,
 // task lists, quotes, rules, tables and bare links. It never throws: any trouble falls back to escaped plain text.
 window.MC = window.MC || {};
@@ -82,8 +83,10 @@ window.MC.md = (function () {
   /* ---------- inline ---------- */
   var ESCAPABLE = '\\`*_{}[]()#+-.!~|<>&"\'';
   var SAFE_URL = /^(?:https?:\/\/|mailto:)/i;
-  // a backslash, a backtick, or the start of an absolute Windows path (C:\ or C:/) that is not inside a word or an address
-  var RE_SPECIAL = /[\\`]|(?<![\w\/\\:.])[A-Za-z]:[\\\/](?!\s)/g;
+  // a backslash, a backtick, or the start of an absolute path that is not inside a word or an address: a Windows one (C:\ or
+  // C:/), or a macOS one under a folder local files live in (/Users/, /Volumes/, /private/, /tmp/, ~/), so a route such as
+  // /api/x stays text
+  var RE_SPECIAL = /[\\`]|(?<![\w\/\\:.~])(?:[A-Za-z]:[\\\/]|(?:\/(?:Users|Volumes|private|tmp)|~)\/)(?!\s)/g;
   // [text](url "title") and ![alt](url), run on already escaped text, so quotes in a title arrive as &quot;
   // The text may hold one badge image: [![alt](img)](url). Every run is length-bounded so a long line cannot make it slow.
   var RE_LINK = /(!?)\[((?:[^\[\]\n]|!\[[^\[\]\n]{0,300}\]\([^\s()]{0,300}\)){0,500})\]\(\s{0,40}([^\s()]{0,2000}(?:\([^\s()]{0,2000}\)[^\s()]{0,2000}){0,20})(?:\s{1,40}&quot;[^\n]{0,300}?&quot;)?\s{0,40}\)/g;
@@ -93,11 +96,13 @@ window.MC.md = (function () {
 
   function anchor(url, inner) { return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + inner + '</a>'; }
 
-  // Local paths: an absolute Windows path anywhere in the text, and in a code span or a [text](target) link also a relative
-  // path ("server/config.js:12", "app/") or a lone file name with a known extension. A ":12" or ":12:5" line may follow.
-  var RE_ABS_RUN = /[A-Za-z]:[\\\/][^\s<>"|?*`]{0,1000}/y;
-  var RE_ABS_WHOLE = /^[A-Za-z]:[\\\/][^<>"|?*\n]{0,1000}$/;
-  var RE_REL = /^(?:\.{1,2}[\\\/])?[\w@.+-]{1,200}(?:[\\\/][\w@.+-]{1,200}){1,40}[\\\/]?(?::\d{1,7}(?::\d{1,7})?)?$/;
+  // Local paths: an absolute Windows or macOS path anywhere in the text, and in a code span or a [text](target) link also a
+  // relative path ("server/config.js:12", "app/") or a lone file name with a known extension. A ":12" or ":12:5" line may follow.
+  var RE_ABS_RUN = /(?:[A-Za-z]:[\\\/]|(?:\/(?:Users|Volumes|private|tmp)|~)\/)[^\s<>"|?*`]{0,1000}/y;
+  var RE_ABS_WHOLE = /^(?:[A-Za-z]:[\\\/]|(?:\/(?:Users|Volumes|private|tmp)|~)\/)[^<>"|?*\n]{0,1000}$/;
+  // A relative path; its later folders and its file name may hold spaces ("01-Acme/Map - Acme systems.html"), its first part may
+  // not, so a command such as "node tools/x.js" stays text. Each part starts and ends with a non-space.
+  var RE_REL = /^(?:\.{1,2}[\\\/])?[\w@.+-]{1,200}(?:[\\\/][\w@.+-](?:[\w@.+ -]{0,198}[\w@.+-])?){1,40}[\\\/]?(?::\d{1,7}(?::\d{1,7})?)?$/;
   var RE_FILE = /^[\w@.+-]{1,200}\.(?:md|markdown|txt|log|json|jsonc|js|mjs|cjs|ts|tsx|jsx|rs|py|ps1|psm1|bat|cmd|sh|html|htm|css|scss|toml|yaml|yml|ini|cfg|conf|xml|csv|sql|go|java|kt|kts|c|h|cpp|hpp|cs|gd|tscn|lua|gradle)(?::\d{1,7}(?::\d{1,7})?)?$/i;
   function pathLike(p) {
     if (!p || p.length > 1000) return false;
@@ -105,13 +110,28 @@ window.MC.md = (function () {
     if (/^[a-z][\w+.-]*:(?!\d)/i.test(p) || p.indexOf('//') >= 0) return false; // an address or a scheme ("x.js:12" is a line)
     if (/^(?:\.{1,2}[\\\/])?[\w@.+-]{1,200}[\\\/]$/.test(p)) return true; // one folder: "app/"
     if (RE_REL.test(p)) {
+      if (/\.[A-Za-z0-9]{1,10} /.test(p)) return false; // "app/x.js and app/y.js" is two paths in a sentence, not one
       if (/[\\\/]$/.test(p)) return true; // a folder
       var last = p.replace(/:\d+(?::\d+)?$/, '').split(/[\\\/]/).pop();
       return /\.[A-Za-z0-9]{1,10}$/.test(last); // a file with an extension, so "and/or" and "1/2" stay text
     }
     return RE_FILE.test(p);
   }
+  // An address in a code span opens in a new tab: a web address, or a local server written without http ("localhost:3000",
+  // "192.168.1.20:8080/api"), which gets http:// in front. Returns the address to open, or null.
+  var RE_LOCAL_HOST = /^(?:localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|\[::1\])(?::\d{1,5})?(?:\/\S*)?$/i;
+  var RE_IP_PORT = /^\d{1,3}(?:\.\d{1,3}){3}:\d{1,5}(?:\/\S*)?$/;
+  function webOf(c) {
+    if (!c || c.length > 2000 || /\s/.test(c)) return null;
+    if (/^https?:\/\/[^\s\/]/i.test(c)) return c;
+    if (RE_LOCAL_HOST.test(c) || RE_IP_PORT.test(c)) return 'http://' + c;
+    if (/^www\.[\w-]+(?:\.[\w-]+)+(?:\/\S*)?$/i.test(c)) return 'https://' + c;
+    return null;
+  }
   // attr: the path already HTML-escaped
+  // A task id (MC-40, TG-2) becomes a link when the page knows it: md.isTask(id), set by the page that has the task list
+  var RE_TASK = /\b[A-Z][A-Z0-9]{0,7}-\d{1,6}\b/g, RE_TASK_ONE = /^[A-Z][A-Z0-9]{0,7}-\d{1,6}$/;
+  function taskAnchor(id, inner) { return '<a class="md-task" href="#" data-task="' + id + '" title="Open ' + id + '">' + inner + '</a>'; }
   function pathAnchor(attr, inner) { return '<a class="md-path" href="#" data-path="' + attr + '" title="Open ' + attr + '">' + inner + '</a>'; }
 
   // Strikethrough, bold and italic on escaped text. Spans are length-bounded so a stray marker cannot make this slow.
@@ -163,8 +183,8 @@ window.MC.md = (function () {
       if (found < 0) { buf += ticks; i += k; continue; }
       var code = s.slice(i + k, found).replace(/\n/g, ' ');
       if (code.length > 2 && code.charAt(0) === ' ' && code.charAt(code.length - 1) === ' ' && code.trim()) code = code.slice(1, -1);
-      var ci = '<code class="md-ic">' + esc(code) + '</code>', cp = code.trim();
-      buf += hold(pathLike(cp) ? pathAnchor(esc(cp), ci) : ci);
+      var ci = '<code class="md-ic">' + esc(code) + '</code>', cp = code.trim(), web = webOf(cp);
+      buf += hold(web ? anchor(esc(web), ci) : pathLike(cp) ? pathAnchor(esc(cp), ci) : md.isTask && RE_TASK_ONE.test(cp) && md.isTask(cp) ? taskAnchor(cp, ci) : ci);
       i = found + k;
     }
     var t = esc(buf);
@@ -192,6 +212,7 @@ window.MC.md = (function () {
       if (u.length <= 8) return u + tail;
       return hold(anchor(u, u)) + tail;
     });
+    if (md.isTask && /[A-Z]-\d/.test(t)) t = t.replace(RE_TASK, function (id) { return md.isTask(id) ? hold(taskAnchor(id, id)) : id; });
     t = emph(t);
 
     if (t.indexOf('\u0000') < 0) return t;
@@ -211,7 +232,7 @@ window.MC.md = (function () {
 
   function indentOf(l) { var k = 0; while (l.charCodeAt(k) === 32) k++; return k; }
   function strip(l, k) { var d = Math.min(indentOf(l), k); return d ? l.slice(d) : l; }
-  function fenceOpen(l) { var m = RE_FENCE.exec(l); return m ? { ch: m[1].charAt(0), len: m[1].length, lang: /^[ \t]*([^\s`]*)/.exec(m[2])[1] } : null; }
+  function fenceOpen(l) { var m = RE_FENCE.exec(l); return m ? { ch: m[1].charAt(0), len: m[1].length, lang: /^[ \t]*([^\s`]*)/.exec(m[2])[1], info: m[2] } : null; }
   // ATX heading: returns { lv, text } or null. The closing #s and the spaces around the text are cut by hand, not by a regex that backtracks.
   function headOf(l) {
     var m = RE_HEAD.exec(l); if (!m) return null;
@@ -225,10 +246,32 @@ window.MC.md = (function () {
   function fenceClose(l, f) { var m = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(l); return !!m && m[1].charAt(0) === f.ch && m[1].length >= f.len; }
   function isBlockStart(l) { return !!(fenceOpen(l) || RE_HEAD.test(l) || RE_HR.test(l) || RE_QUOTE.test(l)); }
 
-  function codeHtml(lines, lang) {
+  // A block to run in a terminal: its language is a shell, its info string says "command" (```text command), or it has no
+  // language and its lines are commands (looksLikeCommand). Mission Control 2 on the PC shows "Paste in the console" on it
+  // (the button is hidden everywhere else, md.css).
+  var CMD_LANGS = { powershell: 1, ps1: 1, pwsh: 1, ps: 1, shell: 1, sh: 1, bash: 1, zsh: 1, console: 1, command: 1 };
+  function isCommand(lang, info) {
+    return !!CMD_LANGS[String(lang || '').toLowerCase()] || /(^|\s)command(\s|$)/i.test(String(info || ''));
+  }
+  // A block with no language is a command too when every line runs a program from a terminal ("npx wrangler login"). A line
+  // after one that ends in \ or ` (a continued command) and a # comment are let through; more than 20 lines is a script.
+  var RE_CMD_LINE = /^(?:[A-Za-z_]\w{0,40}=\S{0,200}\s+){0,5}(?:sudo\s+)?(?:npx|npm|pnpm|yarn|bun|bunx|node|deno|git|gh|cd|ls|mkdir|cp|mv|rm|cat|touch|chmod|open|code|brew|cargo|rustup|rustc|python3?|pip3?|uv|curl|wget|wrangler|docker|ssh|scp|tar|unzip|make|go|winget|choco|claude|tauri|dotnet|java|cmake|ffmpeg|Set-Location|Get-[A-Za-z]{1,40}|Set-[A-Za-z]{1,40}|New-Item|Remove-Item|Copy-Item|Move-Item|Start-Process|Invoke-WebRequest)(?=\s|$)/;
+  function looksLikeCommand(lines) {
+    var n = 0, cont = false;
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i].trim(), was = cont;
+      cont = /[\\`]$/.test(l);
+      if (was || !l || l.charAt(0) === '#') continue;
+      if (++n > 20 || !RE_CMD_LINE.test(l)) return false;
+    }
+    return n > 0;
+  }
+  function codeHtml(lines, lang, info) {
+    var cmd = isCommand(lang, info) || (!lang && looksLikeCommand(lines));
     lang = String(lang || '').replace(/[^\w+#.\-]/g, '').slice(0, 24);
-    // the button's label comes from md.css (::after), so it is not part of the text when someone selects and copies by hand
-    return '<div class="md-code">' + (lang ? '<span class="md-lang">' + esc(lang) + '</span>' : '') + '<button type="button" class="md-copy" title="Copy" aria-label="Copy code"></button><pre><code>' + esc(lines.join('\n')) + '</code></pre></div>';
+    // the buttons' labels come from md.css (::after), so they are not part of the text when someone selects and copies by hand
+    var paste = cmd ? '<button type="button" class="md-paste" title="Paste in the console: you check it, then press Enter" aria-label="Paste in the console"></button>' : '';
+    return '<div class="md-code' + (cmd ? ' md-cmd' : '') + '">' + (lang || cmd ? '<span class="md-lang">' + esc(lang) + paste + '</span>' : '') + '<button type="button" class="md-copy" title="Copy" aria-label="Copy code"></button><pre><code>' + esc(lines.join('\n')) + '</code></pre></div>';
   }
 
   // Splits a table row on pipes that are not escaped and not inside a code span.
@@ -337,7 +380,7 @@ window.MC.md = (function () {
         var code = []; i++;
         while (i < n && !fenceClose(L[i], f)) { code.push(L[i]); i++; }
         i++; // skip the closing fence; an unclosed one runs to the end, which is what a streaming answer needs
-        out.push(codeHtml(code, f.lang));
+        out.push(codeHtml(code, f.lang, f.info));
         continue;
       }
       if ((m = headOf(ln))) {
@@ -386,6 +429,7 @@ window.MC.md = (function () {
     }
   }
   md.esc = esc;
+  md.isCommand = isCommand;
   return md;
 })();
 

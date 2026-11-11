@@ -3,7 +3,7 @@
 // Runs against the FAKE Claude CLI in tools/fakeclaude, which reports background tasks the way the real CLI's stream-json
 // output does (system events background_tasks_changed, task_started, task_updated, task_notification; or, in
 // FAKE_BG_MODE=text, only the tool_result text and the <task-notification> message). Nothing here starts a real Claude conversation.
-// Run: node --test "tools/test/*.test.mjs"
+// Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -48,12 +48,16 @@ const idleRun = (s, runId) => waitFor(async () => {
 describe('idle close waits for background work', () => {
   for (const [word, mode] of [['BGAGENT', 'system'], ['BGBASH', 'system'], ['BGAGENT', 'text']]) {
     test(`${word} (${mode} events): the process stays open while the task runs, and is closed after it ends and the idle time passes`, async () => {
-      const s = await boot({ MC_IDLE_MS: '700', FAKE_BG_MS: '3000', FAKE_BG_MODE: mode });
+      // The task runs 6 s: the run must be seen idle, and still idle 1.7 s later, before it ends, even on a busy PC.
+      const s = await boot({ MC_IDLE_MS: '700', FAKE_BG_MS: '6000', FAKE_BG_MODE: mode });
       const r = await pc(s, 'POST', '/api/chat', { prompt: `${word} please` });
       assert.equal(r.status, 200, r.text);
       const id = r.json.runId;
       const idle = await idleRun(s, id);
       assert.equal(idle.background, 1, 'the run says it has one background task');
+      assert.equal(idle.bgTasks.length, 1, 'and which one, for the pages');
+      assert.equal(idle.bgTasks[0].type, word === 'BGAGENT' ? 'local_agent' : 'local_bash');
+      assert.ok(idle.bgTasks[0].since > 0);
       // Longer than twice the idle time: without the fix the process would be closed by now.
       await sleep(1700);
       const still = await runOf(s, id);

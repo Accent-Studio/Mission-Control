@@ -1,6 +1,6 @@
 // Tests for GET /api/projects/:id/library and the file route's `root`: the Docs and Screenshots tabs list a project's text files
 // and pictures as trees, with its notes folders as extra roots, read only.
-// Run: node --test "tools/test/*.test.mjs"        (no npm packages; the server uses a free port and its own data folder)
+// Run: npm test (2 test files at a time)        (no npm packages; the server uses a free port and its own data folder)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';

@@ -17,7 +17,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { run } from '../lib/run.js';
-import { clientCount, onClientConnect, publish, sendTo } from '../lib/events.js';
+import { clientCount, connectedClients, onClientConnect, publish, sendTo } from '../lib/events.js';
 import { resolveClaude } from '../lib/claudeExe.js';
 import { getProject, loadCatalog } from './catalog.js';
 import { isUuid, getSessionInfo, getSessionStats, statsFromAssistantEvent, noteContextWindow, withCurrentWindow, catalogModels, liveSendFileImages, transcriptSize } from './sessions.js';
@@ -25,18 +25,23 @@ import { buildContent, cacheImage } from './uploads.js';
 import { ingestRateLimitEvent } from './usage.js';
 import { PERSONAS, personaPromptFile, personaEvent } from './persona.js';
 import { classifyUserEntry, rawTextOf } from './userKinds.js';
-import { adoptRunnerProc, onAttach, onLost, runnerReady, spawnProc, startRunnerClient } from './runnerClient.js';
+import { adoptRunnerProc, onAttach, onLost, runnerReady, runnerStatus, spawnProc, startRunnerClient } from './runnerClient.js';
+import { MCP_DIR, MC_TOOLS, mcpConfigFile } from '../runner/shared.js';
 import { getVoicePrefs } from './voice.js';
-import { isArchived, isOneOff, setOneOff, isLocked } from './sessionMeta.js';
+import { isLocalAbs } from '../lib/localPath.js';
+import { isArchived, isOneOff, setOneOff, setComlink, isLocked, modeOf, setMode } from './sessionMeta.js';
 import { nameConversation } from './autoTitle.js';
-import { DEFAULT_CWD } from '../config.js'; // also one of the folders the runner accepts (runner/shared.js)
+import { DEFAULT_CWD, DISCOVERY_ROOTS, MACHINE_NAME, PORT, ROLE } from '../config.js'; // also one of the folders the runner accepts (runner/shared.js)
+import { CHAT_FLAGS, ensureChatsDir, isChatDir } from '../lib/chats.js';
+import { beforeChatRun } from './hubSync.js';
+import { ensureGate, gatePlan, isLocalModel, localEffort, localModelOptions, settingsFileFor, writeProjectsFile } from './localModels.js';
 
 const MAX_CONCURRENT = 3;
 const MAX_FINISHED = 20;
 const MAX_PROMPT = 20000;
 
 // What the chat can ask for. Only these values ever reach the command line: "default" means no flag, and
-// bypassPermissions and dontAsk are deliberately not offered.
+// dontAsk is not offered.
 // Models are full ids (never aliases, because an alias such as "sonnet" can resolve to another version than
 // the label says). The list comes from the CLI's own model catalog, with this table as the fallback.
 const FALLBACK_MODELS = [
@@ -103,7 +108,6 @@ function modelOptions() {
     .sort((x, y) => rank(x.m) - rank(y.m) || y.v[0] - x.v[0] || y.v[1] - x.v[1] || x.i - y.i)
     .map((x) => x.m);
   return [
-    { id: 'default', label: 'Default', flag: null },
     ...sorted.map((m) => {
       const o = { id: m.id, label: m.label, flag: m.id };
       if (m.minVersion && installedVersion && olderThan(installedVersion, m.minVersion)) {
@@ -112,34 +116,57 @@ function modelOptions() {
       }
       return o;
     }),
+    // local models (llama.cpp) after Claude's, each with its own efforts; the hub runs Claude only
+    ...(ROLE === 'hub' ? [] : localModelOptions()),
   ];
 }
 
+// Every run names its model and its mode. Left out, the CLI takes them from ~/.claude/settings.json: the last /model picked
+// in a terminal, or a "defaultMode" that turns Ask first into something else.
+const DEFAULT_MODEL = 'claude-opus-5-5';
 const MODES = [
-  { id: 'default', label: 'Ask first', flag: null },
+  { id: 'default', label: 'Ask first', flag: 'default' },
   { id: 'acceptEdits', label: 'Accept edits', flag: 'acceptEdits' },
   { id: 'plan', label: 'Plan', flag: 'plan' },
   { id: 'auto', label: 'Auto', flag: 'auto' },
+  { id: 'bypassPermissions', label: 'Accept all', flag: 'bypassPermissions' }, // never asks, and no safety check
 ];
+// The mode of a new conversation, and of one that never had a mode picked for it. A chat always runs Ask first (it only searches).
+export const DEFAULT_MODE = 'auto';
+// Highest first, as the menus show them; "Default" (no flag) stays the choice of a page that remembers nothing.
 const EFFORTS = [
-  { id: 'default', label: 'Default', flag: null },
-  { id: 'low', label: 'Low', flag: 'low' },
-  { id: 'medium', label: 'Medium', flag: 'medium' },
-  { id: 'high', label: 'High', flag: 'high' },
-  { id: 'xhigh', label: 'Extra high', flag: 'xhigh' },
   { id: 'max', label: 'Max', flag: 'max' },
+  { id: 'xhigh', label: 'Extra high', flag: 'xhigh' },
+  { id: 'high', label: 'High', flag: 'high' },
+  { id: 'medium', label: 'Medium', flag: 'medium' },
+  { id: 'low', label: 'Low', flag: 'low' },
+  { id: 'default', label: 'Default', flag: null },
 ];
+
+// The model a new conversation gets: Opus 5.5, or the newest Opus when this CLI does not offer it.
+function defaultModel(list = modelOptions()) {
+  const usable = list.filter((o) => !o.disabled);
+  const hit = usable.find((o) => o.id === DEFAULT_MODEL) || usable.find((o) => /^claude-opus-/.test(o.id)) || usable[0];
+  return hit ? hit.id : DEFAULT_MODEL;
+}
 
 export async function chatOptions() {
   await claudeVersion();
-  const strip = (list) => list.map(({ id, label, disabled, reason }) => (disabled ? { id, label, disabled: true, reason } : { id, label }));
-  return { models: strip(modelOptions()), modes: strip(MODES), efforts: strip(EFFORTS) };
+  const strip = (list) => list.map(({ id, label, disabled, reason, local, efforts }) => ({ id, label, ...(disabled ? { disabled: true, reason } : {}), ...(local ? { local: true, efforts } : {}) }));
+  const models = modelOptions();
+  return { models: strip(models), modes: strip(MODES), efforts: strip(EFFORTS), defaults: { model: defaultModel(models), effort: 'default', mode: DEFAULT_MODE }, machine: MACHINE_NAME };
 }
 
-// Returns the CLI flag value for an option, null for "default", or throws 400 for anything not on the list.
+// A full model id a conversation already ran on, such as claude-opus-4-6 or claude-haiku-4-5-20251001 (never an alias).
+const FULL_MODEL_ID = /^claude-[a-z]+-\d+(?:-\d+)*(?:\[1m\])?$/;
+const ownModelId = (m) => typeof m === 'string' && (FULL_MODEL_ID.test(m) || isLocalModel(m)); // also a local model it ran on
+
+// Returns the CLI flag value for an option, null for nothing asked, or throws 400 for anything not on the list.
+// A model may also be a conversation's own model that the list no longer offers: keeping it is not a switch.
 function optionFlag(list, value, name) {
   if (value === undefined || value === null || value === '') return null;
   if (typeof value !== 'string') throw fail(400, `${name} must be a string`);
+  if (name === 'model' && FULL_MODEL_ID.test(value) && !list.some((o) => o.id === value)) return value;
   const hit = list.find((o) => o.id === value);
   if (!hit) throw fail(400, `unknown ${name}`);
   if (hit.disabled) throw fail(400, hit.reason);
@@ -184,19 +211,32 @@ function pub(type, data) {
 
 const IDLE_MS = Number(process.env.MC_IDLE_MS) || 10 * 60 * 1000; // an idle process is closed after this long
 const MAX_IDLE = Number(process.env.MC_IDLE_MAX) || 4; // at most this many idle processes stay open
-const PERMISSION_MS = Number(process.env.MC_PERMISSION_MS) || 15 * 60 * 1000; // no answer by then: deny
+// A permission question with no answer by then is denied. Claude's own questions (AskUserQuestion) wait far longer, since an
+// answer there can take a while to write, and typing into one (POST .../permission/typing) starts its countdown again.
+const PERMISSION_MS = Number(process.env.MC_PERMISSION_MS) || 60 * 60 * 1000;
+const QUESTION_MS = Number(process.env.MC_QUESTION_MS) || 24 * 60 * 60 * 1000;
+const TOUCH_JOURNAL_MS = 30 * 1000; // typing is written to the journal at most this often per question (the restart keeps it)
 const KILL_AFTER_CLOSE_MS = 15000; // a process that ignores a closed stdin is killed after this long
 // Background work (helper agents, background shell commands) started in a turn keeps a run from being closed as idle. A
 // task whose "finished" event was lost is forgotten after this long, so it cannot keep a process forever.
-const BG_MAX_MS = Number(process.env.MC_BG_MAX_MS) || 4 * 60 * 60 * 1000;
+const BG_MAX_MS = Number(process.env.MC_BG_MAX_MS) || 24 * 60 * 60 * 1000;
 const BG_MAX_TASKS = 256;
 const CHECKPOINT_EVERY = 200; // journal lines handled while idle before the runner may drop them
 
 const isLive = (r) => r.state === 'starting' || r.state === 'working' || r.state === 'idle';
 const isBusy = (r) => r.state === 'starting' || r.state === 'working';
 
+// Runs the pages leave out of their lists (the Sync button's commit step, sync.js). Only a flag for the pages: the run
+// itself is an ordinary one, and its permission questions still reach the pages (sync.js shows the conversation then).
+const hiddenRuns = new Set();
+export function hideRun(runId, on) {
+  if (on) hiddenRuns.add(runId);
+  else hiddenRuns.delete(runId);
+}
+
 function publicRun(r) {
   return {
+    ...(hiddenRuns.has(r.runId) ? { hidden: true } : {}),
     runId: r.runId,
     projectId: r.projectId,
     sessionId: r.sessionId,
@@ -205,8 +245,9 @@ function publicRun(r) {
     state: r.state,
     running: isBusy(r),
     promptPreview: r.promptPreview,
+    ...(isChatDir(r.cwd) ? { chat: true } : {}),
     ...(r.pending.size ? { pending: r.pending.size } : {}),
-    ...(r.bg.size ? { background: r.bg.size } : {}), // background tasks still running (such a run is idle but is not closed)
+    ...(r.bg.size ? { background: r.bg.size, bgTasks: [...r.bg].slice(0, 5).map(([id, t]) => ({ id, type: t.type, description: t.description, since: t.since })) } : {}), // background tasks still running (such a run is idle but is not closed): the pages show them
     ...(r.turn.events.length ? { liveEvents: r.turn.events.length } : {}), // events kept for a page that joins the turn (gone when it ends)
     ...(r.remote.state !== 'off' ? { remote: r.remote.state } : {}),
     ...(r.remote.state === 'on' && r.remote.url ? { remoteUrl: r.remote.url } : {}),
@@ -240,9 +281,10 @@ export async function resolveSessionCwd(sessionId, fallback = DEFAULT_CWD) {
   const info = await getSessionInfo(sessionId);
   if (!info) throw fail(404, 'Unknown session');
   const cwd = info.cwd;
-  if (typeof cwd !== 'string' || !/^[A-Za-z]:[\\/]/.test(cwd) || cwd.includes('\0')) {
+  if (!isLocalAbs(cwd) || cwd.includes('\0')) {
     throw fail(409, 'The session has no usable working folder recorded, so it cannot be resumed here');
   }
+  if (isChatDir(cwd)) return ensureChatsDir(); // a chat brought in from elsewhere (claude.ai) before any chat ran here
   let ok = false;
   try {
     ok = fs.statSync(cwd).isDirectory();
@@ -320,6 +362,8 @@ function rememberOpts(rec) {
   // and a resume from the Talk page (which says nothing about it) must still keep the conversation off claude.ai.
   try {
     setOneOff(rec.sessionId, !!rec.oneOff);
+    if (rec.opts.mode && !isChatDir(rec.cwd)) setMode(rec.sessionId, rec.opts.mode); // the next message that names no mode (another PC, the phone) keeps it
+    if (rec.persona) setComlink(rec.sessionId); // a Com Link chat gets no default action before its cache runs out
   } catch (err) {
     console.error('[runs] could not save the one-off flag:', err.message);
   }
@@ -334,7 +378,8 @@ function checkPrompt(prompt, hasAttachments) {
   return prompt;
 }
 
-const busyCount = () => [...runs.values()].filter(isBusy).length;
+// The Com Link's runs are not counted: it must answer while the crew is busy, and its runs are small.
+const busyCount = () => [...runs.values()].filter((r) => isBusy(r) && !r.persona).length;
 
 // A locked conversation is read only (sessionMeta.js): every way of sending to it ends here.
 const LOCKED = 'This conversation is locked. Unlock it to send.';
@@ -358,11 +403,16 @@ async function untilGone(recs) {
 // ({ runId, joined: true }), otherwise a process starts ({ runId }).
 // remote: false keeps the new process off claude.ai (Remote Control). A one-off task (Commit, Review and push, a skill
 // chip) sets it and the conversation remembers it (remote: true turns it back on); a conversation the user holds (the Talk page, the Com Link) leaves it out, and it defaults to on.
-export async function startRun({ prompt, attachments, projectId, sessionId, model, mode, effort, persona, remote } = {}) {
+// chat: true starts a plain chat (lib/chats.js) instead of a code conversation. A resumed conversation is a chat when its
+// folder is the chats folder, whatever is sent.
+// folder: a new conversation in one of the root folders (a discovery root such as D:\Dev) rather than in a project.
+export async function startRun({ prompt, attachments, projectId, sessionId, model, mode, effort, persona, remote, chat, folder } = {}) {
   await claudeVersion();
   await runnerReady(); // after a restart, the conversations the runner kept must be taken over before a new message is placed
   if (persona !== undefined && persona !== null && !PERSONAS.includes(persona)) throw fail(400, 'unknown persona');
   if (remote !== undefined && remote !== null && typeof remote !== 'boolean') throw fail(400, 'remote must be true or false');
+  if (chat !== undefined && chat !== null && typeof chat !== 'boolean') throw fail(400, 'chat must be true or false');
+  if (chat && persona) throw fail(400, 'a chat has no persona');
   if (sessionId !== undefined && sessionId !== null && sessionId !== '' && !isUuid(sessionId)) {
     throw fail(400, 'sessionId must be a uuid');
   }
@@ -373,9 +423,41 @@ export async function startRun({ prompt, attachments, projectId, sessionId, mode
   if (last && !explicit) ({ model, mode, effort } = last);
   else if (last && model === undefined) model = last.model; // no model named: the conversation keeps its own, even when the effort changes
   const cwdHint = last ? last.cwd : null; // a conversation this server ran knows its folder, even before it is indexed
+  // A chat has no permission mode to pick: it may only search the web, which it does without asking.
+  const chatLike = chat === true || (!!sessionId && isChatDir(cwdHint || ((await getSessionInfo(sessionId).catch(() => null)) || {}).cwd));
+  if (chatLike) mode = 'default';
+  // The hub is a shared server with no projects: its Claude runs chats only (no file tools), never a code conversation.
+  if (ROLE === 'hub' && !chatLike) throw fail(409, 'The hub runs chats only. Code conversations run on their PC.');
+  // Always a model by name. "default" is what older pages, saved jobs and remembered choices still send.
+  if (model === 'default') model = undefined;
+  if (model === undefined || model === null || model === '') {
+    // A conversation keeps the model its transcript last answered with; a new one gets the default model.
+    const info = sessionId ? await getSessionInfo(sessionId).catch(() => null) : null;
+    model = info && ownModelId(info.model) ? info.model : defaultModel();
+  }
+  // No mode named and none in memory (a restart, or a message from another PC or the phone): the one this conversation last ran with.
+  if ((mode === undefined || mode === null || mode === '') && sessionId) {
+    const saved = modeOf(sessionId);
+    if (saved && MODES.some((m) => m.id === saved)) mode = saved;
+  }
+  if (mode === undefined || mode === null || mode === '') mode = DEFAULT_MODE;
   const modelFlag = optionFlag(modelOptions(), model, 'model');
   const modeFlag = optionFlag(MODES, mode, 'mode');
-  const effortFlag = optionFlag(EFFORTS, effort, 'effort');
+  // A local model has its own efforts (lib/localModels.js), sent through its settings file, never as --effort. A Claude
+  // effort sent for it (an older page, the Com Link's saved choice) is read as the nearest local one.
+  const local = isLocalModel(model);
+  if (local) effort = localEffort(effort);
+  const effortFlag = local ? `local:${effort}` : optionFlag(EFFORTS, effort, 'effort');
+  let localCtx = null;
+  if (local) {
+    if (runnerStatus().old) throw fail(409, 'Local models need a full restart of Mission Control first: close its window, then run start.bat.');
+    try {
+      await ensureGate();
+      localCtx = await gatePlan(model);
+    } catch (err) {
+      throw fail(503, err.message);
+    }
+  }
   const hasFiles = Array.isArray(attachments) && attachments.length > 0;
   prompt = checkPrompt(prompt, hasFiles);
   const content = await buildContent(prompt, attachments);
@@ -386,6 +468,12 @@ export async function startRun({ prompt, attachments, projectId, sessionId, mode
   if (live) {
     const same = live.flags.model === modelFlag && live.flags.mode === modeFlag && live.flags.effort === effortFlag;
     if (same || !explicit) {
+      submit(live, content, prompt);
+      return { runId: live.runId, joined: true };
+    }
+    // Only the mode differs: the running Claude switches mode (at once, also in the middle of a turn) and takes the message.
+    if (live.flags.model === modelFlag && live.flags.effort === effortFlag && !chatLike) {
+      switchMode(live, mode);
       submit(live, content, prompt);
       return { runId: live.runId, joined: true };
     }
@@ -409,18 +497,32 @@ export async function startRun({ prompt, attachments, projectId, sessionId, mode
 
   let cwd = DEFAULT_CWD;
   let pid = null;
-  if (projectId) {
+  if (chat && !sessionId) cwd = ensureChatsDir();
+  else if (projectId) {
     const p = typeof projectId === 'string' ? getProject(projectId) : null;
     if (!p) throw fail(400, 'unknown projectId');
     if (!fs.existsSync(p.folder)) throw fail(400, 'project folder does not exist');
     cwd = p.folder;
     pid = p.id;
+  } else if (folder !== undefined && folder !== null && folder !== '' && !sessionId) {
+    const root = discoveryRoot(folder);
+    if (!root) throw fail(400, 'folder must be one of the root folders');
+    if (!fs.existsSync(root)) throw fail(400, 'that root folder does not exist');
+    cwd = root;
   }
   if (sessionId) cwd = cwdHint && fs.existsSync(cwdHint) ? cwdHint : await resolveSessionCwd(sessionId, cwd);
+  const isChat = isChatDir(cwd);
+  if (isChat && persona) throw fail(400, 'a chat has no persona');
+  if (isChat && sessionId) {
+    // the hub's baton, and the chat's latest copy from the other places; when another place holds it and its Claude is
+    // thinking, the message goes there instead (as a phone's would) and the answer comes back with the chat
+    const away = await beforeChatRun(sessionId, { text: prompt, attachments: hasFiles ? attachments : [] });
+    if (away && away.relayed) return { relayed: true, to: away.to };
+  }
 
   // Resolve first, then count and register with no await in between. Counting before an await
   // would let two quick requests both see free capacity and both start.
-  const entry = await resolveClaude();
+  const entry = await resolveClaude({ fresh: true }); // Claude Code may have updated itself since the last start
   // Another request for the same conversation may have started its process during the awaits above: join it,
   // never start a second process for one conversation.
   const raced = sessionId ? findLive(sessionId) : null;
@@ -428,18 +530,27 @@ export async function startRun({ prompt, attachments, projectId, sessionId, mode
     submit(raced, content, prompt);
     return { runId: raced.runId, joined: true };
   }
-  if (busyCount() >= MAX_CONCURRENT) throw fail(429, `Too many runs at once (limit ${MAX_CONCURRENT})`);
+  if (!persona && busyCount() >= MAX_CONCURRENT) throw fail(429, `Too many runs at once (limit ${MAX_CONCURRENT})`);
 
   // The runner checks every one of these: the fixed list, then only these flags with values of the expected shape.
   const args = [...entry.pre, '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--replay-user-messages', '--permission-prompt-tool', 'stdio'];
   if (sessionId) args.push('--resume', sessionId);
   if (modelFlag) args.push('--model', modelFlag);
   if (modeFlag) args.push('--permission-mode', modeFlag);
-  if (effortFlag) args.push('--effort', effortFlag);
+  // A local model: the gate shows it only the core tools and loads the others on demand (lib/localModels.js), and it has
+  // no skills (their list alone would fill its small context).
+  if (local) {
+    writeProjectsFile();
+    args.push('--settings', settingsFileFor(model, effort, localCtx), '--disable-slash-commands');
+  }
+  else if (effortFlag) args.push('--effort', effortFlag);
   // The Com Link speaks as its persona: her prompt and memory, read fresh for every process (a resumed one too).
   if (persona) args.push('--append-system-prompt-file', personaPromptFile(persona, getVoicePrefs().comlinkName));
+  if (isChat) args.push(...CHAT_FLAGS);
 
   const runId = crypto.randomUUID();
+  // Mission Control's own tools (tasks), for every code conversation. A runner older than this code would refuse the flags.
+  if (!isChat && ROLE !== 'hub' && !runnerStatus().old && writeMcpConfig(runId)) args.push('--mcp-config', mcpConfigFile(runId), '--allowedTools', MC_TOOLS);
   const preview = prompt.trim() || content.sent.map((s) => s.name).join(', ');
   const rec = makeRec({
     runId,
@@ -470,6 +581,40 @@ export async function startRun({ prompt, attachments, projectId, sessionId, mode
   }, 30);
 
   return { runId };
+}
+
+// The MCP config of one run: Mission Control's endpoint, with the run's id so a tool call knows its conversation and project.
+// Removed when the process ends; leftovers of a crash are cleared at start.
+function writeMcpConfig(runId) {
+  try {
+    fs.mkdirSync(MCP_DIR, { recursive: true });
+    const cfg = { mcpServers: { mc: { type: 'http', url: `http://127.0.0.1:${PORT}/api/mcp`, headers: { 'X-MC': '1', 'X-MC-Run': runId } } } };
+    fs.writeFileSync(mcpConfigFile(runId), JSON.stringify(cfg));
+    return true;
+  } catch (err) {
+    console.error('[runs] could not write the MCP config:', err.message);
+    return false;
+  }
+}
+function dropMcpConfig(runId) {
+  fs.rm(mcpConfigFile(runId), { force: true }, () => {});
+}
+setTimeout(() => {
+  // configs of runs that no longer exist (a crash): kept a day, since a run the runner kept may still use its own
+  fs.readdir(MCP_DIR, (err, names) => {
+    if (err) return;
+    for (const n of names) {
+      const f = `${MCP_DIR}/${n}`;
+      fs.stat(f, (e, st) => { if (!e && Date.now() - st.mtimeMs > 24 * 3600e3 && !runs.has(n.replace(/\.json$/, ''))) fs.rm(f, { force: true }, () => {}); });
+    }
+  });
+}, 60e3).unref();
+
+// Who a call to Mission Control's MCP endpoint comes from (services/mcp.js): the conversation and project of a run.
+export function runCaller(runId) {
+  const rec = runId ? runs.get(runId) : null;
+  if (!rec) return null;
+  return { sessionId: rec.sessionId || null, projectId: rec.projectId || null, cwd: rec.cwd || null, local: isLocalModel(rec.opts && rec.opts.model) };
 }
 
 // A fresh record. restoreRun() builds one the same way from what the runner kept.
@@ -512,6 +657,7 @@ function makeRec(init) {
     cpN: 0, // ... and the one the runner last got a checkpoint for
     cpDue: false,
     replaying: false, // the journal is being replayed after a restart
+    openTools: new Map(), // tool calls of this turn with no answer yet (noteTools)
     bg: new Map(), // background tasks that are running: task id -> { since, type, description }
     pubSeq: 0, // (a record rebuilt after a restart) the last event number the old server is known to have published
     stash: null, // (same) the events numbered after it, for the pages that connect after the restart (see stashEvent)
@@ -530,6 +676,7 @@ function makeRec(init) {
   rec.exited = new Promise((resolve) => {
     rec.markExited = resolve;
   });
+  rec.exited.then(() => dropMcpConfig(rec.runId));
   return rec;
 }
 
@@ -552,7 +699,7 @@ export async function sendToRun(runId, { prompt, attachments } = {}) {
 function submit(rec, content, prompt) {
   if (!isLive(rec) || rec.closing) throw fail(409, 'This run has already ended');
   if (rec.replaying) throw fail(503, 'Mission Control is taking this conversation over again after a restart, try again in a moment');
-  if (rec.state === 'idle' && busyCount() >= MAX_CONCURRENT) throw fail(429, `Too many runs at once (limit ${MAX_CONCURRENT})`);
+  if (rec.state === 'idle' && !rec.persona && busyCount() >= MAX_CONCURRENT) throw fail(429, `Too many runs at once (limit ${MAX_CONCURRENT})`);
   // The message carries an id of our own: the CLI replays it and saves it to the transcript under that id (or, if it
   // ignores ours, the replay tells which id it used, see handleEvent). A page that holds the saved part and the live
   // events matches the two by that id, so a message that is in both shows once.
@@ -584,6 +731,12 @@ function act(rec, e) {
       case 'perm':
         applyAnswer(rec, e);
         break;
+      case 'touch': {
+        // someone is typing an answer: the countdown starts again from here
+        const p = rec.pending.get(e.requestId);
+        if (p) { p.touched = Math.max(p.touched || 0, e.t); p.journaled = e.t; rearmPermission(rec, p); }
+        break;
+      }
       case 'close':
         rec.closing = e.why;
         rec.closeAt = e.t;
@@ -593,6 +746,24 @@ function act(rec, e) {
       case 'kill':
         rec.stopRequested = true; // the end of a killed process is "stopped", not "failed"
         break;
+      case 'mode': {
+        // the running Claude switches its permission mode (the CLI's set_permission_mode); kept, so a restart knows it
+        const hit = MODES.find((m) => m.id === e.mode);
+        if (!hit) break;
+        rec.opts.mode = hit.id;
+        rec.flags = { ...rec.flags, mode: hit.flag };
+        sendControl(rec, { subtype: 'set_permission_mode', mode: hit.flag }, (r) => {
+          if (r && r.subtype === 'error') console.error('[runs] the CLI did not switch the permission mode:', r.error);
+        });
+        if (rec.sessionId) {
+          const last = lastOpts.get(rec.sessionId.toLowerCase());
+          if (last) last.mode = hit.id;
+          if (!ctx.replay && !isChatDir(rec.cwd)) {
+            try { setMode(rec.sessionId, hit.id); } catch (err) { console.error('[runs] could not save the mode:', err.message); }
+          }
+        }
+        break;
+      }
       default:
         break;
     }
@@ -658,6 +829,27 @@ function toolHint(input) {
   return out;
 }
 
+// The ids of the tool calls a user event answers
+function toolResultIds(ev) {
+  const c = ev && ev.type === 'user' && ev.message && Array.isArray(ev.message.content) ? ev.message.content : [];
+  return c.filter((b) => b && b.type === 'tool_result' && typeof b.tool_use_id === 'string').map((b) => b.tool_use_id.slice(0, 100));
+}
+
+// The tool calls of the turn that have no answer yet: id -> { name, hint, since }. A page shows the oldest one with its
+// own clock, so a long command (a test suite, a build) shows as running even while Claude is not writing.
+function noteTools(rec, ev) {
+  if (!ev) return;
+  if (ev.type === 'assistant' && ev.message && Array.isArray(ev.message.content)) {
+    for (const b of ev.message.content) {
+      if (!b || b.type !== 'tool_use' || typeof b.id !== 'string') continue;
+      if (rec.openTools.size >= 20) rec.openTools.delete(rec.openTools.keys().next().value);
+      rec.openTools.set(b.id.slice(0, 100), { name: String(b.name || 'tool').slice(0, 60), hint: toolHint(b.input), since: tnow() });
+    }
+  } else if (ev.type === 'user') {
+    for (const id of toolResultIds(ev)) rec.openTools.delete(id);
+  } else if (ev.type === 'result') rec.openTools.clear();
+}
+
 // The part of a published 'chat' payload a page needs to rebuild the turn, or null when it needs nothing.
 function turnPiece(p) {
   if (p.sent) return { sent: p.sent, at: p.at, uuid: p.uuid };
@@ -670,11 +862,14 @@ function turnPiece(p) {
     const content = [];
     for (const b of ev.message.content) {
       if (b && b.type === 'text' && b.text) content.push({ type: 'text', text: String(b.text).slice(0, 200000) });
-      else if (b && b.type === 'tool_use') content.push({ type: 'tool_use', name: String(b.name || 'tool').slice(0, 60), input: toolHint(b.input) });
+      else if (b && b.type === 'tool_use') content.push({ type: 'tool_use', id: typeof b.id === 'string' ? b.id.slice(0, 100) : undefined, name: String(b.name || 'tool').slice(0, 60), input: toolHint(b.input) });
     }
     return content.length ? { event: { type: 'assistant', message: { content } } } : null;
   }
   if (ev.type === 'user' && ev.mcNotice) return { event: { type: 'user', mcNotice: ev.mcNotice } };
+  // which tool calls have their answer: a page that joins the turn shows the one still running (a test suite, a build)
+  const done = toolResultIds(ev);
+  if (done.length) return { event: { type: 'user', message: { content: done.map((id) => ({ type: 'tool_result', tool_use_id: id })) } } };
   return null;
 }
 
@@ -718,6 +913,7 @@ export function liveTurnOf(sessionId) {
       truncated: r.turn.truncated,
       events: r.turn.events.slice(),
       turn: { startedAt: new Date(r.turnStartedAt).toISOString(), lastEventAt: new Date(r.lastEventAt).toISOString(), outputTokens: out },
+      tools: [...r.openTools].map(([id, t]) => ({ id, name: t.name, since: new Date(t.since).toISOString() })),
     };
   }
   return null;
@@ -1061,7 +1257,8 @@ function handleEvent(rec, event) {
     rec.sessionId = event.session_id;
     persistRun(rec);
     // a conversation that starts here gets a short name from its first message; one-off tasks keep their own
-    if (isNew && !ctx.replay && rec.firstPrompt && !rec.oneOff) nameConversation(rec.sessionId, rec.firstPrompt, rec.opts && rec.opts.projectId);
+    // a local model's conversation is not named by Haiku: its first message would leave the PC
+    if (isNew && !ctx.replay && rec.firstPrompt && !rec.oneOff && !isLocalModel(rec.opts && rec.opts.model)) nameConversation(rec.sessionId, rec.firstPrompt, rec.opts && rec.opts.projectId);
     rec.firstPrompt = null;
   }
   const type = event && event.type;
@@ -1070,9 +1267,13 @@ function handleEvent(rec, event) {
   if (type === 'control_response') return onControlResponse(rec, event);
   rec.heard = true;
   if (!rec.remote.asked && !ctx.replay) enableRemote(rec); // the first thing heard from a process: ask for Remote Control (never delays a message)
-  if (noteBackground(rec, event) && rec.state === 'idle') {
-    armIdle(rec);
-    enforceIdleCap(); // the last task may just have ended: the run can be closed again, and counts toward the cap again
+  noteTools(rec, event);
+  if (noteBackground(rec, event)) {
+    if (!ctx.replay) pub('run.background', { runId: rec.runId, sessionId: rec.sessionId, count: rec.bg.size }); // the pages read the runs again
+    if (rec.state === 'idle') {
+      armIdle(rec);
+      enforceIdleCap(); // the last task may just have ended: the run can be closed again, and counts toward the cap again
+    }
   }
 
   if (rec.state === 'starting') {
@@ -1181,13 +1382,19 @@ function summaryOf(input) {
 }
 
 function publicPending(p) {
-  return { requestId: p.requestId, tool: p.tool, summary: p.summary, input: p.input, suggestions: p.suggestions, toolUseId: p.toolUseId, at: p.at, ...(p.questions ? { questions: p.questions } : {}) };
+  return {
+    requestId: p.requestId, tool: p.tool, summary: p.summary, input: p.input, suggestions: p.suggestions, toolUseId: p.toolUseId, at: p.at,
+    deadline: new Date(deadlineOf(p)).toISOString(),
+    ...(p.questions ? { questions: p.questions } : {}),
+    ...(p.draft ? { draft: p.draft } : {}),
+  };
 }
 
 // Claude's multiple choice questions (its AskUserQuestion tool) arrive as a permission request. The page shows them as a
 // question card; the answer goes back as an allow whose updatedInput carries `answers`: { "<question text>": "<chosen label>" }
 // (several labels joined with ", ", or the words typed under Other).
 const ASK_TOOL = 'AskUserQuestion';
+const MAX_ANSWER = 20000; // one answer, picks and the words typed under Other together
 const clip = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
 function questionsOf(input) {
   const qs = Array.isArray(input.questions) ? input.questions : [];
@@ -1205,7 +1412,7 @@ function checkAnswers(p, answers) {
   const out = {};
   for (const [k, v] of Object.entries(answers)) {
     if (!asked.has(k)) throw fail(400, 'answers names a question that was not asked');
-    if (typeof v !== 'string' || !v.trim() || v.length > 4000) throw fail(400, 'each answer must be text of at most 4000 characters');
+    if (typeof v !== 'string' || !v.trim() || v.length > MAX_ANSWER) throw fail(400, `each answer must be text of at most ${MAX_ANSWER} characters`);
     out[k] = v.trim();
   }
   if (!Object.keys(out).length) throw fail(400, 'answers is empty');
@@ -1249,12 +1456,24 @@ function onControlRequest(rec, event) {
   emit(rec, { permission: publicPending(p) });
 }
 
-// Nobody answered in time: deny. The countdown runs from when the question was asked, also after a restart of the server.
+// Nobody answered in time: deny. The countdown runs from when the question was asked or last typed into, also after a
+// restart of the server. Long waits are cut into steps, since a timer cannot wait longer than about 24.8 days.
+const limitOf = (p) => (p.tool === ASK_TOOL ? QUESTION_MS : PERMISSION_MS);
+const deadlineOf = (p) => Math.max(Date.parse(p.at) || 0, p.touched || 0) + limitOf(p);
 function armPermission(rec, p) {
   if (ctx.replay || p.timer) return;
-  const left = Math.max(0, PERMISSION_MS - (Date.now() - Date.parse(p.at)));
-  p.timer = setTimeout(() => answer(rec, p, 'deny', 'No answer in time', false), left);
+  const left = Math.max(0, deadlineOf(p) - Date.now());
+  p.timer = setTimeout(() => {
+    p.timer = null;
+    if (deadlineOf(p) > Date.now()) armPermission(rec, p);
+    else if (rec.pending.has(p.requestId)) act(rec, { k: 'perm', requestId: p.requestId, behavior: 'deny', message: 'No answer in time', expired: true });
+  }, Math.min(left, 2 ** 31 - 1));
   p.timer.unref();
+}
+function rearmPermission(rec, p) {
+  clearTimeout(p.timer);
+  p.timer = null;
+  armPermission(rec, p);
 }
 
 function dropPending(rec, requestId, behavior) {
@@ -1281,7 +1500,39 @@ function applyAnswer(rec, e) {
       ? { behavior: 'allow', updatedInput: e.answers ? { ...p.rawInput, answers: e.answers } : p.rawInput, ...(e.always && p.suggestions.length ? { updatedPermissions: p.suggestions } : {}) }
       : { behavior: 'deny', message: e.message || 'Denied in Mission Control' };
   sendLine(rec, { type: 'control_response', response: { subtype: 'success', request_id: p.requestId, response } });
-  emit(rec, { permissionDone: p.requestId, behavior: e.behavior });
+  emit(rec, { permissionDone: p.requestId, behavior: e.behavior, ...(e.expired ? { expired: true } : {}) });
+}
+
+// The permission mode a conversation runs with now (its live process), or that its next message gets when it names none.
+export function modeFor(sessionId) {
+  const key = String(sessionId || '').toLowerCase();
+  const live = key ? findLive(key) : null;
+  if (live && live.opts && live.opts.mode) return live.opts.mode;
+  const last = lastOpts.get(key);
+  if (last && last.mode) return last.mode;
+  return modeOf(key) || DEFAULT_MODE;
+}
+
+function switchMode(rec, mode) {
+  if (rec.opts.mode === mode) return;
+  act(rec, { k: 'mode', mode });
+}
+
+// POST /api/sessions/:id/mode { mode }: the permission mode picked for a conversation. It is kept with the conversation, and a
+// Claude running it switches at once (also in the middle of a turn), so the next permission question already follows it.
+export function setSessionMode(sessionId, mode) {
+  if (!isUuid(sessionId)) throw fail(400, 'sessionId must be a uuid');
+  const hit = MODES.find((m) => m.id === mode);
+  if (!hit) throw fail(400, 'unknown mode');
+  if (hit.disabled) throw fail(400, hit.reason);
+  const live = findLive(sessionId);
+  if (live && live.replaying) throw fail(503, 'Mission Control is taking this conversation over again after a restart, try again in a moment');
+  if (live && isChatDir(live.cwd)) throw fail(409, 'A simple chat has no permission mode');
+  setMode(sessionId, hit.id);
+  const last = lastOpts.get(String(sessionId).toLowerCase());
+  if (last) last.mode = hit.id;
+  if (live) switchMode(live, hit.id);
+  return { ok: true, mode: hit.id, live: !!live };
 }
 
 // POST /api/runs/:id/permission
@@ -1300,6 +1551,33 @@ export function answerPermission(runId, { requestId, behavior, message, always, 
   else if (answers !== undefined) throw fail(400, 'answers are only for a question card');
   answer(rec, p, behavior, message ? message.slice(0, 500) : '', always === true && !p.questions, picked);
   return { ok: true, requestId, behavior };
+}
+
+// POST /api/runs/:id/permission/typing { requestId, draft? }: someone is writing an answer. The countdown starts again, and
+// draft ({ "<question text>": "what is typed so far" }) is kept with the question, so a page opened later (a reload, another
+// device) shows the words. The words are kept in memory only; the page keeps its own copy too.
+export function typingPermission(runId, { requestId, draft } = {}) {
+  const rec = runs.get(runId);
+  if (!rec) throw fail(404, 'Unknown run');
+  if (rec.replaying) throw fail(503, 'Mission Control is taking this conversation over again after a restart, try again in a moment');
+  if (typeof requestId !== 'string' || !requestId) throw fail(400, 'requestId is required');
+  const p = rec.pending.get(requestId);
+  if (!p) throw fail(404, 'No such question is waiting (it may have been answered or timed out)');
+  if (draft !== undefined && draft !== null) {
+    if (typeof draft !== 'object' || Array.isArray(draft)) throw fail(400, 'draft must be an object');
+    const asked = new Set((p.questions || []).map((q) => q.question));
+    const kept = {};
+    for (const [k, v] of Object.entries(draft)) {
+      if (!asked.has(k)) throw fail(400, 'draft names a question that was not asked');
+      if (typeof v !== 'string' || v.length > MAX_ANSWER) throw fail(400, `each draft must be text of at most ${MAX_ANSWER} characters`);
+      if (v) kept[k] = v;
+    }
+    p.draft = Object.keys(kept).length ? kept : null;
+  }
+  const now = Date.now();
+  if (now - (p.journaled || 0) >= TOUCH_JOURNAL_MS) act(rec, { k: 'touch', requestId });
+  else { p.touched = now; rearmPermission(rec, p); }
+  return { ok: true, requestId, deadline: new Date(deadlineOf(p)).toISOString() };
 }
 
 // GET /api/runs/:id/pending
@@ -1491,8 +1769,8 @@ export async function pingSession(sessionId, prompt, model) {
   if (known) return startRun({ prompt, sessionId });
   const list = modelOptions().filter((o) => o.flag && !o.disabled);
   const hit = typeof model === 'string' && model ? list.find((o) => o.id === model) || list.find((o) => model.startsWith(o.id + '-') || model.startsWith(o.id + '[')) : null;
-  if (!hit) throw fail(409, `The model of this conversation (${model || 'unknown'}) is not in the model list`);
-  return startRun({ prompt, sessionId, model: hit.id });
+  if (!hit && !(typeof model === 'string' && FULL_MODEL_ID.test(model))) throw fail(409, `The model of this conversation (${model || 'unknown'}) is not in the model list`);
+  return startRun({ prompt, sessionId, model: hit ? hit.id : model });
 }
 
 // ---- The process ----
@@ -1716,6 +1994,7 @@ async function adoptRuns(info) {
     if (isLive(rec) && rec.proc && rec.proc.kind === 'runner' && !present.has(rec.runId)) lostRun(rec, RUNNER_FORGOT);
   }
   await Promise.race([Promise.all(waits), new Promise((res) => setTimeout(res, 10000).unref())]);
+  if (waits.length) console.log(`[runs] the runs of the runner are taken over (${waits.length})`);
 }
 
 // A record from what the runner kept: meta, checkpoint, then the journal after it (asked for here, delivered to applyBatch).
@@ -1799,6 +2078,8 @@ function settleRun(rec) {
     rec.stash.until = Date.now() + RESYNC_MS;
     const t = setTimeout(() => (rec.stash = null), RESYNC_MS + 1000);
     t.unref();
+    // The server listens before the replay is over, so a page may have connected meanwhile and been given nothing.
+    for (const res of connectedClients()) giveStash(rec, res);
   }
   // Events numbered after the last one any page is known to have got may be lost (a server before this one saw them and wrote
   // a checkpoint while no page was connected). One resync event makes every page read the conversation again, once.
@@ -1833,14 +2114,18 @@ onClientConnect((res) => {
       continue;
     }
     if (!rec.stash || rec.stash.until === 0 || now > rec.stash.until) continue;
-    for (const msg of rec.stash.events) sendTo(res, 'chat', msg);
-    // The stash holds every event after the old server's last one, so a page that got it has everything up to the newest.
-    if (!rec.stash.over && rec.stash.events.length) {
-      rec.given = Math.max(rec.given, rec.stash.events[rec.stash.events.length - 1].seq);
-      notePublished(rec);
-    }
+    giveStash(rec, res);
   }
 });
+
+function giveStash(rec, res) {
+  for (const msg of rec.stash.events) sendTo(res, 'chat', msg);
+  // The stash holds every event after the old server's last one, so a page that got it has everything up to the newest.
+  if (!rec.stash.over && rec.stash.events.length) {
+    rec.given = Math.max(rec.given, rec.stash.events[rec.stash.events.length - 1].seq);
+    notePublished(rec);
+  }
+}
 
 // Called by emit(): remembers an event for the pages that connect after a restart.
 function stashEvent(rec, msg) {
@@ -1942,3 +2227,10 @@ process.on('SIGBREAK', () => process.exit(131)); // Ctrl+Break
 // Look the CLI up once at startup so the first chat request returns at once.
 resolveClaude().catch(() => {});
 claudeVersion();
+
+// The root folder (one of DISCOVERY_ROOTS) that this path names, written as configured, or null.
+export function discoveryRoot(folder) {
+  if (typeof folder !== 'string') return null;
+  const key = (p) => p.replace(/[\\/]+$/, '').replace(/\//g, '\\').toLowerCase();
+  return DISCOVERY_ROOTS.find((r) => key(r) === key(folder)) || null;
+}

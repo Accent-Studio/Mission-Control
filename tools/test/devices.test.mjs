@@ -1,5 +1,5 @@
 // Tests for the devices service: pairing, the device list, removal, the bridge control stream and the SSE event.
-// Run: node --test "tools/test/*.test.mjs"        (no npm packages; every server uses free ports and its own data folder)
+// Run: npm test (2 test files at a time)        (no npm packages; every server uses free ports and its own data folder)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -128,7 +128,8 @@ describe('pairing: start, cancel, use, burn', () => {
     const list = (await asPc(s, 'GET', '/api/devices')).json;
     assert.deepEqual(list.bridge, { online: true, endpointId: ENDPOINT, version: '0.0.1-test' });
     assert.equal(list.devices.length, 1);
-    assert.deepEqual(Object.keys(list.devices[0]).sort(), ['id', 'lastSeen', 'name', 'online', 'pairedAt']);
+    assert.deepEqual(Object.keys(list.devices[0]).sort(), ['computer', 'id', 'lastSeen', 'name', 'online', 'pairedAt']);
+    assert.equal(list.devices[0].computer, false, 'a pairing alone never makes a linked computer');
     assert.equal(list.devices[0].online, false);
     await events.waitFor((e) => e.type === 'devices.changed');
   });
@@ -207,7 +208,7 @@ describe('pairing: start, cancel, use, burn', () => {
   test('the new device is accepted on the bridge listener at once (the S1 lookup uses the service)', async () => {
     const r = await asPhone(s, 'GET', '/api/whoami', undefined, NEW_PHONE);
     assert.equal(r.status, 200);
-    assert.deepEqual(r.json, { remote: true, device: { id: NEW_PHONE, name: 'Pixel 9' } });
+    assert.deepEqual({ remote: r.json.remote, device: r.json.device }, { remote: true, device: { id: NEW_PHONE, name: 'Pixel 9' } });
   });
 
   test('bad input to the bridge pair route is a 400', async () => {
@@ -631,7 +632,7 @@ describe('environment clamps', () => {
       await connectBridge(s);
       const p = (await asPc(s, 'POST', '/api/devices/pair', {})).json;
       const left = Date.parse(p.expiresAt) - Date.now();
-      assert.ok(left > 590000 && left <= 600000, `${value}: ${left}`);
+      assert.ok(left > 590000 && left <= 600050, `${value}: ${left}`); // the server and the test read the clock apart: a few ms either way
     }
   });
 

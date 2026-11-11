@@ -1,6 +1,6 @@
 // Tests for the chat model list (/api/chat/options): the pages take the FIRST model of a family, so the newest
 // version of each family must come first, whatever order the CLI's catalog lists them in.
-// Run: node --test "tools/test/*.test.mjs"        (no npm packages; every server uses free ports and its own data folder)
+// Run: npm test (2 test files at a time)        (no npm packages; every server uses free ports and its own data folder)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';

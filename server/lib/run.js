@@ -4,7 +4,8 @@
 // node_modules\@anthropic-ai\claude-code\bin\claude.exe, which can be launched directly).
 import { execFile } from 'node:child_process';
 
-export function run(cmd, args = [], { cwd, timeoutMs = 15000, maxBuffer = 16 * 1024 * 1024 } = {}) {
+// env: extra variables for the program, on top of this process's own.
+export function run(cmd, args = [], { cwd, timeoutMs = 15000, maxBuffer = 16 * 1024 * 1024, env } = {}) {
   return new Promise((resolve) => {
     const done = (err, stdout, stderr) => {
       let code = 0;
@@ -20,7 +21,7 @@ export function run(cmd, args = [], { cwd, timeoutMs = 15000, maxBuffer = 16 * 1
       execFile(
         cmd,
         args,
-        { cwd, timeout: timeoutMs, maxBuffer, windowsHide: true, encoding: 'utf8' },
+        { cwd, timeout: timeoutMs, maxBuffer, windowsHide: true, encoding: 'utf8', ...(env ? { env: { ...process.env, ...env } } : {}) },
         done,
       );
     } catch (err) {

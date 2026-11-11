@@ -1,0 +1,1198 @@
+<!doctype html>
+<!-- k-scaled -->
+<html lang="en" data-theme="slate">
+<head>
+<meta charset="utf-8">
+<title>Mission Control</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="stylesheet" href="/md.css">
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="pg-system.css">
+<link rel="stylesheet" href="pg-usage.css">
+<link rel="stylesheet" href="pg-connections.css">
+<link rel="stylesheet" href="pg-automation.css">
+<link rel="stylesheet" href="pg-wake.css">
+<link rel="stylesheet" href="pg-crew.css">
+<link rel="stylesheet" href="pg-tasks.css">
+<link rel="stylesheet" href="pg-stars.css">
+<style>
+/* Mockup D: B's studio frame (menus, workspaces, tiled viewports) with project tabs in the title bar like Chrome,
+   a rail of Mission Control's pages, A's thin status bar, and Slate as the default theme. */
+.win{display:flex;flex-direction:column;height:100vh}
+
+/* title bar: project tabs */
+.titlebar{height:calc(46px*var(--k));flex:none;display:flex;align-items:stretch;gap:calc(4px*var(--k));padding-left:calc(8px*var(--k));background:var(--bg)}
+.ptabs{display:flex;align-items:flex-end;gap:calc(3px*var(--k));min-width:0;flex:0 1 auto;padding-top:calc(7px*var(--k))}
+.ptab{height:calc(39px*var(--k));width:calc(265px*var(--k));flex:0 1 auto;min-width:calc(120px*var(--k));display:flex;align-items:center;gap:calc(9px*var(--k));padding:0 calc(6px*var(--k)) 0 calc(12px*var(--k));border-radius:calc(11px*var(--k)) calc(11px*var(--k)) 0 0;color:var(--text-2);font-size:calc(15px*var(--k));position:relative;cursor:pointer;user-select:none}
+.ptab:hover{background:var(--hover);color:var(--text)}
+/* a tab dragged along the row: it rides above the others, which slide aside */
+.tabdrag .ptab{transition:transform .15s ease}
+.tabdrag,.tabdrag *{cursor:grabbing!important;user-select:none}
+.ptab.dragging{z-index:5;transition:none;background:var(--bg-2);color:var(--text);box-shadow:0 calc(4px*var(--k)) calc(14px*var(--k)) rgba(0,0,0,.35)}
+.tabdrag .ptab:not(.dragging){pointer-events:none}
+.ptab .tint{width:calc(22px*var(--k));height:calc(22px*var(--k));font-size:calc(12px*var(--k));border-radius:calc(7px*var(--k))}
+.ptab .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.ptab .mk{display:inline-flex;align-items:center;gap:calc(3px*var(--k));font-size:calc(13px*var(--k));font-weight:600}
+.ptab .mk.warn{color:var(--warn)} .ptab .mk.run{color:#8dbaff}
+.ptab .x{width:calc(24px*var(--k));height:calc(24px*var(--k));border-radius:calc(6px*var(--k));display:grid;place-items:center;color:var(--text-3);opacity:0}
+.ptab:hover .x,.ptab.on .x{opacity:1}
+.ptab .x:hover{background:var(--press);color:var(--text)}
+.ptab.on{background:var(--bg-2);color:var(--text);box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+.ptab.on::before{content:"";position:absolute;left:calc(16px*var(--k));right:calc(16px*var(--k));top:0;height:2px;border-radius:2px;background:var(--accent);box-shadow:0 0 calc(10px*var(--k)) var(--accent),0 0 calc(3px*var(--k)) var(--accent)}
+.ptab.last{background:color-mix(in srgb,var(--bg-2) 50%,transparent)}
+.ptab.drop{background:var(--accent-soft)}
+.ptab.drop::after{content:"Drop here: message box. Hold: open the tab";position:absolute;top:calc(44px*var(--k));left:0;z-index:50;white-space:nowrap;font-size:calc(13px*var(--k));background:var(--raised);border:1px solid var(--line-2);padding:calc(4px*var(--k)) calc(9px*var(--k));border-radius:calc(6px*var(--k));box-shadow:var(--shadow);color:var(--text)}
+[data-theme="redline"] .ptab{border-radius:0}
+.newtab{align-self:center;margin-left:calc(4px*var(--k))}
+.titlebar .grow{min-width:calc(30px*var(--k))}
+.wbtn{width:calc(56px*var(--k));align-self:stretch;display:grid;place-items:center;color:var(--text-2)}
+.wbtn:hover{background:var(--hover)} .wbtn.x:hover{background:#c42b1c;color:#fff}
+
+/* second bar: the page's own bar (project, menus, workspaces) */
+.mbar{height:calc(50px*var(--k));flex:none;display:flex;align-items:center;gap:2px;padding:0 calc(10px*var(--k)) 0 calc(8px*var(--k));background:var(--bg-2);border-bottom:1px solid var(--line-2)}
+.pbtn{display:flex;align-items:center;gap:calc(10px*var(--k));height:calc(38px*var(--k));padding:0 calc(12px*var(--k)) 0 calc(8px*var(--k));border-radius:var(--r-sm);font-weight:700;font-size:calc(19px*var(--k));margin-right:calc(8px*var(--k));font-family:var(--head);text-transform:var(--head-case);letter-spacing:var(--head-track)}
+.pbtn:hover{background:var(--hover)}
+.pbtn.open{background:var(--hl-grad),var(--raised);box-shadow:var(--hl-shadow)}
+.pbtn .tint{width:calc(27px*var(--k));height:calc(27px*var(--k));font-size:calc(14px*var(--k))}
+.pbtn .root{font:400 calc(14px*var(--k)) var(--font);color:var(--text-3);text-transform:none;letter-spacing:0}
+.mm{height:calc(36px*var(--k));padding:0 calc(11px*var(--k));border-radius:var(--r-xs);color:var(--text-2);font-size:calc(16px*var(--k))}
+.mm:hover{background:var(--hover);color:var(--text)}
+.wsg{display:flex;align-items:center;gap:calc(4px*var(--k));margin:0 auto}
+.mtools{display:flex;align-items:center;gap:calc(2px*var(--k));margin-left:calc(10px*var(--k))}
+.mtools .ibtn.on{color:var(--accent)}
+.ws{display:flex;gap:calc(4px*var(--k));padding:calc(4px*var(--k));border-radius:calc(var(--r-sm) + calc(3px*var(--k)));background:var(--bg);box-shadow:var(--well)}
+.ws button{height:calc(36px*var(--k));padding:0 calc(18px*var(--k));color:var(--text-2);font-size:calc(16px*var(--k));font-weight:600;border-radius:var(--r-sm);display:flex;align-items:center;gap:calc(8px*var(--k));position:relative}
+.ws button:hover{color:var(--text)}
+.ws button.on{color:var(--text)}
+.ws button.on.glow3d::before{left:calc(14px*var(--k));right:calc(14px*var(--k));top:auto;bottom:1px;width:auto;height:2px}
+.ws .cust{color:var(--accent)}
+.wsren{width:auto;min-width:0;background:var(--bg);border:1px solid var(--accent);border-radius:var(--r-xs);color:var(--text);font:inherit;padding:0 calc(6px*var(--k));height:calc(28px*var(--k));outline:0}
+.ws .moddot{width:calc(7px*var(--k));height:calc(7px*var(--k));border-radius:50%;background:var(--text-2);display:inline-block}
+.pgt{display:flex;align-items:center;gap:calc(12px*var(--k));padding-left:calc(6px*var(--k))}
+.pgt b{font-size:calc(21px*var(--k))}
+.pgt .faint{font-size:calc(15px*var(--k))}
+
+/* body: rail, tree, pages */
+.body{flex:1;display:flex;min-height:0}
+/* the panels sit 8px in from the rail (.vpwrap padding), so the rail adds the same 8px on its left to match */
+.rail{width:calc(88px*var(--k));flex:none;display:flex;flex-direction:column;align-items:center;gap:calc(4px*var(--k));padding:calc(10px*var(--k)) 0 calc(10px*var(--k)) calc(8px*var(--k));background:var(--bg)}
+.ri{width:calc(58px*var(--k));height:calc(58px*var(--k));border-radius:var(--r-sm);display:grid;place-items:center;color:var(--text-2);position:relative}
+.ri::after{content:attr(data-tip);position:absolute;left:calc(100% + calc(12px*var(--k)));top:50%;transform:translate(-4px,-50%);opacity:0;pointer-events:none;white-space:nowrap;z-index:60;font-size:calc(15px*var(--k));font-weight:500;color:var(--text);background:var(--raised);border:1px solid var(--line-2);border-radius:var(--r-xs);padding:calc(5px*var(--k)) calc(10px*var(--k));box-shadow:var(--shadow);transition:opacity .12s,transform .12s}
+.ri:hover::after{opacity:1;transform:translate(0,-50%)}
+.ri:hover{background:var(--hover);color:var(--text)}
+.ri svg.i.lg{width:calc(29px*var(--k));height:calc(29px*var(--k))}
+.ri.on svg{color:var(--accent)}
+.ri .badge{position:absolute;top:calc(-2px*var(--k));right:calc(-4px*var(--k));height:calc(19px*var(--k));min-width:calc(19px*var(--k));font-size:calc(11px*var(--k));padding:0 calc(4px*var(--k))}
+.rail .grow{flex:1}
+.fly{width:0;flex:none;overflow:hidden;background:var(--bg);transition:width .18s ease}
+.fly.on{width:calc(375px*var(--k))}
+.fly-in{width:calc(375px*var(--k));height:100%;display:flex;flex-direction:column}
+.fly-h{display:flex;align-items:center;gap:calc(10px*var(--k));padding:calc(15px*var(--k)) calc(15px*var(--k)) calc(5px*var(--k)) calc(20px*var(--k));font-weight:700;font-family:var(--head);text-transform:var(--head-case);letter-spacing:var(--head-track);font-size:calc(19px*var(--k))}
+.fly .tree{flex:1;overflow:auto;padding:calc(5px*var(--k)) calc(12px*var(--k)) calc(18px*var(--k))}
+.pages{flex:1;min-width:0;display:flex}
+.page{display:none;flex:1;min-width:0;min-height:0}
+.page.on{display:flex}
+.pane{display:none;flex:1;min-width:0;min-height:0}
+.pane.on{display:flex}
+.vpwrap{flex:1;display:flex;min-width:0;min-height:0;padding:calc(8px*var(--k))}
+.vps{gap:0}
+.vp-head{height:calc(46px*var(--k))}
+.gut{width:calc(8px*var(--k))}.gut.h{height:calc(8px*var(--k))}
+.vp.drop{box-shadow:inset 0 0 0 2px var(--accent)}
+[data-theme="redline"] .vp{clip-path:polygon(calc(12px*var(--k)) 0,100% 0,100% calc(100% - calc(12px*var(--k))),calc(100% - calc(12px*var(--k))) 100%,0 100%,0 calc(12px*var(--k)))}
+[data-theme="redline"] .vp.focus .vp-head{box-shadow:inset 0 2px 0 var(--accent)}
+
+/* the pages that stay as they are, in the new look */
+.spage{flex:1;overflow:auto;padding:calc(8px*var(--k));display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:calc(18px*var(--k));align-content:start}
+.card{grid-column:span 12;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:calc(16px*var(--k)) calc(18px*var(--k));display:flex;flex-direction:column;gap:calc(12px*var(--k));min-width:0}
+.card.c8{grid-column:span 8}.card.c6{grid-column:span 6}.card.c4{grid-column:span 4}.card.c3{grid-column:span 3}
+[data-theme="redline"] .card{clip-path:polygon(calc(12px*var(--k)) 0,100% 0,100% calc(100% - calc(12px*var(--k))),calc(100% - calc(12px*var(--k))) 100%,0 100%,0 calc(12px*var(--k)))}
+.card h3{display:flex;align-items:center;gap:calc(10px*var(--k));font:var(--head-weight) calc(15px*var(--k)) var(--head);text-transform:uppercase;letter-spacing:.09em;color:var(--text-2)}
+.card h3 .grow{height:1px;background:var(--line)}
+.card h3 .faint{text-transform:none;letter-spacing:0;font:400 calc(14px*var(--k)) var(--font)}
+.sgroup{grid-column:span 12;font:var(--head-weight) calc(19px*var(--k)) var(--head);text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:calc(14px*var(--k));margin-top:calc(6px*var(--k))}
+.sgroup::after{content:"";flex:1;height:1px;background:var(--line-2)}
+.ruler{position:relative;height:calc(96px*var(--k));margin:calc(4px*var(--k)) calc(8px*var(--k)) 0}
+.ruler .ax{position:absolute;left:0;right:0;top:calc(48px*var(--k));height:1px;background:var(--line-3)}
+.ruler .tk{position:absolute;top:calc(44px*var(--k));height:calc(9px*var(--k));width:1px;background:var(--line-3)}
+.ruler .tk span{position:absolute;top:calc(14px*var(--k));left:calc(-14px*var(--k));font:calc(12px*var(--k)) var(--mono);color:var(--text-3)}
+.ruler .dm{position:absolute;top:calc(41px*var(--k));width:calc(14px*var(--k));height:calc(14px*var(--k));margin-left:calc(-7px*var(--k));transform:rotate(45deg);background:var(--text);box-shadow:0 0 0 calc(3px*var(--k)) var(--panel)}
+.ruler .dm.fail{background:var(--fail);box-shadow:0 0 0 calc(3px*var(--k)) var(--panel),0 0 0 calc(4px*var(--k)) #ff8a93}
+.ruler .dl{position:absolute;font-size:calc(13px*var(--k));font-weight:600;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;transform:translateX(-50%)}
+.ruler .now{position:absolute;top:calc(6px*var(--k));bottom:calc(6px*var(--k));width:2px;background:var(--accent);box-shadow:0 0 calc(8px*var(--k)) var(--accent)}
+.ruler .now b{position:absolute;top:-2px;left:calc(6px*var(--k));font:600 calc(11px*var(--k)) var(--mono);color:var(--accent)}
+.tbl{display:flex;flex-direction:column}
+.tr{display:grid;gap:calc(14px*var(--k));align-items:center;padding:calc(10px*var(--k)) calc(6px*var(--k));border-top:1px solid var(--line);font-size:calc(16px*var(--k))}
+.tr.hd{border-top:0;font-size:calc(13px*var(--k));color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;padding-top:2px}
+.sched .tr{grid-template-columns:calc(36px*var(--k)) 1.4fr 1.3fr 1.3fr 1fr auto calc(46px*var(--k))}
+.skills{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(210px*var(--k)),1fr));gap:calc(8px*var(--k))}
+.skills .lbl{grid-column:1/-1;font-size:calc(12px*var(--k));letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin-top:calc(6px*var(--k))}
+.svcs{grid-column:span 12;display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(330px*var(--k)),1fr));gap:calc(14px*var(--k))}
+.svc{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:calc(14px*var(--k)) calc(16px*var(--k));display:flex;flex-direction:column;gap:calc(10px*var(--k))}
+.svc.off{opacity:.6}
+.svc .code{width:calc(40px*var(--k));height:calc(40px*var(--k));display:grid;place-items:center;border-radius:calc(9px*var(--k));font:700 calc(14px*var(--k)) var(--mono);background:var(--hl-grad),var(--raised);box-shadow:var(--hl-shadow)}
+.svc .nm{font-weight:600;font-size:calc(18px*var(--k))}
+.svc p{color:var(--text-2);font-size:calc(15px*var(--k));line-height:1.5}
+.svc .tg{display:flex;gap:calc(16px*var(--k));font-size:calc(15px*var(--k));color:var(--text-2)}
+.svc .tg span{display:inline-flex;gap:calc(8px*var(--k));align-items:center}
+.spend .tr{grid-template-columns:calc(150px*var(--k)) 1fr calc(90px*var(--k))}
+.calls .tr{grid-template-columns:calc(70px*var(--k)) calc(80px*var(--k)) 1fr;font-size:calc(15px*var(--k))}
+.heat{display:grid;grid-template-columns:calc(44px*var(--k)) repeat(24,1fr);gap:calc(3px*var(--k));font-size:calc(12px*var(--k));color:var(--text-3)}
+.heat i{height:calc(18px*var(--k));border-radius:calc(3px*var(--k));background:var(--accent)}
+
+/* status bar (from mockup A) */
+.sbar{height:calc(32px*var(--k));flex:none;display:flex;align-items:center;gap:calc(20px*var(--k));padding:0 calc(18px*var(--k));border-top:1px solid var(--line);background:var(--bg);font-size:calc(14px*var(--k));color:var(--text-3)}
+.sbar span{display:inline-flex;align-items:center;gap:calc(8px*var(--k))}
+.sbar b{color:var(--text-2);font-weight:500}
+.sb-srv{display:inline-flex;align-items:center;gap:calc(8px*var(--k));background:none;border:0;padding:calc(3px*var(--k)) calc(6px*var(--k));margin:0 calc(-6px*var(--k));border-radius:var(--r-xs);color:inherit;font:inherit;cursor:pointer}
+.sb-srv:hover{background:var(--hover)}
+.sb-gpu{display:inline-flex;align-items:center;gap:calc(8px*var(--k));background:none;border:0;padding:calc(3px*var(--k)) calc(6px*var(--k));margin:0 calc(-6px*var(--k));border-radius:var(--r-xs);color:inherit;font:inherit;cursor:pointer}
+.sb-gpu:empty{display:none} .sb-gpu:hover{background:var(--hover)}
+.sb-gpu-one{display:inline-flex;align-items:center;gap:calc(8px*var(--k))} .sb-gpu-one+.sb-gpu-one{margin-left:calc(10px*var(--k))}
+.srvpop{width:calc(400px*var(--k))}
+.srows{display:flex;flex-direction:column;gap:calc(10px*var(--k))}
+.srow{display:flex;align-items:center;gap:calc(10px*var(--k));font-size:calc(15px*var(--k))}
+.srow .grow{display:flex;flex-direction:column;min-width:0}
+.srow .grow .faint{font-size:calc(13px*var(--k));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .sw{color:var(--text-2)} .srow>.syc{margin-left:auto} .srow .mono{min-width:calc(78px*var(--k));text-align:right;font-size:calc(13px*var(--k))}
+.sbtns{display:flex;gap:calc(8px*var(--k));margin-top:calc(14px*var(--k))} .sbtns .btn{flex:1;justify-content:center}
+.sypop{width:calc(540px*var(--k));max-height:calc(100vh - 80px);overflow:auto}
+.sygrid{display:grid;align-items:center;column-gap:calc(12px*var(--k));row-gap:calc(10px*var(--k));font-size:calc(14px*var(--k))}
+.syth{color:var(--text-3);font-size:calc(12px*var(--k));font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding-bottom:calc(2px*var(--k));border-bottom:1px solid var(--line);align-self:end;max-width:calc(130px*var(--k))}
+.sycn{display:flex;flex-direction:column;min-width:0} .sycn b{font-size:calc(15px*var(--k))} .sycn .faint{font-size:calc(12.5px*var(--k));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.syc{display:inline-flex;align-items:center;gap:calc(5px*var(--k));height:calc(24px*var(--k));padding:0 calc(8px*var(--k)) 0 calc(6px*var(--k));border-radius:calc(7px*var(--k));font-weight:600;white-space:nowrap;justify-self:start}
+.syc svg{width:calc(14px*var(--k));height:calc(14px*var(--k));stroke-width:2.3;flex:none}
+.syc-ok{background:rgba(134,214,114,.13);color:var(--ok)} .syc-warn{background:rgba(242,138,58,.16);color:var(--warn)}
+.syc-fail{background:var(--fail);color:var(--fail-ink)} .syc-off{background:rgba(255,255,255,.05);color:var(--text-3);font-weight:500} .syc-run{background:rgba(92,157,255,.14);color:#8dbaff}
+.syact{justify-self:end;display:flex}
+.sy-f{display:flex;gap:calc(8px*var(--k));justify-content:flex-end;margin-top:calc(14px*var(--k));padding-top:calc(12px*var(--k));border-top:1px solid var(--line)}
+.sypop .sy-p{margin-top:calc(10px*var(--k))}
+.btn.due{border-color:var(--warn);color:var(--warn)} .btn.due svg{color:var(--warn)}
+.btn.arm{background:var(--warn);color:var(--warn-ink);border-color:transparent;font-weight:700}
+.btn.arm svg{color:var(--warn-ink)}
+.arm-n{margin-top:calc(8px*var(--k));color:var(--warn)}
+.sy-h{display:flex;align-items:center;gap:calc(10px*var(--k));margin-bottom:calc(10px*var(--k));font-size:calc(16px*var(--k))} .sy-h .faint{font-size:calc(13px*var(--k))}
+.sy-p{display:flex;flex-direction:column;gap:calc(6px*var(--k));padding:calc(10px*var(--k)) 0;border-top:1px solid var(--line)} .sy-p:first-of-type{border-top:0}
+.sy-t{display:flex;align-items:center;gap:calc(10px*var(--k));font-size:calc(15px*var(--k))}
+.sy-r,.sy-s,.sy-n{display:flex;align-items:flex-start;gap:calc(10px*var(--k));font-size:calc(14px*var(--k))} .sy-r .st,.sy-s .st{flex:none;min-width:calc(92px*var(--k))}
+.sy-n{color:var(--text-3);font-size:calc(13px*var(--k))} .sy-a{display:flex;gap:calc(8px*var(--k));justify-content:flex-end}
+.sbar .bar{width:calc(75px*var(--k));height:calc(5px*var(--k))}
+
+/* the same soft amber light on the open tab and the selected workspace */
+.ptab.on{background:radial-gradient(70% 120% at 50% 0%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 65%),var(--bg-2)}
+.ptab.on::before{height:2px;left:calc(10px*var(--k));right:calc(10px*var(--k));background:linear-gradient(90deg,transparent,var(--accent) 30%,var(--accent) 70%,transparent);box-shadow:0 0 calc(8px*var(--k)) var(--accent),0 0 calc(18px*var(--k)) calc(3px*var(--k)) color-mix(in srgb,var(--accent) 45%,transparent);opacity:.9}
+.ws button.on.glow3d{background:radial-gradient(80% 140% at 50% 100%,color-mix(in srgb,var(--accent) 20%,transparent),transparent 62%),var(--hl-grad),var(--raised)}
+.ws button.on.glow3d::before{height:2px;width:auto;background:linear-gradient(90deg,transparent,var(--accent) 30%,var(--accent) 70%,transparent)}
+
+/* the open tab is lit from its top edge, the selected workspace from its bottom edge, the same falling light */
+.ptab.on{background:linear-gradient(180deg,var(--glow-fall)),var(--bg-2)}
+.ptab.on::before{display:none}
+.ws button.on.glow3d{background:linear-gradient(0deg,var(--glow-fall)),var(--hl-grad),var(--raised)}
+.ws button.on.glow3d::before{display:none}
+
+/* the open tab (top edge) and the selected workspace (bottom edge): the same wash and thin glowing oval */
+.ptab.on{background:radial-gradient(70% 120% at 50% 0%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 65%),var(--bg-2)}
+.ptab.on::before{display:block;left:25%;right:25%;top:0;height:calc(3px*var(--k));width:auto;border-radius:50%;background:var(--accent);box-shadow:0 0 calc(7px*var(--k)) var(--accent),0 0 calc(16px*var(--k)) calc(2px*var(--k)) color-mix(in srgb,var(--accent) 40%,transparent);opacity:1}
+.ws button.on.glow3d{background:radial-gradient(80% 140% at 50% 100%,color-mix(in srgb,var(--accent) 20%,transparent),transparent 62%),var(--hl-grad),var(--raised)}
+.ws button.on.glow3d::before{display:block;left:25%;right:25%;top:auto;bottom:0;height:calc(3px*var(--k));width:auto;border-radius:50%}
+
+.ptab.on::before{left:0;right:0;top:calc(-1.5px*var(--k))}
+.ws button.on.glow3d::before{left:0;right:0;bottom:calc(-1.5px*var(--k))}
+
+.ptab.on{overflow:hidden}
+/* a rail button keeps its name tip outside, so its oval is cut by itself instead of by the button */
+.ri.on{overflow:visible}
+.ri.on::before{clip-path:inset(0 calc(-40px*var(--k)) 0 calc(1.5px*var(--k)) round var(--r-sm) 0 0 var(--r-sm))}
+.ptab.on::before{background:linear-gradient(90deg,transparent,var(--accent) 30%,var(--accent) 70%,transparent)}
+/* the open tab: 30% softer than the other highlights */
+.ptab.on{background:radial-gradient(70% 120% at 50% 0%,color-mix(in srgb,var(--accent) 11%,transparent),transparent 65%),var(--bg-2)}
+.ptab.on::before{opacity:.7}
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar" id="titlebar">
+    <div class="ptabs" id="tabs"></div>
+    <span class="grow"></span>
+    <button class="wbtn" title="Minimize to the tray">&#8212;</button><button class="wbtn" title="Maximize">&#9744;</button><button class="wbtn x" title="Close to the tray (the server keeps running)">&#10005;</button>
+  </div>
+  <div class="mbar" id="mbar"></div>
+  <div class="body">
+    <nav class="rail" id="rail"></nav>
+    <aside class="fly" id="fly"><div class="fly-in"><div class="fly-h">Projects<span class="grow"></span><button class="ibtn sm" id="flyX" title="Close the project list"></button></div><div class="tree" id="ptree"></div></div></aside>
+    <main class="pages">
+      <section class="page" data-page="home"><div class="vpwrap" id="homeVps"></div></section>
+      <section class="page" data-page="projects" id="panes"></section>
+      <section class="page" data-page="automation"><div class="spage" id="pgAutomation"></div></section>
+      <section class="page" data-page="connections"><div class="spage" id="pgConnections"></div></section>
+      <section class="page" data-page="usage"><div class="spage" id="pgUsage"></div></section>
+      <section class="page" data-page="system"><div class="spage" id="pgSystem"></div></section>
+      <section class="page" data-page="settings"><div class="spage" id="pgSettings"></div></section>
+    </main>
+  </div>
+  <div class="sbar" id="sbar"></div>
+</div>
+<script src="/api.js"></script>
+<script src="/md.js"></script>
+<script src="data.js"></script>
+<script src="modules.js"></script>
+<script src="/gallery.js"></script>
+<script src="/phrases.js"></script>
+<script src="voice.js"></script>
+<script src="viewer.js"></script>
+<script src="live.js"></script>
+<script src="panels.js"></script>
+<script src="settings.js"></script>
+<script src="console.js"></script>
+<script src="face.js"></script>
+<script src="home.js"></script>
+<script src="phone.js"></script>
+<script src="pg-system.js"></script>
+<script src="pg-usage.js"></script>
+<script src="pg-connections.js"></script>
+<script src="pg-automation.js"></script>
+<script src="pg-crew.js"></script>
+<script src="pg-tasks.js"></script>
+<script>
+(() => {
+  const { $, $$, icon: I, esc, state: S } = MC;
+  const D = MC.data, M = MC.modules;
+  if (!S.theme) MC.setTheme('slate');
+  if (MC.phone) { MC.phoneStart(); return; } /* a phone: one screen at a time (phone.js), no tabs or panels */
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+
+  /* ---------- layouts ----------
+     Talk, Plan, Code, Review and Ship are the same in every project. A change is remembered (one for all the projects, one
+     for Home, in this browser only) until the saved layout is loaded again; the saved layouts go to every PC (below).
+     A parent layout is a workspace in the bar (Talk); its child layouts are saved variants (Talk 2, Talk 3), named after it.
+     The ⋯ menu loads one, saves a new parent or child, overwrites the one loaded, or opens Manage layouts (rename, reorder, delete). */
+  const WSN = ['Talk', 'Plan', 'Code', 'Review', 'Ship'];
+  const HWS = ['Home']; let homeWs = 'Home'; /* Home's own workspaces, and the one on screen */
+  const L = { def: {
+    Talk: [{ w: 1.5, rows: [{ mod: 'convo', state: { ls: true } }] }, { w: 1, rows: [{ mod: 'overview' }, { mod: 'gallery', h: .85 }] }, { w: .8, rows: [{ mod: 'usage' }, { mod: 'docs', h: .9 }] }],
+    Plan: [{ w: 1.7, rows: [{ mod: 'tasks' }] }, { w: 1, rows: [{ mod: 'timeline', h: .9 }, { mod: 'convo' }] }],
+    Code: [{ w: 1.1, rows: [{ mod: 'convo' }] }, { w: 1, rows: [{ mod: 'git' }] }, { w: 1, rows: [{ mod: 'docs' }] }],
+    Review: [{ rows: [{ mod: 'gallery' }] }, { rows: [{ mod: 'docs' }] }, { rows: [{ mod: 'convo' }] }],
+    Ship: [{ w: 1.2, rows: [{ mod: 'overview' }] }, { rows: [{ mod: 'scripts' }, { mod: 'console' }] }, { rows: [{ mod: 'timeline' }, { mod: 'running', state: { view: 'list' }, h: .8 }] }],
+    Home: [{ w: .72, rows: [{ mod: 'comlink' }, { mod: 'inbox', h: .72 }] }, { w: 1.5, rows: [{ mod: 'projects' }, { mod: 'timeline', state: { scope: 'all' }, h: .8 }] }, { w: 1, rows: [{ mod: 'brief' }, { mod: 'nextup', h: .9 }, { mod: 'running', state: { scope: 'all', view: 'list' }, h: .75 }] }],
+  }, subs: {}, proj: {}, own: {} }; /* own: the workspaces whose default you overwrote or made; only those are saved, so new defaults reach the rest */
+  const remKey = (p) => (p === '*home*' ? '*home*' : '*proj*');
+  const rec = (p, w) => { const k = remKey(p), r = (L.proj[k] = L.proj[k] || {}); return (r[w] = r[w] || { base: w, cols: null }); };
+  const baseOf = (p, w) => { const r = rec(p, w); return r.base === w ? L.def[w] : ((L.subs[w] || {})[r.base] || L.def[w]); };
+  const layoutOf = (p, w) => rec(p, w).cols || baseOf(p, w);
+  const norm = (l) => JSON.stringify(l.map((c) => ({ w: +(+(c.w || 1)).toFixed(2), rows: c.rows.map((r) => ({ mod: r.mod, tab: r.tab || (M[r.mod].tabs ? M[r.mod].tabs[0] : null), h: +(+(r.h || 1)).toFixed(2), s: ['scope', 'ls', 'lu'].concat(S.work ? [] : ['view']).map((k) => (r.state || {})[k] || '') })) })));
+  const modified = (p, w) => { const r = rec(p, w); return !!r.cols && norm(r.cols) !== norm(baseOf(p, w)); };
+  const kids = (w) => Object.keys(L.subs[w] || {});
+  const allNames = () => WSN.concat(HWS).flatMap((w) => [w, ...kids(w)]);
+  const freeName = (base) => { const t = allNames(); if (!t.includes(base)) return base; for (let k = 2; ; k++) if (!t.includes(`${base} ${k}`)) return `${base} ${k}`; };
+  const nextKid = (w) => { const t = allNames(); for (let k = 2; ; k++) if (!t.includes(`${w} ${k}`)) return `${w} ${k}`; };
+  /* a new name for a parent layout; its child layouts take the new name too (Talk 2 becomes Chat 2) */
+  const renameWs = (w, n) => {
+    n = (n || '').trim().replace(/\s+/g, ' ');
+    if (!n || n === w) return true;
+    const mine = [w, ...kids(w)], others = allNames().filter((x) => !mine.includes(x));
+    const map = { [w]: n }; kids(w).forEach((k) => (map[k] = n + k.slice(w.length)));
+    const taken = Object.values(map).find((x) => others.includes(x));
+    if (taken) { MC.toast(`"${taken}" is already taken`, 'x'); return false; }
+    [WSN, HWS].forEach((a) => { const i = a.indexOf(w); if (i >= 0) a[i] = n; });
+    L.def[n] = L.def[w]; delete L.def[w]; L.own[n] = 1; delete L.own[w];
+    if (L.subs[w]) { L.subs[n] = Object.fromEntries(Object.entries(L.subs[w]).map(([k, v]) => [map[k], v])); delete L.subs[w]; }
+    Object.values(L.proj).forEach((r) => { if (r[w]) { r[n] = r[w]; r[n].base = map[r[n].base] || n; delete r[w]; } });
+    tabs.forEach((t) => { if (t.ws === w) t.ws = n; });
+    if (homeWs === w) homeWs = n;
+    return true;
+  };
+  /* show again what a tab or Home shows, after a layout it uses was deleted */
+  const reload = (w) => {
+    tabs.forEach((t) => { if (t.vps && t.ws === w) t.vps.setLayout(layoutOf(t.project, t.ws)); });
+    if (homeWs === w) homeVps.setLayout(layoutOf('*home*', homeWs));
+  };
+  const deleteWs = (w) => {
+    const list = HWS.includes(w) ? HWS : WSN;
+    if (list.length < 2) return;
+    list.splice(list.indexOf(w), 1);
+    delete L.def[w]; delete L.own[w]; delete L.subs[w];
+    Object.values(L.proj).forEach((r) => delete r[w]);
+    tabs.forEach((t) => { if (t.ws === w) { t.ws = WSN[0]; if (t.vps) t.vps.setLayout(layoutOf(t.project, t.ws)); } });
+    if (homeWs === w) { homeWs = HWS[0]; homeVps.setLayout(layoutOf('*home*', homeWs)); }
+  };
+  const deleteKid = (w, k) => {
+    if (!L.subs[w]) return;
+    delete L.subs[w][k]; if (!kids(w).length) delete L.subs[w];
+    Object.values(L.proj).forEach((r) => { if (r[w] && r[w].base === k) r[w].base = w; });
+    reload(w);
+  };
+
+  /* ---------- tabs: each shows a page (Home, a project, Usage...), like a browser tab; a project tab keeps its panels built
+     and hidden, so switching is instant. A new tab opens on Home. ---------- */
+  let tabs = [], cur = null, page = 'projects', seq = 0;
+  const loadTabState = (t) => { S.project = t.project; S.session = t.session; S.picked = t.picked; S.draft = t.draft; };
+  const saveTabState = () => { if (!cur) return; cur.session = S.session; cur.picked = S.picked; cur.draft = S.draft; };
+  const newTab = (project, opts = {}) => { const t = { id: 'tab' + (++seq), project: project || null, page: opts.page || (project ? 'projects' : 'home'), fly: opts.fly != null ? !!opts.fly : !project, ws: opts.ws || WSN[0], session: opts.session || null, picked: new Set(), draft: '', pane: null, vps: null }; if (opts.at != null) tabs.splice(Math.min(opts.at, tabs.length), 0, t); else tabs.push(t); if (!opts.bg) showTab(t); else drawTabs(); return t; };
+  const ensurePane = (t) => {
+    if (t.pane) return;
+    t.pane = document.createElement('div'); t.pane.className = 'pane'; t.pane.innerHTML = '<div class="vpwrap"></div>'; $('#panes').appendChild(t.pane);
+    t.vps = new MC.Viewports($('.vpwrap', t.pane), layoutOf(t.project, t.ws), { active: () => page === 'projects' && cur === t, onLayout: (v) => { rec(t.project, t.ws).cols = v.serial(); drawBar(); }, ...dragOpts(() => t.project) });
+  };
+  /* a panel dragged to another tab (hold it over the tab for half a second, then place it) is copied there; the copy keeps
+     showing the project it came from, and its header says so when that is not the tab's project */
+  const copyPanel = (fromProject, src, v, host, drop, move) => {
+    const toProject = host === homeVps ? null : (tabs.find((x) => x.vps === host) || {}).project || null;
+    const state = JSON.parse(JSON.stringify(v.state || {})), shows = state.project || fromProject;
+    if (shows && shows !== toProject) state.project = shows; else delete state.project;
+    if (!state.project) delete state.session;
+    else if (!state.session && v.mod === 'convo') { const ft = tabs.find((x) => x.vps === src); if (ft && ft.session) state.session = ft.session; }
+    host.place({ mod: v.mod, tab: v.tab, state }, drop);
+    /* Shift held: a move, so the panel leaves its layout (a layout keeps at least one panel) */
+    if (move) { if (src.all().length > 1) src.close(v); else MC.toast('Copied: a layout keeps at least one panel', 'layers'); }
+  };
+  /* dragging a panel: held over a project tab or a Home tab for half a second, that tab opens; dropped there, a copy (or with
+     Shift, the panel itself) goes where it is dropped; Esc goes back to the tab the drag started in */
+  const dragOpts = (fromProject) => ({
+    onHoverTab: (id) => { const x = tabs.find((y) => y.id === id); if (x && ((x.page === 'projects' && x.project) || x.page === 'home')) showTab(x); },
+    hostOf: () => (page === 'projects' && cur && cur.vps) || (page === 'home' ? homeVps : null),
+    origin: () => cur,
+    back: (t) => { if (t && tabs.includes(t)) showTab(t); },
+    copyTo: (v, host, drop, move, src) => copyPanel(fromProject(), src, v, host, drop, move),
+  });
+  const TABS_KEY = 'mc2-tabs', LAY_KEY = 'mc2-layouts';
+  /* saved tabs whose project is not known yet at the start (one of Home's or the hub's, read a moment later): they stay in
+     the saved list at their place, and open there once the project is known (projects-known below) */
+  let waiting = [];
+  const saveTabs = () => {
+    if (!tabs.length) return;
+    saveTabState();
+    const out = tabs.map((t) => ({ project: t.project, page: t.page, fly: t.fly, ws: t.ws, session: /^new:/.test(t.session || '') ? null : t.session }));
+    const on = out[tabs.indexOf(cur)];
+    waiting.forEach((w) => out.splice(Math.min(w.at, out.length), 0, { project: w.project, page: w.page, fly: w.fly, ws: w.ws, session: w.session || null }));
+    MC.store.set(TABS_KEY, JSON.stringify({ cur: Math.max(0, out.indexOf(on)), tabs: out }));
+    MC.store.set(LAY_KEY, JSON.stringify({ ...layObj(), proj: L.proj, hcur: homeWs }));
+    pushLay();
+  };
+
+  /* ---------- layouts on every PC ----------
+     The layouts are kept by the server too, and through the hub by every PC (server/services/sharedSync.js): a layout
+     saved here shows on the other PC, also when that PC was off at the time. The newest save wins, whole. What is
+     remembered (L.proj) and which Home workspace is on screen stay with each browser. */
+  const DEF0 = clone(L.def), WSN0 = WSN.slice(), HWS0 = HWS.slice();
+  const layObj = () => ({ def: Object.fromEntries(Object.keys(L.own).map((w) => [w, L.def[w]])), own: L.own, subs: L.subs, wsn: WSN, hws: HWS });
+  const noProj = (v) => { const o = { ...(v || {}) }; delete o.proj; return o; }; /* a shared copy from before the remembered state stayed here */
+  /* the remembered state was once kept per project: that one is set aside (kept, in case) and starts again for all */
+  const oneProj = (pj) => {
+    const o = pj && typeof pj === 'object' ? pj : {};
+    if (Object.keys(o).some((k) => k !== '*home*' && k !== '*proj*')) { MC.store.set('mc2-layouts-per-project', JSON.stringify(o)); return o['*home*'] ? { '*home*': o['*home*'] } : {}; }
+    return o;
+  };
+  const SYNC_AT = 'mc2-layouts-at'; /* the shared copy this browser last had; none: it never joined */
+  let pushedJson = null, pushT = null;
+  const pushLay = () => {
+    const j = JSON.stringify(layObj()); if (j === pushedJson) return;
+    clearTimeout(pushT);
+    pushT = setTimeout(() => {
+      const v = layObj(), jj = JSON.stringify(v); if (jj === pushedJson) return;
+      MC.api.put('/api/shared/layouts', { value: v }).then((d) => { pushedJson = jj; MC.store.set(SYNC_AT, d.at); }).catch(() => { /* the server is restarting: the next save tries again */ });
+    }, 1200);
+  };
+  /* puts a saved layout set in place, from this browser or from the shared copy */
+  const applyLay = (l) => {
+    if (!l || typeof l !== 'object') return;
+    L.def = clone(DEF0); L.own = l.own && typeof l.own === 'object' ? l.own : {};
+    Object.keys(L.own).forEach((w) => { if (l.def && l.def[w]) L.def[w] = l.def[w]; else delete L.own[w]; });
+    L.subs = l.subs || {}; if (l.proj) L.proj = oneProj(l.proj);
+    [[WSN, l.wsn, WSN0], [HWS, l.hws, HWS0]].forEach(([a, sv, d0]) => { const ok = (Array.isArray(sv) ? sv : []).filter((w, i) => L.def[w] && sv.indexOf(w) === i); a.splice(0, a.length, ...(ok.length ? ok : d0.filter((w) => L.def[w]))); });
+  };
+  /* the first time a browser meets the shared copy, what it had of its own is added to it: the shared copy wins where both
+     have the same layout */
+  const mergeLay = (sh, mine) => {
+    const out = clone(sh); out.own = out.own || {}; out.def = out.def || {}; out.subs = out.subs || {}; out.proj = out.proj || {};
+    const names = () => new Set([...(out.wsn || []), ...(out.hws || [])].flatMap((w) => [w, ...Object.keys(out.subs[w] || {})]));
+    [['wsn', WSN0], ['hws', HWS0]].forEach(([k, d0]) => { out[k] = out[k] || d0.slice(); (mine[k] || []).forEach((w) => { if (!out[k].includes(w) && !names().has(w) && (DEF0[w] || (mine.def || {})[w])) { out[k].push(w); if ((mine.own || {})[w]) { out.own[w] = 1; out.def[w] = mine.def[w]; } } }); });
+    Object.keys(mine.own || {}).forEach((w) => { if (!out.own[w] && (mine.def || {})[w]) { out.own[w] = 1; out.def[w] = mine.def[w]; } });
+    Object.entries(mine.subs || {}).forEach(([w, ks]) => Object.entries(ks || {}).forEach(([k, v]) => { if (!names().has(k)) (out.subs[w] = out.subs[w] || {})[k] = v; }));
+    delete out.proj;
+    return out;
+  };
+  /* a new shared copy while the page is open: the open tabs whose layout changed show the new one */
+  const takeLay = (v, at) => {
+    v = noProj(v);
+    if (JSON.stringify(v) === JSON.stringify(layObj())) { MC.store.set(SYNC_AT, at); return; }
+    const before = tabs.map((t) => JSON.stringify(layoutOf(t.project, t.ws))), homeBefore = JSON.stringify(layoutOf('*home*', homeWs));
+    applyLay(v);
+    tabs.forEach((t, i) => { if (!WSN.includes(t.ws)) t.ws = WSN[0]; if (t.vps && JSON.stringify(layoutOf(t.project, t.ws)) !== before[i]) t.vps.setLayout(layoutOf(t.project, t.ws)); });
+    if (!HWS.includes(homeWs)) homeWs = HWS[0];
+    if (JSON.stringify(layoutOf('*home*', homeWs)) !== homeBefore) homeVps.setLayout(layoutOf('*home*', homeWs));
+    pushedJson = JSON.stringify(layObj());
+    MC.store.set(LAY_KEY, JSON.stringify({ ...layObj(), proj: L.proj, hcur: homeWs })); MC.store.set(SYNC_AT, at);
+    drawBar();
+  };
+  const loadShared = async () => {
+    let d; try { d = await MC.api.get('/api/shared/layouts'); } catch (e) { return; }
+    if (d && d.value != null) d.value = noProj(d.value);
+    const mine = layObj(), joined = !!MC.store.get(SYNC_AT);
+    if (!d || d.value == null) { pushedJson = null; pushLay(); return; } /* the first PC to share: its own go up */
+    if (d.at === MC.store.get(SYNC_AT) && JSON.stringify(d.value) === JSON.stringify(mine)) { pushedJson = JSON.stringify(mine); return; }
+    if (!joined && JSON.stringify(d.value) !== JSON.stringify(mine)) {
+      MC.store.set('mc2-layouts-before-sync', JSON.stringify(mine)); /* kept, in case the merge is not wanted */
+      takeLay(mergeLay(d.value, mine), d.at); pushedJson = null; pushLay(); return;
+    }
+    takeLay(d.value, d.at);
+  };
+  let layReady = false; /* the tabs are up (start, below) */
+  MC.events.on('shared', (d) => { if (layReady && d && d.key === 'layouts' && d.at !== MC.store.get(SYNC_AT)) loadShared(); });
+  MC.on('session', () => saveTabs());
+  const showTab = (t) => {
+    saveTabState(); cur = t; loadTabState(t);
+    if (t.page === 'projects' && !t.project) t.page = 'home';
+    page = t.page;
+    if (page === 'projects') { if (t.vps) { const want = layoutOf(t.project, t.ws); if (norm(want) !== norm(t.vps.serial())) t.vps.setLayout(want); } ensurePane(t); }
+    tabs.forEach((x) => x.pane && x.pane.classList.toggle('on', x === t));
+    lockCover();
+    setFly(!!t.fly);
+    showPage(); if (page === 'projects') t.vps.wake();
+  };
+  const closeTab = (t) => {
+    if (tabs.length === 1) { MC.toast('The last tab stays open', 'x'); return; }
+    const i = tabs.indexOf(t); tabs.splice(i, 1); if (t.pane) t.pane.remove();
+    if (t === cur) { cur = null; showTab(tabs[Math.min(i, tabs.length - 1)]); } else drawTabs();
+  };
+  const drawTabs = () => {
+    if (tabDrag && tabDrag.on) { tabDrag.redraw = true; return; } /* a tab being dragged keeps its element; drawn at the drop */
+    $('#tabs').innerHTML = tabs.map((t) => {
+      const cls = t === cur ? 'on' : '';
+      if (t.page !== 'projects') { const pg = PAGES.concat([['settings', 'gear', 'Settings']]).find((x) => x[0] === t.page) || PAGES[0]; return `<div class="ptab ${cls}" data-tab="${t.id}" title="${esc(pg[2])}"><span class="tint pgi">${I(pg[1], 'sm')}</span><span class="nm">${esc(pg[2])}</span><button class="x" data-close="${t.id}" title="Close tab (Ctrl W)">${I('x', 'sm')}</button></div>`; }
+      const p = MC.projectInfo(t.project), need = D.inbox.filter((x) => x.proj === t.project).length;
+      return `<div class="ptab ${cls}" data-tab="${t.id}" title="${esc(t.project)} · ${t.ws}"><span class="tint" style="background:${p.tint}">${esc(t.project[0])}</span><span class="nm">${esc(t.project)}</span>`
+        + (need ? `<span class="mk warn" title="${need} need you">${I('clock', 'sm')}${need}</span>` : p.running ? `<span class="mk run" title="${p.running} running">${I('loader', 'sm')}${p.running}</span>` : '')
+        + `<button class="x" data-close="${t.id}" title="Close tab (Ctrl W)">${I('x', 'sm')}</button></div>`;
+    }).join('') + `<button class="ibtn sm newtab" data-newtab title="New tab (Ctrl T)">${I('plus', 'sm')}</button>`;
+    saveTabs();
+  };
+  $('#tabs').addEventListener('click', (e) => {
+    if (Date.now() - tabDropAt < 250) return; /* the click that ends a drag */
+    const x = e.target.closest('[data-close]'); if (x) { closeTab(tabs.find((t) => t.id === x.dataset.close)); return; }
+    if (e.target.closest('[data-newtab]')) { newTab(null, { page: 'home' }); return; }
+    const tb = e.target.closest('[data-tab]'); if (tb) showTab(tabs.find((t) => t.id === tb.dataset.tab));
+  });
+  $('#tabs').addEventListener('auxclick', (e) => { const tb = e.target.closest('[data-tab]'); if (tb && e.button === 1) closeTab(tabs.find((t) => t.id === tb.dataset.tab)); });
+  /* dragging a tab sideways puts it elsewhere in the row, as in a browser: it follows the pointer and the tabs it passes
+     slide aside; let go, it settles into its place. Esc puts it back. */
+  let tabDrag = null, tabDropAt = 0;
+  const TAB_SLIDE_MS = 200;
+  const endTabDrag = (drop) => {
+    const d = tabDrag; tabDrag = null; if (!d || !d.on) return;
+    removeEventListener('keydown', d.esc, true);
+    tabDropAt = Date.now();
+    const to = drop ? d.to : d.from;
+    d.el.style.transition = `transform ${TAB_SLIDE_MS}ms cubic-bezier(.2, .9, .3, 1.15)`; /* a small spring as it settles */
+    d.el.style.transform = `translateX(${(to - d.from) * d.shift}px)`;
+    if (!drop) d.els.forEach((x) => { if (x !== d.el) x.style.transform = ''; });
+    setTimeout(() => {
+      if (to !== d.from) { const t = tabs.find((x) => x.id === d.id); if (t) { tabs.splice(tabs.indexOf(t), 1); tabs.splice(to, 0, t); } }
+      d.el.classList.toggle('dragging', false); document.body.classList.toggle('tabdrag', false);
+      drawTabs();
+    }, TAB_SLIDE_MS);
+  };
+  $('#tabs').addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || (tabDrag && tabDrag.on) || e.target.closest('[data-close],[data-newtab]')) return;
+    const el = e.target.closest('.ptab[data-tab]'); if (!el) return;
+    tabDrag = { el, id: el.dataset.tab, x0: e.clientX, pid: e.pointerId, on: false };
+  });
+  addEventListener('pointermove', (e) => {
+    const d = tabDrag; if (!d || e.pointerId !== d.pid) return;
+    const dx = e.clientX - d.x0;
+    if (!d.on) {
+      if (Math.abs(dx) < 6) return;
+      d.els = $$('#tabs .ptab[data-tab]'); d.from = d.els.indexOf(d.el); d.to = d.from;
+      if (d.from < 0 || d.els.length < 2) { tabDrag = null; return; }
+      d.rects = d.els.map((x) => x.getBoundingClientRect());
+      d.shift = d.rects[1].left - d.rects[0].left; /* one tab and the gap after it */
+      d.on = true; d.el.classList.add('dragging'); document.body.classList.add('tabdrag');
+      d.esc = (k) => { if (k.key === 'Escape') { k.preventDefault(); k.stopPropagation(); endTabDrag(false); } };
+      addEventListener('keydown', d.esc, true);
+    }
+    e.preventDefault();
+    const me = d.rects[d.from], first = d.rects[0], last = d.rects[d.rects.length - 1];
+    /* past either end of the row it still follows, with more and more resistance (a rubber band), at most half a tab */
+    const lo = first.left - me.left, hi = last.right - me.right, give = me.width / 2;
+    const band = (o) => give * (1 - 1 / (o / give + 1));
+    const x = dx > hi ? hi + band(dx - hi) : dx < lo ? lo - band(lo - dx) : dx;
+    d.el.style.transform = `translateX(${x}px)`;
+    /* its place, as in a browser: it passes a tab once it covers more than half of it, so the first and the last place are
+       reached at the ends of the row */
+    const left = me.left + x, right = me.right + x;
+    d.to = d.rects.filter((r, i) => (i < d.from ? left >= r.left + r.width / 2 : i > d.from && right > r.left + r.width / 2)).length;
+    d.els.forEach((el, i) => {
+      if (i === d.from) return;
+      const by = d.from < d.to && i > d.from && i <= d.to ? -d.shift : d.from > d.to && i >= d.to && i < d.from ? d.shift : 0;
+      el.style.transform = by ? `translateX(${by}px)` : '';
+    });
+  });
+  addEventListener('pointerup', (e) => { if (tabDrag && e.pointerId === tabDrag.pid) { if (tabDrag.on) endTabDrag(true); else tabDrag = null; } });
+  addEventListener('pointercancel', (e) => { if (tabDrag && e.pointerId === tabDrag.pid) { if (tabDrag.on) endTabDrag(false); else tabDrag = null; } });
+
+  /* ---------- pages ---------- */
+  const PAGES = [['home', 'home', 'Home'], ['projects', 'folder', 'Projects'], ['automation', 'bolt', 'Automation'], ['connections', 'share', 'Connections'], ['usage', 'chart', 'Usage'], ['system', 'cpu', 'System']];
+  const INFO = { automation: ['Automation', ''], connections: ['Connections', ''], usage: ['Usage', ''], system: ['System', ''], settings: ['Settings', ''] };
+  const drawRail = () => {
+    $('#rail').innerHTML = PAGES.map(([id, ic, l]) => `<button class="ri ${page === id ? 'on glow3d' : ''}" data-page="${id}" data-tip="${l}">${I(ic, 'lg')}${id === 'home' && D.inbox.length ? `<span class="badge alert">${D.inbox.length}</span>` : ''}</button>`).join('')
+      + `<span class="grow"></span><button class="ri ${page === 'settings' ? 'on glow3d' : ''}" data-page="settings" data-tip="Settings">${I('gear', 'lg')}</button>`;
+  };
+  const goPage = (pg, inNew) => {
+    if (inNew) return newTab(null, { page: pg === 'projects' ? 'home' : pg, fly: pg === 'projects' });
+    if (!cur) return;
+    /* the Projects button opens and closes the project list on the project page, and in a tab with no project yet */
+    if (pg === 'projects' && (page === 'projects' || !cur.project)) { openFly(!cur.fly); return; }
+    cur.page = pg; showTab(cur);
+  };
+  $('#rail').onclick = (e) => { const b = e.target.closest('[data-page]'); if (b) goPage(b.dataset.page, e.ctrlKey || e.metaKey); };
+  $('#rail').onauxclick = (e) => { const b = e.target.closest('[data-page]'); if (b && e.button === 1) { e.preventDefault(); goPage(b.dataset.page, true); } };
+  $('#rail').onmousedown = (e) => { if (e.button === 1) e.preventDefault(); };
+  const showPage = () => {
+    $$('.page').forEach((p) => p.classList.toggle('on', p.dataset.page === page));
+    if (page === 'home') homeVps.wake();
+    if (page === 'settings') MC.drawSettings($('#pgSettings'));
+    /* a page file (pg-*.js) draws its page each time it is shown */
+    const pd = MC.drawPage[page]; if (pd) pd($('#pg' + page[0].toUpperCase() + page.slice(1)));
+    drawRail(); drawTabs(); drawBar(); drawSbar();
+    if (MC.tellFocus) MC.tellFocus();
+  };
+
+  /* ---------- the page bar ---------- */
+  const MENUS = {
+    File: [['New conversation', 'chat', ''], ['New simple chat', 'chat', ''], ['New tab', 'plus', 'Ctrl T']],
+    View: [['Command palette', 'cmd', 'Ctrl K'], ['Maximize focused viewport', 'max', 'Ctrl Space'], [], ['Theme: Slate', 'moon', ''], ['Theme: Redline', 'moon', ''], ['Theme: Midnight', 'moon', ''], [], ['Text size: S', 'type', ''], ['Text size: M', 'type', ''], ['Text size: L', 'type', ''], ['Work mode', 'brief', 'Ctrl .']],
+    Project: [['Open folder', 'folder', ''], ['Open in VS Code', 'ext', ''], ['Run a job', 'play', ''], [], ['Commit with Claude', 'git', ''], ['Review and push with Claude', 'lock', ''], [], ['Project settings', 'gear', '']],
+    Claude: [['Handoff now', 'ext', ''], ['Compact this conversation', 'min', ''], ['What fills the context', 'chart', ''], [], ['Stop', 'stop', '']],
+  };
+  /* Commit and Review and push are short Claude tasks: a new conversation in the project's folder, on Haiku, in Auto mode (it
+     may run git). It shows in the project's conversation list; questions and permissions show there and in Needs you. */
+  let haikuId;
+  async function quickRun(prompt, what) {
+    const pid = MC.live.helpers.pidOf(cur && cur.project); if (!pid) return;
+    if (haikuId === undefined) { try { const o = await MC.api.get('/api/chat/options'); const h = (o.models || []).find((m) => /haiku/i.test(m.id) && !m.disabled); haikuId = h ? h.id : null; } catch (e) { haikuId = null; } }
+    try { await MC.api.post('/api/chat', { prompt, projectId: pid, mode: 'auto', ...(haikuId ? { model: haikuId } : {}) }); MC.live.helpers.loadRuns(); MC.toast(`${what} started. It is in ${cur.project}'s conversations.`, 'git'); }
+    catch (e) { MC.toast(`${what} did not start: ${MC.live.helpers.errText(e)}`, 'warn'); }
+  }
+  MC.reviewPush = () => quickRun(`/github-push Push ${cur.project} (this folder) to GitHub. Follow the skill fully: audit every tracked file, curate the local commits, show me the list, and wait for my yes before pushing.`, 'The push review');
+  /* a conversation of this project, opened in the Talk layout (the Sync button's Open conversation) */
+  MC.openInTalk = (sid) => {
+    if (!cur || page !== 'projects' || !sid) return;
+    if (cur.ws !== 'Talk') { cur.ws = 'Talk'; cur.vps.setLayout(layoutOf(cur.project, 'Talk')); drawBar(); }
+    MC.ctx = null; MC.setSession(sid); MC.emit('open', 'convo');
+  };
+  /* a slash command in the conversation on screen */
+  const toConvo = (cmd) => {
+    const cv = MC.wakeConvo(); const sid = cv && cv.dataset.sid;
+    if (!sid || MC.live.helpers.isNew(sid)) { MC.toast('Open a conversation first', 'chat'); return; }
+    if (cmd === 'stop') { const r = (MC.live.runs || []).find((x) => x.sessionId === sid && x.running); if (r) MC.api.post(`/api/runs/${encodeURIComponent(r.runId)}/stop`, {}).catch(() => {}); else MC.toast('Nothing is running there', 'stop'); return; }
+    MC.live.helpers.sendText(sid, cmd);
+  };
+  /* where a wake dictation goes: the Talk side when a conversation panel is on screen in a project tab, else the Com Link */
+  MC.wakeConvo = () => { const root = page === 'projects' && cur && cur.pane; return root ? root.querySelector('.vp.focus .convo') || root.querySelector('.convo') : null; };
+  MC.wakePage = () => (MC.wakeConvo() ? 'chat' : 'comlink');
+  /* the layouts of one workspace, as Overwrite targets: its parent layout, then its child layouts */
+  const overItems = (P, onBase) => [
+    { id: `over:${P}\n${P}`, label: P, sub: 'parent layout', icon: 'layers', on: onBase === P },
+    ...kids(P).map((n) => ({ id: `over:${P}\n${n}`, label: n, sub: 'child layout', icon: 'layers', on: onBase === n }))];
+  const group = (P) => ({ label: P, icon: 'layers', sub: kids(P).length ? `${kids(P).length + 1} layouts` : '', kids: overItems(P) });
+  const PDETAIL = {}; /* project details for the Run a job submenu, loaded when the Project menu opens */
+  const layMenu = (anchor, p, w, vps) => {
+    const r = rec(p, w), home = p === '*home*';
+    MC.menu(anchor, [{ h: `${w} layouts` },
+      { id: 'load:' + w, label: `Load ${w}`, sub: 'parent layout', icon: 'layers', on: r.base === w && !r.cols },
+      ...kids(w).map((n) => ({ id: 'load:' + n, label: `Load ${n}`, sub: 'child layout', icon: 'layers', on: r.base === n && !r.cols })),
+      { sep: 1 },
+      { id: 'newp', label: 'Save new parent layout', icon: 'plus' },
+      { id: 'save', label: 'Save new child layout', sub: nextKid(w), icon: 'plus' },
+      /* Overwrite: this workspace's layouts first, then one submenu per other workspace, the other page's one level deeper */
+      { label: 'Overwrite', icon: 'save', kids: [...overItems(w, r.base), { sep: 1 },
+        ...(home ? HWS : WSN).filter((x) => x !== w).map(group),
+        { label: home ? 'Project layouts' : 'Home layouts', icon: home ? 'folder' : 'home', kids: (home ? WSN : HWS).map(group) }] },
+      { sep: 1 }, { id: 'manage', label: 'Manage layouts…', icon: 'gear' }],
+    (id) => {
+      if (id.startsWith('load:')) { r.base = id.slice(5); r.cols = null; vps.setLayout(layoutOf(p, w)); MC.toast(`${r.base} loaded`, 'layers'); }
+      if (id === 'save') { const n = nextKid(w); (L.subs[w] = L.subs[w] || {})[n] = vps.serial(); r.base = n; r.cols = null; MC.toast(`Saved as ${n}`, 'layers'); }
+      /* any layout takes what is on screen; when it is the one loaded here, this workspace has no changes left */
+      if (id.startsWith('over:')) {
+        const [P, n] = id.slice(5).split('\n'), lay = vps.serial();
+        if (n === P) { L.def[P] = lay; L.own[P] = 1; } else if (L.subs[P]) L.subs[P][n] = lay;
+        if (P === w && r.base === n) r.cols = null;
+        MC.toast(`${n} overwritten`, 'save');
+      }
+      /* a new parent layout: a new workspace in the bar, with its name ready to type */
+      if (id === 'newp') {
+        const n = freeName(home ? 'Home' : 'Mine'); (home ? HWS : WSN).push(n); L.def[n] = vps.serial(); L.own[n] = 1;
+        if (home) homeWs = n; else cur.ws = n;
+        drawBar(); saveTabs(); const b = $(`#mbar [data-${home ? 'hws' : 'ws'}="${CSS.escape(n)}"]`); if (b) renameInBar(b, n); return;
+      }
+      if (id === 'manage') { manageLayouts(home ? 'home' : 'projects'); return; }
+      drawBar();
+    }, { alignRight: true });
+  };
+  /* double-click a workspace in the bar: type its new name there (Enter keeps it, Esc does not) */
+  let renaming = false;
+  const renameInBar = (btn, w) => {
+    const inp = document.createElement('input'); inp.className = 'wsren'; inp.value = w; inp.size = Math.max(3, w.length + 1);
+    renaming = true; btn.replaceChildren(inp); inp.focus(); inp.select();
+    let done = false;
+    const fin = (ok) => { if (done) return; done = true; renaming = false; if (ok) renameWs(w, inp.value); drawBar(); saveTabs(); };
+    inp.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') fin(true); if (e.key === 'Escape') fin(false); };
+    inp.oninput = () => { inp.size = Math.max(3, inp.value.length + 1); };
+    inp.onblur = () => fin(true);
+    inp.onclick = inp.ondblclick = inp.onmousedown = (e) => e.stopPropagation();
+  };
+  /* Manage layouts: rename, reorder and delete parent layouts, and delete child layouts */
+  const manageLayouts = (which) => {
+    MC.closeMenus();
+    const d = document.createElement('div'); d.className = 'mdlg';
+    let arm = null, dragW = null; /* arm: the delete button waiting for its second click */
+    const list = () => (which === 'home' ? HWS : WSN);
+    const draw = () => {
+      const a = list();
+      d.innerHTML = `<div class="mbox lmg" role="dialog" aria-modal="true"><div class="row lmg-h"><span class="mt2">Manage layouts</span><span class="grow"></span>`
+        + `<div class="seg">${[['projects', 'folder', 'Projects'], ['home', 'home', 'Home']].map(([k, ic, l]) => `<button class="${which === k ? 'on' : ''}" data-which="${k}">${I(ic, 'sm')}${l}</button>`).join('')}</div></div>`
+        + `<div class="lmg-list">${a.map((w) => `<div class="lmg-g" data-w="${esc(w)}"><div class="lmg-p"><span class="lmg-grip" title="Drag to reorder">${I('grip', 'sm')}</span>`
+          + `<span class="input"><input value="${esc(w)}" data-ren="${esc(w)}" aria-label="Name of ${esc(w)}"></span><span class="faint lmg-n">${kids(w).length ? kids(w).length + (kids(w).length > 1 ? ' children' : ' child') : ''}</span>`
+          + delBtn('p:' + w, a.length < 2) + `</div>`
+          + kids(w).map((k) => `<div class="lmg-c">${I('layers', 'sm')}<span class="grow">${esc(k)}</span>${delBtn('c:' + w + '\n' + k)}</div>`).join('') + `</div>`).join('')}</div>`
+        + `<div class="row"><span class="grow"></span><button class="btn sm primary" data-x>Done</button></div></div>`;
+    };
+    const delBtn = (key, off) => arm === key ? `<button class="btn sm lmg-del sure" data-del="${esc(key)}">${I('trash', 'sm')}Delete</button>`
+      : `<button class="ibtn sm lmg-del" data-del="${esc(key)}" ${off ? 'disabled' : ''} title="${off ? 'The last one stays' : 'Delete'}">${I('trash', 'sm')}</button>`;
+    /* a rename updates the rows in place, so a click that blurred the field still lands */
+    const commit = (inp) => {
+      const w = inp.dataset.ren, i = list().indexOf(w); if (i < 0 || inp.value.trim() === w) return;
+      if (!renameWs(w, inp.value)) { inp.value = w; return; }
+      const n = list()[i], g = inp.closest('.lmg-g'); g.dataset.w = n; inp.dataset.ren = n; inp.value = n;
+      g.querySelector('.lmg-p [data-del]').dataset.del = 'p:' + n;
+      $$('.lmg-c', g).forEach((c, j) => { const k = kids(n)[j]; c.querySelector('.grow').textContent = k; c.querySelector('[data-del]').dataset.del = 'c:' + n + '\n' + k; });
+      drawBar(); saveTabs();
+    };
+    const close = () => { d.remove(); removeEventListener('keydown', key, true); drawBar(); saveTabs(); };
+    const key = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const inp = e.target.closest && e.target.closest('[data-ren]'); if (inp) { inp.value = inp.dataset.ren; inp.blur(); } else close(); }
+      if (e.key === 'Enter' && e.target.closest && e.target.closest('[data-ren]')) { e.preventDefault(); e.target.blur(); }
+    };
+    d.onclick = (e) => {
+      if (e.target === d || e.target.closest('[data-x]')) { close(); return; }
+      const s = e.target.closest('[data-which]'); if (s) { which = s.dataset.which; arm = null; draw(); return; }
+      const b = e.target.closest('[data-del]'); if (!b || b.disabled) { if (arm && !b && !e.target.closest('input')) { arm = null; draw(); } return; }
+      const k = b.dataset.del;
+      if (arm !== k) { arm = k; draw(); return; }
+      arm = null;
+      if (k.startsWith('p:')) deleteWs(k.slice(2)); else { const [w, n] = k.slice(2).split('\n'); deleteKid(w, n); }
+      drawBar(); saveTabs(); draw();
+    };
+    d.addEventListener('focusout', (e) => { if (e.target.dataset && e.target.dataset.ren) commit(e.target); });
+    /* reorder: drag a parent by its grip */
+    d.addEventListener('mousedown', (e) => { const g = e.target.closest('.lmg-grip'); if (g) g.closest('.lmg-g').draggable = true; });
+    d.addEventListener('dragstart', (e) => { const g = e.target.closest('.lmg-g'); if (!g) return; dragW = g.dataset.w; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragW); g.classList.add('dragging'); });
+    const mark = (e) => { const g = e.target.closest('.lmg-g'); $$('.lmg-g', d).forEach((x) => x.classList.remove('dropb', 'dropa')); if (!g || g.dataset.w === dragW) return null; const r = g.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2; g.classList.add(after ? 'dropa' : 'dropb'); return { w: g.dataset.w, after }; };
+    d.addEventListener('dragover', (e) => { if (!dragW) return; e.preventDefault(); mark(e); });
+    d.addEventListener('drop', (e) => {
+      if (!dragW) return; e.preventDefault(); const t = mark(e), a = list();
+      if (t) { a.splice(a.indexOf(dragW), 1); a.splice(a.indexOf(t.w) + (t.after ? 1 : 0), 0, dragW); drawBar(); saveTabs(); }
+      dragW = null; draw();
+    });
+    d.addEventListener('dragend', () => { dragW = null; $$('.lmg-g', d).forEach((x) => { x.draggable = false; x.classList.remove('dragging', 'dropb', 'dropa'); }); });
+    draw(); document.body.appendChild(d); addEventListener('keydown', key, true);
+  };
+  const TOOLS = () => `<span class="mtools"><button class="ibtn" data-t="srch" title="Search and commands (Ctrl K)">${I('search')}</button><button class="ibtn" data-t="bell" title="Needs you" style="position:relative">${I('bell')}${D.inbox.length ? `<span class="badge alert" style="position:absolute;top:1px;right:-3px;height:calc(19px*var(--k));min-width:calc(19px*var(--k));font-size:calc(12px*var(--k));padding:0 calc(4px*var(--k))">${D.inbox.length}</span>` : ''}</button><button class="ibtn ${S.work ? 'on' : ''}" data-t="look" title="Look: theme, text size, work mode${S.work ? ' (work mode is on)' : ''}">${I('palette')}</button></span>`;
+  const lookMenu = (b) => MC.menu(b, [{ h: 'Theme on this PC' }, ...[['slate', 'Slate'], ['redline', 'Redline'], ['midnight', 'Midnight']].map(([id, l]) => ({ id, label: l, icon: 'moon', on: document.documentElement.dataset.theme === id })),
+    { h: 'Text size' }, ...[['S', 'Small'], ['M', 'Medium'], ['L', 'Large']].map(([z, l]) => ({ id: 'z:' + z, label: l, sub: z, icon: 'type', on: S.size === z })),
+    { sep: 1 }, { id: 'work', label: S.work ? 'Work mode is on' : 'Work mode', sub: 'Ctrl .', icon: 'brief', on: S.work }],
+  (id) => { if (id === 'work') MC.setWork(!S.work); else if (id.startsWith('z:')) MC.setSize(id.slice(2)); else MC.setTheme(id); }, { alignRight: true });
+  /* a click on a layout in the bar shows it as it was left (remembered). Ctrl (Cmd on a Mac): what it shows becomes the
+     saved layout it came from (Talk 3). Shift: that saved layout again, the changes dropped. Alt: what it shows becomes a
+     new child layout (Talk 4). Each of the three is undone from its toast for 5 s. */
+  const wsClick = (e, home, w) => {
+    const p = home ? '*home*' : cur.project, vps = home ? homeVps : cur.vps, was = home ? homeWs : cur.ws, onIt = was === w;
+    const act = e.ctrlKey || e.metaKey ? 'save' : e.shiftKey ? 'load' : e.altKey ? 'new' : null;
+    const before = act ? clone({ def: L.def, own: L.own, subs: L.subs, proj: L.proj, wsn: WSN, hws: HWS }) : null;
+    const lay = onIt ? vps.serial() : layoutOf(p, w);
+    if (home) homeWs = w; else cur.ws = w;
+    const r = rec(p, w), n = r.base;
+    let msg = '';
+    if (act === 'save') { if (n === w) { L.def[w] = lay; L.own[w] = 1; } else (L.subs[w] = L.subs[w] || {})[n] = lay; r.cols = null; msg = `${n} saved`; }
+    if (act === 'load') { r.cols = null; msg = `${n} loaded`; }
+    if (act === 'new') { const k = nextKid(w); (L.subs[w] = L.subs[w] || {})[k] = lay; r.base = k; r.cols = null; msg = `Saved as ${k}`; }
+    vps.setLayout(layoutOf(p, w));
+    drawBar(); saveTabs();
+    if (!act) return;
+    MC.toast(msg, act === 'load' ? 'layers' : 'save', { label: 'Undo', run: () => {
+      Object.assign(L, { def: before.def, own: before.own, subs: before.subs, proj: before.proj });
+      WSN.splice(0, WSN.length, ...before.wsn); HWS.splice(0, HWS.length, ...before.hws);
+      if (home) homeWs = was; else cur.ws = was;
+      vps.setLayout(layoutOf(p, was)); drawBar(); saveTabs(); MC.toast('Undone', 'undo');
+    } });
+  };
+  const drawBar = () => {
+    saveTabs();
+    if (renaming) return;
+    const bar = $('#mbar');
+    if (page === 'projects' && cur) {
+      const p = MC.projectInfo(cur.project);
+      bar.innerHTML = `<button class="pbtn ${$('#fly').classList.contains('on') ? 'open' : ''}" id="pbtn" title="Switch project"><span class="tint" style="background:${p.tint}">${esc(p.name[0])}</span>${esc(p.name)}<span class="root">${esc(p.folder || "")}</span>${I('chev', 'sm')}</button>`
+        + Object.keys(MENUS).map((m) => `<button class="mm" data-mm="${m}">${m}</button>`).join('')
+        + `<div class="wsg"><nav class="ws" id="ws">${WSN.map((w) => { const r = rec(cur.project, w), on = w === cur.ws, mod = modified(cur.project, w);
+          return `<button class="${on ? 'on glow3d' : ''}" data-ws="${esc(w)}" title="${esc(r.base)}${mod ? ', changed, not saved' : ''}">${esc(r.base)}${mod ? '<i class="moddot"></i>' : ''}</button>`; }).join('')}</nav>`
+        + `<button class="ibtn" data-lay title="Layouts">${I('more')}</button></div>` + TOOLS();
+    } else if (page === 'home') {
+      bar.innerHTML = `<span class="pgt">${I('home', 'lg')}<b class="h">Home</b><span class="faint">${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} · ${D.agents.length} running · ${MC.needCount ? MC.needCount() : D.inbox.length} need you</span></span>`
+        + `<div class="wsg"><nav class="ws" id="ws">${HWS.map((w) => { const r = rec('*home*', w), on = w === homeWs, mod = modified('*home*', w);
+          return `<button class="${on ? 'on glow3d' : ''}" data-hws="${esc(w)}" title="${esc(r.base)}${mod ? ', changed, not saved' : ''}">${esc(r.base)}${mod ? '<i class="moddot"></i>' : ''}</button>`; }).join('')}</nav>`
+        + `<button class="ibtn" data-lay title="Layouts">${I('more')}</button></div>` + TOOLS();
+    } else {
+      /* a page file may add a short line beside the title and its own buttons: MC.pageBar[page]() gives { sub, html } (sub is plain text) */
+      const [t, sub0] = INFO[page], pb = MC.pageBar[page] ? MC.pageBar[page]() || {} : {}, sub = pb.sub != null ? esc(pb.sub) : sub0;
+      bar.innerHTML = `<span class="pgt">${I(PAGES.concat([['settings', 'gear']]).find((x) => x[0] === page)[1], 'lg')}<b class="h">${t}</b><span class="faint">${sub}</span></span><span class="grow"></span>`
+        + (pb.html || '') + TOOLS();
+    }
+  };
+  $('#mbar').addEventListener('click', async (e) => {
+    const t = e.target.closest('[data-t]');
+    if (t) { if (t.dataset.t === 'srch') MC.palette(); if (t.dataset.t === 'look') lookMenu(t); if (t.dataset.t === 'bell') MC.menu(t, [{ h: 'Needs you' }, ...D.inbox.map((x, i) => ({ id: i, label: x.what, sub: x.proj, icon: x.kind === 'perm' ? 'lock' : 'chat' }))], () => MC.emit('open', 'inbox'), { alignRight: true }); return; }
+    if (e.target.closest('#pbtn')) { openFly(!$('#fly').classList.contains('on')); return; }
+    const lay = e.target.closest('[data-lay]'); if (lay) { if (page === 'home') layMenu(lay, '*home*', homeWs, homeVps); else layMenu(lay, cur.project, cur.ws, cur.vps); return; }
+    const hw = e.target.closest('[data-hws]'); if (hw) { wsClick(e, true, hw.dataset.hws); return; }
+    const w = e.target.closest('[data-ws]'); if (w) { wsClick(e, false, w.dataset.ws); return; }
+    const b = e.target.closest('[data-mm]'); if (!b) return;
+    const H = MC.live.helpers, P = MC.projectInfo(cur.project), pid = H.pidOf(cur.project);
+    if (b.dataset.mm === 'Project' && pid && !PDETAIL[pid]) { try { PDETAIL[pid] = await MC.api.get('/api/projects/' + encodeURIComponent(pid)); } catch (er) { /* the submenu says so */ } }
+    const items = MENUS[b.dataset.mm].map((x) => x.length ? { id: x[0], label: x[0], icon: x[1], sub: x[2] } : { sep: 1 });
+    /* Run a job: the project's own jobs, in a submenu */
+    const jobs = items.find((x) => x.id === 'Run a job');
+    if (jobs) { const d = PDETAIL[pid]; jobs.kids = d ? (d.jobs || []).filter((j) => j.visible !== false && j.builtin !== 'git-push').sort((a, c) => (a.order || 0) - (c.order || 0)).map((j) => ({ id: 'job:' + j.id, label: j.label || j.id, icon: 'play', job: j })) : [{ id: 'none', label: 'Could not read the jobs', icon: 'x' }]; if (jobs.kids && !jobs.kids.length) jobs.kids = [{ id: 'none', label: 'No jobs in this project', icon: 'x' }]; }
+    MC.menu(b, items, (id, it) => {
+      if (id.startsWith('Theme: ')) MC.setTheme(id.slice(7).toLowerCase());
+      else if (id.startsWith('Text size: ')) MC.setSize(id.slice(11));
+      else if (id === 'Work mode') MC.setWork(!S.work);
+      else if (id === 'Command palette') MC.palette();
+      else if (id === 'Maximize focused viewport') { const v = cur.vps; v.maxed = v.maxed ? null : v.focused; v.render(); }
+      else if (id === 'New tab') newTab(null, { page: 'home' });
+      else if (id === 'New conversation') { MC.setSession(H.newKey(false)); MC.emit('open', 'convo'); }
+      else if (id === 'New simple chat') newTab('Simple chats', { session: H.newKey(true) });
+      else if (id === 'Open folder') { if (P.folder) MC.revealPath(P.folder); }
+      else if (id === 'Open in VS Code') { if (P.folder) MC.api.post('/api/path/code', { path: P.folder }).then(() => MC.toast('Opening VS Code', 'ext'), (er) => MC.toast('Could not open VS Code: ' + H.errText(er), 'warn')); }
+      else if (id.startsWith('job:')) MC.runJob(pid, it.job.id, it.job.label || it.job.id);
+      else if (id === 'Commit with Claude') quickRun('/commit-here', 'Commit');
+      else if (id === 'Review and push with Claude') quickRun(`/github-push Push ${cur.project} (this folder) to GitHub. Follow the skill fully: audit every tracked file, curate the local commits, show me the list, and wait for my yes before pushing.`, 'The push review');
+      else if (id === 'Project settings') MC.emit('open', 'settings');
+      else if (id === 'Handoff now') toConvo('/handoff');
+      else if (id === 'Compact this conversation') toConvo('/compact');
+      else if (id === 'What fills the context') toConvo('/context');
+      else if (id === 'Stop') toConvo('stop');
+    });
+  });
+  $('#mbar').addEventListener('dblclick', (e) => { const w = e.target.closest('[data-ws], [data-hws]'); if (w && !renaming) renameInBar(w, w.dataset.ws || w.dataset.hws); });
+
+  /* ---------- project tree ---------- */
+  const fly = $('#fly');
+  /* each tab keeps its own: open or closed */
+  const treeOpts = { onPick: () => openFly(false), onNewTab: (n) => newTab(n, { fly: false }) };
+  const setFly = (on) => {
+    fly.classList.toggle('on', on);
+    if (on) MC.renderProjectTree($('#ptree'), treeOpts);
+    drawBar();
+  };
+  const openFly = (on) => { if (cur) cur.fly = on; setFly(on); saveTabs(); };
+  $('#flyX').innerHTML = I('panelL', 'sm'); $('#flyX').onclick = () => openFly(false);
+  /* a project picked anywhere (tree, star system, cards): the open tab moves there, or a new tab opens */
+  MC.on('project', (name) => {
+    if (cur) {
+      const same = cur.project === name;
+      cur.project = name; cur.page = 'projects';
+      if (!same) { cur.session = S.session = null; cur.draft = S.draft = ''; cur.picked = S.picked = new Set(); }
+      if (cur.vps && !same) cur.vps.setLayout(layoutOf(name, cur.ws));
+      showTab(cur); return;
+    }
+    const hit = tabs.find((t) => t.project === name); if (hit) showTab(hit); else newTab(name);
+  });
+
+  /* ---------- title bar right side ---------- */
+  MC.on('work', (on) => { drawBar(); drawSbar(); if (fly.classList.contains('on')) MC.renderProjectTree($('#ptree'), treeOpts); MC.toast(on ? 'Work mode: personal projects hidden, plain views, no motion' : 'Work mode off', 'brief'); });
+
+  /* ---------- status bar ---------- */
+  /* the two plan meters: the 5-hour session and the week */
+  const plan = () => { const u = MC.live && MC.live.usage; if (!u) return ''; const m = (l, w) => (w ? `<span title="${l} usage, resets ${new Date(w.resetsAt).toLocaleString('en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}">${l} <b>${Math.round(w.pct)}%</b> <span class="bar ${w.pct >= 80 ? 'warn' : ''}"><i style="width:${Math.min(100, Math.round(w.pct))}%"></i></span></span>` : ''); return m('Session', u.fiveHour) + m('Week', u.sevenDay); };
+  /* the graphics card: memory used (bar and numbers) and how busy it is, from the System tick (every 5 s while a page is open).
+     The linked PC's card comes as pc.gpu (services/pcLink.js, every 10 s) and shows next to it as "<its name> VRAM", so a
+     computer without a card of its own (the Mac) still sees the one that runs the local models */
+  let GPU = null, PCGPU = null;
+  const meter = (label, g) => {
+    const pct = Math.min(100, Math.round((g.vramUsedGB / g.vramTotalGB) * 100));
+    return `<span class="sb-gpu-one">${I('cpu', 'sm')}${label} <b>${g.vramUsedGB.toFixed(1)}/${Math.round(g.vramTotalGB)}GB</b> <span class="bar ${pct >= 85 ? 'warn' : ''}"><i style="width:${pct}%"></i></span>${g.utilPct != null ? `<b class="mono">${Math.round(g.utilPct)}%</b>` : ''}</span>`;
+  };
+  const gpuHtml = () => (GPU && GPU.vramTotalGB ? meter('GPU', GPU) : '') + (PCGPU && PCGPU.vramTotalGB ? meter(esc(PCGPU.machine || 'Linked PC') + ' VRAM', PCGPU) : '');
+  const gpuTitle = (g, whose) => `${whose}${g.name || 'graphics card'}: ${g.vramUsedGB.toFixed(1)}GB of ${g.vramTotalGB.toFixed(1)}GB memory used, ${Math.round(g.utilPct || 0)}% busy`;
+  const paintGpu = () => {
+    const e = $('#sbar [data-gpu]'); if (!e) return;
+    e.innerHTML = gpuHtml();
+    const t = [];
+    if (GPU && GPU.vramTotalGB) t.push(gpuTitle(GPU, ''));
+    if (PCGPU && PCGPU.vramTotalGB) t.push(gpuTitle(PCGPU, (PCGPU.machine || 'The linked PC') + '\'s '));
+    e.title = t.length ? t.join('\n') + (GPU && GPU.vramTotalGB ? '. Click for the System page' : '. Click for its local models on Connections') : '';
+  };
+  MC.events.on('system.tick', (d) => { if (d && d.gpu) { GPU = d.gpu; paintGpu(); } });
+  MC.events.on('pc.gpu', (d) => { PCGPU = d && d.vramTotalGB ? d : null; paintGpu(); });
+  const drawSbar = () => {
+    const run = D.agents.filter((a) => a.state === 'run').length, wait = D.agents.filter((a) => a.state === 'wait').length;
+    $('#sbar').innerHTML = `<button class="sb-srv" data-srv>${((d) => `<span class="dot ${SRV.down ? 'run pulse' : d.fix ? 'warn' : 'ok'}"></span><b>${SRV.down ? 'Server restarting' : d.fix ? (d.fix === 'all' ? 'Restart due: all three' : 'Restart due: server') : 'Server on'}</b>`)(srvDue())} ${location.port ? ':' + esc(location.port) : ''}</button>${D.places.filter((p) => p.id !== 'home').map((p) => `<span><span class="dot ${p.online ? 'ok' : 'idle'}"></span>${esc(p.name)}${p.online ? '' : ' offline'}</span>`).join('')}${syChip()}<span><span class="dot ${run ? 'run pulse' : 'idle'}"></span><b>${run} running</b></span>${wait ? `<span><span class="dot warn"></span><b>${wait} need${wait > 1 ? '' : 's'} you</b></span>` : ''}${S.work ? `<span>${I('brief', 'sm')}<b>Work mode</b></span>` : ''}
+    <span class="grow"></span><button class="sb-gpu" data-gpu></button>${plan()}<span>${I('clock', 'sm')}Cache <b class="cache-t">0:00</b></span><span>${esc(MC.place || 'This PC')}</span>`;
+    paintGpu();
+  };
+
+  /* ---------- the server window: server, runner and phone bridge, how long each has run, and the two restarts ---------- */
+  const SRV = { st: null, at: 0, down: false, err: '', pop: null, tick: null, since: null };
+  const SY = { v: null, pop: null, reading: false, err: '', seen: new Set(), hid: new Set(), tick: null }; /* the Sync panel, below */
+  const upFor = (ms) => { if (ms == null || ms < 0) return ''; const s = Math.floor(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60), d = Math.floor(h / 24); return d ? `${d} d ${h % 24} h` : h ? `${h} h ${m % 60} m` : m ? `${m} m` : `${s} s`; };
+  const sinceOf = (v) => { const t = typeof v === 'number' ? v : Date.parse(v || ''); return Number.isFinite(t) ? t : null; };
+  async function srvLoad() {
+    MC.api.get('/api/pc-lock').then((l) => { SRV.lock = l; srvPaint(); }).catch(() => {});
+    try { SRV.st = await MC.api.get('/api/server/status'); SRV.at = Date.now(); SRV.err = ''; if (SRV.down && SRV.since !== SRV.st.server.startedAt) { SRV.down = false; clearInterval(SRV.watch); MC.toast(SRV.all ? 'Server, bridge and runner restarted' : 'Server restarted', 'server'); syLoad(true); } }
+    catch (e) { SRV.err = (e && e.message) || 'No answer'; }
+    srvPaint(); drawSbar();
+  }
+  /* this server restarts; watched until it is back (also with its panel closed), then every computer is read again */
+  async function restartHere(all) {
+    if (!SRV.st) await srvLoad();
+    try { await MC.api.post('/api/server/restart', { confirm: true, all }); }
+    catch (err) { MC.toast('Not restarted: ' + ((err && err.message) || 'no answer'), 'warn'); return false; }
+    SRV.down = true; SRV.all = all; SRV.since = SRV.st && SRV.st.server.startedAt; srvPaint(); syPaint(); drawSbar();
+    clearInterval(SRV.watch); let k = 0; SRV.watch = setInterval(() => { if (!SRV.down || ++k > 90) { clearInterval(SRV.watch); return; } if (!SRV.pop) srvLoad(); }, 1500);
+    return true;
+  }
+  /* which of the three run older code: { server, runner, bridge } and the restart that fixes it ('one', 'all' or null) */
+  function srvDue() {
+    const st = SRV.st; if (!st || SRV.down) return { server: false, runner: false, bridge: false, fix: null };
+    const d = { server: !!st.server.old, runner: !!(st.runner.old && st.runner.state === 'connected'), bridge: !!(st.bridge.old && st.bridge.online) };
+    d.fix = d.runner || d.bridge ? 'all' : d.server ? 'one' : null;
+    return d;
+  }
+  function srvHtml() {
+    const st = SRV.st; if (!st) return `<div class="faint">${SRV.err ? esc(SRV.err) : 'Reading'}</div>`;
+    const off = Date.now() - SRV.at, up = (v) => { const t = sinceOf(v); return t == null ? '' : 'up ' + upFor(st.now - t + off); };
+    const r = st.runner, b = st.bridge, n = st.running.runs, due = srvDue();
+    const rWord = { connected: 'On', connecting: 'Starting', reconnecting: 'Reconnecting', off: 'Off', disabled: 'Turned off' }[r.state] || r.state;
+    /* the marks sit at the right edge, in one column with the other computers' below; how long each has run goes under its name */
+    const row = (name, c, upTxt, sub) => `<div class="srow"><span class="grow"><b>${name}</b><span class="faint">${[sub, esc(upTxt)].filter(Boolean).join(' · ')}</span></span>${c}</div>`;
+    const oldC = (what) => cell('warn', 'Restart due', `${what} runs older code than its folder has`);
+    const srvC = SRV.down ? cell('run', 'Restarting') : due.server ? oldC('The server') : cell('ok', 'On');
+    const runC = r.state === 'connected' ? (due.runner ? oldC('The runner') : cell('ok', 'On')) : /connect/.test(r.state) ? cell('run', rWord) : cell('off', rWord, r.reason || '');
+    const brC = b.online ? (due.bridge ? cell('warn', 'Restart due', 'A new build of the bridge waits for its next start') : cell('ok', 'On')) : cell('off', b.built ? 'Off' : 'Not built');
+    const which = [due.server && 'the server', due.runner && 'the runner', due.bridge && 'the bridge'].filter(Boolean);
+    const say = which.length ? `<div class="sy-n arm-n">${I('warn', 'sm')}<span>${esc(which.join(which.length > 2 ? ', ' : ' and ').replace(/^./, (c) => c.toUpperCase()))} ${which.length === 1 ? 'runs' : 'run'} older code: use ${due.fix === 'all' ? 'Restart all three' : 'Restart server'}${due.fix === 'all' && n ? `. ${n} running conversation${n === 1 ? '' : 's'} will stop` : ''}.</span></div>` : '';
+    const dis = `${SRV.down || !st.server.supervised ? 'disabled' : ''}`;
+    return `<div class="srows">${row('Server', srvC, SRV.down ? '' : up(st.server.startedAt), `:${st.server.port} · pid ${st.server.pid}`)}
+      ${row('Runner', runC, r.state === 'connected' ? up(r.startedAt) : '', r.state === 'connected' ? `${n} conversation${n === 1 ? '' : 's'} running` : esc(r.reason || ''))}
+      ${row('Phone bridge', brC, b.online ? up(b.startedAt) : '', b.version ? 'version ' + esc(b.version) : '')}</div>${say}
+      ${SRV.lock && SRV.lock.pin ? `<div class="srow"><span class="grow"><b>PIN lock</b><span class="faint">${SRV.lock.unlocked ? 'open until ' + new Date(SRV.lock.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'locked'}</span></span>${SRV.lock.unlocked ? `<button class="btn sm" data-pclock="here">${I('lock', 'sm')}Lock now</button>` : cell('ok', 'Locked')}</div>` : ''}
+      <div class="sbtns">${armBtn('srv:one', 'Restart server', `data-srvr="one" ${dis}`, due.fix === 'one' ? 'due' : '')}${armBtn('srv:all', 'Restart all three', `data-srvr="all" ${dis}`, due.fix === 'all' ? 'due' : '')}</div>${armed('srv:one') ? armHint('Running conversations keep going.') : armed('srv:all') ? armHint(n ? `${n} running conversation${n === 1 ? '' : 's'} will stop. Phones drop for a few seconds.` : 'No conversation is running. Phones drop for a few seconds.') : ''}${farRestarts()}`;
+  }
+  /* Restart buttons confirm in place: the first click turns the button into "Confirm" for a few seconds, a second click
+     restarts. No dialog, so the mouse does not have to move */
+  const ARM = { key: null, until: 0, t: null };
+  const armed = (k) => ARM.key === k && Date.now() < ARM.until;
+  function arm(k) { ARM.key = k; ARM.until = Date.now() + 4000; clearTimeout(ARM.t); ARM.t = setTimeout(() => { ARM.key = null; srvPaint(); syPaint(); }, 4050); srvPaint(); syPaint(); }
+  const disarm = () => { ARM.key = null; clearTimeout(ARM.t); };
+  const armBtn = (k, label, attrs, cls = '') => armed(k) ? `<button class="btn sm arm" ${attrs} title="Click again to restart">${I('warn', 'sm')}Confirm: ${esc(label.toLowerCase())}</button>` : `<button class="btn sm ${cls}" ${attrs}>${I('refresh', 'sm')}${esc(label)}</button>`;
+  const armHint = (t) => `<div class="sy-n arm-n">${I('warn', 'sm')}<span>${esc(t)} Click again to confirm.</span></div>`;
+  /* the other computers' servers (through their links): the Sync panel's view says which are on and which run older code */
+  function farRestarts() {
+    const ms = SY.v ? SY.v.machines.filter((m) => m.which !== 'here') : [];
+    if (!ms.length) return '';
+    const L = MC.live.link, linked = (m) => !!(L && L.paired && L.online && L.paired.name === m.name);
+    /* the PIN lock of the linked PC (server/services/pcLock.js there): locked before leaving it, its PIN typed here */
+    const lockBtn = (m) => (linked(m) ? (L.locked ? `<button class="btn sm primary" data-pclock="unlock" data-name="${esc(m.name)}">${I('lock', 'sm')}Unlock</button>` : `<button class="btn sm" data-pclock="lock" data-name="${esc(m.name)}">${I('lock', 'sm')}Lock</button>`) : '');
+    return `<div class="sect-h" style="margin-top:calc(14px*var(--k))">Other computers</div><div class="srows">${ms.map((m) => `<div class="srow"><span class="grow"><b>${esc(m.name)}</b><span class="faint">${esc(machineSub(m))}</span></span>${lockBtn(m)}${m.online ? farBtn(m, 'Restart', m.restart ? 'due' : '') : ''}${m.online && !m.old ? srvCell(m) : onCell(m)}</div>`).join('')}</div>`;
+  }
+  /* data-all: its runner or bridge runs older code, so the restart is Restart all three there */
+  const farBtn = (m, label, cls = '') => armBtn('far:' + m.which, label, `data-farr="${esc(m.which)}" data-name="${esc(m.name)}" ${m.restartAll ? 'data-all="1" ' : ''}${m.which !== 'here' && m.supervised === false ? `disabled title="${m.role === 'hub' ? 'Its start script does not restart it yet: start the hub once again with server/run-hub.sh' : 'It was not started from its shortcut, so it cannot restart itself'}"` : m.old ? 'title="It runs older code: a restart only helps after a pull there"' : ''}`, cls);
+  function farHint() {
+    const k = ARM.key && armed(ARM.key) ? ARM.key : ''; if (!k.startsWith('far:') && k !== 'sy:all') return '';
+    const ms = !SY.v ? [] : k === 'sy:all' ? syDue() : SY.v.machines.map(liveHere).filter((m) => 'far:' + m.which === k);
+    /* Restart all three stops the conversations there, and so does a restart of this computer without a runner */
+    const stops = (m) => m.restartAll || (m.which === 'here' && SRV.st && SRV.st.runner.state !== 'connected');
+    const cv = (n) => `${n} conversation${n === 1 ? ' runs' : 's run'}`, sum = (l) => l.reduce((a, m) => a + (m.running || 0), 0), names = (l) => l.filter((m) => m.running).map((m) => m.name).join(' and ');
+    const st = ms.filter(stops), kp = ms.filter((m) => !stops(m)), nS = sum(st), nK = sum(kp);
+    const say = [nS ? `${cv(nS)} on ${names(st)}. ${nS === 1 ? 'It stops' : 'They stop'}.` : '', nK ? `${cv(nK)} on ${names(kp)}. The runner keeps ${nK === 1 ? 'it' : 'them'} going.` : ''].filter(Boolean).join(' ');
+    return armHint(say || 'No conversation is running there.');
+  }
+  function srvPaint() { if (SRV.pop) SRV.pop.innerHTML = srvHtml() + (SRV.pop && SY.v ? farHint() : ''); }
+  function srvClose() { if (!SRV.pop) return; SRV.pop.remove(); SRV.pop = null; clearInterval(SRV.tick); removeEventListener('mousedown', srvOff, true); }
+  function srvOff(e) { if (SRV.pop && !SRV.pop.contains(e.target) && !e.target.closest('[data-srv]') && !e.target.closest('.mdlg')) srvClose(); }
+  function srvOpen(btn) {
+    if (SRV.pop) { srvClose(); return; }
+    const p = document.createElement('div'); p.className = 'upop srvpop'; SRV.pop = p; p.innerHTML = srvHtml(); document.body.appendChild(p);
+    const r = btn.getBoundingClientRect(); p.style.left = Math.max(8, r.left) + 'px'; p.style.bottom = innerHeight - r.top + 8 + 'px';
+    addEventListener('mousedown', srvOff, true);
+    let k = 0; SRV.tick = setInterval(() => { if (++k % 5 === 0 || SRV.down) srvLoad(); else srvPaint(); }, 1000);
+    srvLoad();
+    if (!SY.v) syLoad(false);
+    p.onclick = async (e) => {
+      const fr = e.target.closest('[data-farr]'); if (fr) { farRestart(fr.dataset.farr, fr.dataset.name, fr); return; }
+      const lk = e.target.closest('[data-pclock]');
+      if (lk) {
+        const k = lk.dataset.pclock, nm = lk.dataset.name || '';
+        try {
+          if (k === 'here') { SRV.lock = await MC.api.post('/api/pc-lock/lock', {}); MC.toast('Locked', 'lock'); }
+          if (k === 'lock') { const r = await MC.api.post('/api/pc-link/lock', {}); MC.toast(r && r.pin ? `${nm} is locked` : `${nm} has no PIN`, 'lock'); }
+          if (k === 'unlock' && (await MC.pinBox(`${nm}'s PIN`, (pin) => MC.api.post('/api/pc-link/unlock', { pin })))) MC.toast(`${nm} is open until tomorrow morning`, 'lock');
+        } catch (er) { MC.toast((er && er.message) || 'No answer', 'warn'); }
+        srvPaint(); return;
+      }
+      const b = e.target.closest('[data-srvr]'); if (!b) return;
+      const all = b.dataset.srvr === 'all', k = 'srv:' + b.dataset.srvr;
+      if (!armed(k)) { arm(k); return; }
+      disarm(); restartHere(all);
+    };
+  }
+  /* ---------- the Sync panel: every computer and the projects they share (services/machines.js) ---------- */
+  const agoTxt = (iso) => { const t = Date.parse(iso || ''); if (!Number.isFinite(t)) return ''; const ms = Date.now() - t; return ms < 45e3 ? 'just now' : upFor(ms) + ' ago'; };
+  const machineSub = (m) => [m.which === 'here' ? 'This computer' : m.role === 'hub' ? 'Hub' : 'Other computer', !m.online ? 'off' : m.old ? 'runs an older Mission Control' : '', m.online && m.running ? `${m.running} running` : '', m.online && m.restart ? 'runs older code' : ''].filter(Boolean).join(' · ');
+  async function syLoad(fresh) {
+    if (fresh && SY.reading) return;
+    try {
+      if (fresh) { SY.reading = true; syPaint(); drawSbar(); SY.v = (await MC.api.post('/api/sync/machines/refresh', {})).view; }
+      else { SY.v = (await MC.api.get('/api/sync/machines')).view; if (!SY.v || SY.v.stale) { syLoad(true); return; } }
+      SY.err = '';
+    } catch (e) { SY.err = (e && e.message) || 'No answer'; }
+    SY.reading = false; syPaint(); srvPaint(); drawSbar();
+  }
+  const syBusy = () => !!(SY.v && SY.v.shared.some((x) => x.sync && x.sync.busy));
+  function syChip() {
+    const v = SY.v, busy = syBusy();
+    const needs = v && v.shared.some((x) => x.sync && x.sync.phase === 'needs' && !SY.seen.has(x.sync.at));
+    const todo = v ? v.shared.filter((x) => x.todo).length : 0, restart = v ? syDue().length : 0;
+    const [dot, word] = busy ? ['run pulse', 'Syncing'] : SY.reading ? ['run pulse', 'Checking'] : needs ? ['warn', 'Sync needs you'] : !v ? ['idle', 'Sync'] : todo ? ['warn', `Sync: ${todo} to do`] : restart ? ['warn', restart === 1 ? 'Restart due' : `${restart} restarts due`] : ['ok', 'In sync'];
+    return `<button class="sb-srv" data-msync title="Open the Sync panel: your computers and the projects they share" aria-haspopup="dialog" aria-expanded="${SY.pop ? 'true' : 'false'}">${I('swap', 'sm')}<span class="dot ${dot}"></span><b>${esc(word)}</b></button>`;
+  }
+  function syState(x) {
+    const s = x.sync; if (!s) return '';
+    const notes = (s.notes || []).map((n) => `<div class="sy-n">${I('note', 'sm')}<span>${esc(n)}</span></div>`).join('');
+    if (s.busy) return `<div class="sy-s">${MC.st('run', s.label)}<span class="grow">${esc(s.detail || '')}</span></div>`;
+    if (s.phase === 'done') return SY.hid.has(s.at) || Date.now() - Date.parse(s.at || 0) > 30 * 60e3 ? '' : `<div class="sy-s">${MC.st('done', s.label || 'Synced')}<span class="grow">${esc(s.detail || '')} <span class="faint">${esc(agoTxt(s.at))}</span></span><button class="ibtn sm" data-syx="${esc(s.at)}" title="Hide this line">${I('x', 'sm')}</button></div>${notes}`;
+    const r = esc(x.remote);
+    const act = s.kind === 'public' ? `<button class="btn sm" data-syrev="${esc(x.name)}">${I('lock', 'sm')}Review and push</button>`
+      : s.where === 'here' && s.sessionId ? `<button class="btn sm primary" data-syopen="${esc(s.sessionId)}" data-name="${esc(x.name)}">${I('chat', 'sm')}Open conversation</button>`
+      : ['conflict', 'dirty', 'push', 'pull', 'commit', 'far', 'stuck'].includes(s.kind) && (s.where === 'here' ? s.projectId : s.where === 'pc')
+        ? `<button class="btn sm primary" data-syask="${r}" data-name="${esc(x.name)}" title="A conversation with Sonnet ${s.where === 'here' ? 'here' : 'on that computer'}, told what stopped the sync. Nothing is pushed without your yes">${I('chat', 'sm')}Ask Sonnet</button><button class="btn sm ghost" data-syask="${r}" data-model="opus" data-name="${esc(x.name)}" title="The same with Opus, for a hard one">Opus</button>` : '';
+    return `<div class="sy-s">${MC.st('wait', 'Needs you')}<span class="grow">${esc(s.detail || '')}</span></div>${act ? `<div class="sy-a">${act}</div>` : ''}${notes}`;
+  }
+  /* one cell of the computers table: a mark and a short word, so it reads without the color too */
+  const CELL = { ok: 'tick', warn: 'warn', fail: 'xc', off: 'circle', run: 'loader' };
+  const cell = (k, word, title = '') => `<span class="syc syc-${k}" ${title ? `title="${esc(title)}"` : ''}>${I(CELL[k], 'sm')}${esc(word)}</span>`;
+  function onCell(m) {
+    if (!m.online) return cell('off', 'Off', m.error ? 'No answer: ' + m.error : 'It does not answer');
+    if (m.old) return cell('warn', 'Old app', 'It runs an older Mission Control: pull and restart it there once');
+    if (m.error) return cell('warn', 'Error', m.error);
+    return cell('ok', 'On');
+  }
+  function codeCell(m, r) {
+    if (!m.online || m.old) return cell('off', 'Unknown', 'Not checked while it is off');
+    if (!r || r.status === 'none') return cell('off', 'Not here', 'This project is not on that computer');
+    if (r.status === 'stuck') return cell('fail', 'Stuck', r.words);
+    const bits = [r.ahead ? `${r.ahead} to push` : '', r.behind ? `${r.behind} to pull` : ''].filter(Boolean);
+    if (bits.length) return cell('warn', r.ahead && r.behind ? `${r.ahead}↑ ${r.behind}↓` : bits[0], r.words);
+    if (r.tracked) return cell('warn', `${r.tracked} uncommitted`, r.words);
+    return cell('ok', 'Up to date', `${r.branch || ''} ${r.head ? r.head.slice(0, 7) : ''}`.trim());
+  }
+  function srvCell(m) {
+    if (!m.online || m.old) return cell('off', 'Unknown');
+    if (m.restarting || (m.which === 'here' && SRV.down)) return cell('run', 'Restarting');
+    if (m.restartAll) return cell('warn', 'Restart due: all three', `${[m.runnerOld && 'its runner runs older code', m.bridgeOld && 'a new build of its bridge waits'].filter(Boolean).join(', and ').replace(/^./, (c) => c.toUpperCase()) || 'Its runner or bridge runs older code'}: Restart all three fixes it`);
+    return m.restart ? cell('warn', 'Restart due', 'Its folder has newer server code than the server runs') : cell('ok', 'OK', 'It runs the code in its folder');
+  }
+  /* this computer's row follows the server status (read every minute), which knows sooner than the last Sync check */
+  const liveHere = (m) => { if (m.which !== 'here' || !SRV.st || SRV.down) return m; const d = srvDue(); return { ...m, restart: !!d.fix, restartAll: d.fix === 'all', runnerOld: d.runner, bridgeOld: d.bridge }; };
+  const syDue = () => (SY.v ? SY.v.machines.map(liveHere).filter((m) => m.online && m.restart && !m.restarting && !(m.which === 'here' && SRV.down) && (m.which === 'here' || m.supervised !== false)) : []);
+  function syHtml() {
+    const v = SY.v;
+    const head = `<div class="sy-h"><b>Sync</b><span class="faint">${SY.reading ? 'Checking every computer' : v ? 'checked ' + esc(agoTxt(v.at)) : ''}</span><span class="grow"></span><button class="ibtn sm" data-syr title="Check every computer again (a fetch on each)" ${SY.reading ? 'disabled' : ''}>${I(SY.reading ? 'loader' : 'refresh', 'sm')}</button></div>`;
+    if (!v) return head + `<div class="faint">${SY.err ? esc(SY.err) : 'Reading'}</div>`;
+    const busy = syBusy(), sh = v.shared;
+    const th = `<span class="syth">Computer</span><span class="syth">Online</span>${sh.map((x) => `<span class="syth ellip" title="${esc(x.name)}: its commits against GitHub">${esc(x.name)}</span>`).join('')}<span class="syth" title="Does the server run the code in its folder?">Server</span><span></span>`;
+    const rows = v.machines.map(liveHere).map((m) => `<span class="sycn"><b>${esc(m.name)}</b><span class="faint">${esc(m.which === 'here' ? 'This computer' : m.role === 'hub' ? 'Hub' : 'Other computer')}${m.online && m.running ? ` · ${m.running} running` : ''}</span></span>${onCell(m)}${sh.map((x) => codeCell(m, x.rows.find((r) => r.which === m.which))).join('')}${srvCell(m)}<span class="syact">${m.online && m.restart && !m.restarting && !(m.which === 'here' && SRV.down) ? farBtn(m, 'Restart', 'due') : ''}</span>`).join('');
+    const grid = `<div class="sygrid" style="grid-template-columns:minmax(0,1fr) repeat(${sh.length + 2},auto) auto">${th}${rows}</div>`;
+    const due = syDue();
+    const btns = sh.map((x) => `<button class="btn sm ${x.todo ? 'primary' : ''}" data-sya="${esc(x.remote)}" ${busy || SY.reading ? 'disabled' : ''} title="The other computer pushes its commits first, then this one commits, pulls and pushes, then the others pull">${I(x.sync && x.sync.busy ? 'loader' : 'swap', 'sm')}${sh.length > 1 ? 'Sync ' + esc(x.name) : 'Sync all'}</button>`).join('')
+      + (due.length ? armBtn('sy:all', `Restart all ${due.length}`, `data-syrall title="Restart ${esc(due.map((m) => m.name).join(' and '))}: the computers that run older code"`) : '');
+    const states = sh.map((x) => { const st = syState(x); return st ? `<div class="sy-p">${sh.length > 1 ? `<b>${esc(x.name)}</b>` : ''}${st}</div>` : ''; }).join('');
+    return head + (sh.length ? grid : `<div class="faint">No project is on more than one computer yet.</div>`) + `<div class="sy-f">${btns}</div>` + farHint() + states;
+  }
+  function syPaint() { if (SY.pop) SY.pop.innerHTML = syHtml(); }
+  function syClose() { if (!SY.pop) return; SY.pop.remove(); SY.pop = null; clearInterval(SY.tick); removeEventListener('mousedown', syOff, true); }
+  function syOff(e) { if (SY.pop && !SY.pop.contains(e.target) && !e.target.closest('[data-msync]') && !e.target.closest('.mdlg')) syClose(); }
+  function syOpen(btn) {
+    if (SY.pop) { syClose(); return; }
+    /* measured first: drawSbar below replaces the button, and a detached one measures 0 (the panel would open above the window) */
+    const r = btn.getBoundingClientRect();
+    const p = document.createElement('div'); p.className = 'upop srvpop sypop'; SY.pop = p; document.body.appendChild(p);
+    if (SY.v) SY.v.shared.forEach((x) => { if (x.sync && x.sync.phase === 'needs') SY.seen.add(x.sync.at); });
+    syPaint(); drawSbar();
+    p.style.left = Math.max(8, Math.min(r.left, innerWidth - p.offsetWidth - 8)) + 'px'; p.style.bottom = Math.max(8, innerHeight - r.top + 8) + 'px';
+    addEventListener('mousedown', syOff, true);
+    SY.tick = setInterval(syPaint, 15000); /* the "checked ... ago" line */
+    if (!SY.v || Date.now() - Date.parse(SY.v.at) > 60e3) syLoad(!!SY.v); else syLoad(false);
+    p.onclick = async (e) => {
+      const t = e.target;
+      if (t.closest('[data-syr]')) { syLoad(true); return; }
+      const a = t.closest('[data-sya]'); if (a) {
+        a.disabled = true;
+        try { const res = await MC.api.post('/api/sync/machines/sync', { remote: a.dataset.sya }); syMerge(res.state); } catch (er) { MC.toast('Sync did not start: ' + ((er && er.message) || 'no answer'), 'warn'); a.disabled = false; }
+        return;
+      }
+      const fr = t.closest('[data-farr]'); if (fr) { farRestart(fr.dataset.farr, fr.dataset.name, fr); return; }
+      if (t.closest('[data-syrall]')) { if (!armed('sy:all')) { arm('sy:all'); return; } disarm(); restartDue(); return; }
+      const sx = t.closest('[data-syx]'); if (sx) { SY.hid.add(sx.dataset.syx); syPaint(); return; }
+      const so = t.closest('[data-syopen]'); if (so) { syClose(); MC.emit('project', so.dataset.name); setTimeout(() => MC.openInTalk(so.dataset.syopen), 50); return; }
+      const rv = t.closest('[data-syrev]'); if (rv) { syClose(); MC.emit('project', rv.dataset.syrev); setTimeout(() => MC.reviewPush(), 50); return; }
+      const ak = t.closest('[data-syask]'); if (ak) {
+        ak.disabled = true;
+        try {
+          const res = await MC.api.post('/api/sync/machines/ask', { remote: ak.dataset.syask, model: ak.dataset.model || 'sonnet' });
+          if (res.where === 'here' && res.sessionId) { syClose(); MC.emit('project', ak.dataset.name); setTimeout(() => MC.openInTalk(res.sessionId), 50); }
+          else if (res.url) { window.open(res.url, '_blank', 'noopener'); MC.toast('Started there. Its pages opened in a new tab.', 'chat'); }
+          else MC.toast('Started on the other computer. It is in that project\'s conversations there.', 'chat');
+        } catch (er) { MC.toast('Could not start it: ' + ((er && er.message) || 'no answer'), 'warn'); ak.disabled = false; }
+      }
+    };
+  }
+  /* a Sync all state into the view */
+  function syMerge(st) {
+    if (!st || !SY.v) return;
+    const x = SY.v.shared.find((y) => y.remote === st.remote); if (x) x.sync = st;
+    syPaint(); drawSbar(); srvPaint(); MC.emit('rerender', 'overview');
+  }
+  async function farRestart(which, name, btn) {
+    const k = 'far:' + which;
+    if (!armed(k)) { arm(k); return; }
+    disarm(); if (btn) btn.disabled = true;
+    const all = !!(btn && btn.dataset.all);
+    if (which === 'here') { await restartHere(all); return; }
+    if (await restartOne(which, name, all)) { syPaint(); srvPaint(); } else if (btn) btn.disabled = false;
+  }
+  /* the server reads every computer again once that one is back (machines.js afterRestart): the panel follows */
+  async function restartOne(which, name, all = false) {
+    try { await MC.api.post('/api/sync/machines/restart', { which, confirm: true, all }); MC.toast(`${name} is restarting`, 'server'); const m = SY.v && SY.v.machines.find((x) => x.which === which); if (m) m.restarting = true; return true; }
+    catch (er) { MC.toast(`${name} was not restarted: ${(er && er.message) || 'no answer'}`, 'warn'); return false; }
+  }
+  /* Restart all: the other computers first, this one last (its page loses the server for a few seconds) */
+  async function restartDue() {
+    const due = syDue();
+    for (const m of due.filter((x) => x.which !== 'here')) await restartOne(m.which, m.name, !!m.restartAll);
+    const me = due.find((m) => m.which === 'here'); if (me) await restartHere(!!me.restartAll);
+    syPaint();
+  }
+  MC.events.on('machines', (v) => { if (!v) return; const newer = (a, b) => (!a ? b : !b ? a : Date.parse(a.at || 0) >= Date.parse(b.at || 0) ? a : b); SY.v = { ...v, shared: v.shared.map((x) => ({ ...x, sync: newer(x.sync, SY.v && (SY.v.shared.find((y) => y.remote === x.remote) || {}).sync) })) }; syPaint(); srvPaint(); drawSbar(); MC.emit('rerender', 'overview'); });
+  MC.events.on('machines.sync', (st) => {
+    if (!st) return;
+    if (!SY.v) { syLoad(false); return; }
+    syMerge(st);
+    if (st.phase === 'needs') { if (SY.pop) SY.seen.add(st.at); else MC.toast(`Sync needs you: ${String(st.detail || '').slice(0, 90)}`, 'warn'); }
+    else if (st.phase === 'done' && !SY.pop) MC.toast(st.detail || 'Synced', 'swap');
+  });
+  MC.syncPanel = () => { const b = $('#sbar [data-msync]'); if (b && !SY.pop) syOpen(b); };
+  /* the Overview's line for a project that is on more than one computer: its entry in the last view, or null */
+  MC.syncShared = (pid) => (SY.v && pid ? SY.v.shared.find((x) => x.id === pid) || null : null);
+  setTimeout(() => syLoad(false), 3000); /* the chip: the last view the server kept */
+  setTimeout(srvLoad, 2000); setInterval(() => { if (!SRV.pop) srvLoad(); }, 60e3); /* the status bar says when a restart is due */
+
+  $('#sbar').addEventListener('click', (e) => { const b = e.target.closest('[data-srv]'); if (b) srvOpen(b); const sy = e.target.closest('[data-msync]'); if (sy) syOpen(sy); if (e.target.closest('[data-gpu]')) MC.D.setPage(GPU && GPU.vramTotalGB ? 'system' : 'connections'); });
+
+  /* ---------- drag and drop, also between tabs: hold over a tab to open it, drop on a tab to put it in that project's message box ---------- */
+  let dragItem = null, hoverTab = null, hoverTimer = null;
+  const clearHover = () => { clearTimeout(hoverTimer); hoverTab = null; $$('.ptab.drop, .cbox.drop').forEach((x) => x.classList.remove('drop')); };
+  document.addEventListener('dragstart', (e) => {
+    const g = e.target.closest('.gi'), t = e.target.closest('.tcard'), d = e.target.closest('.ditem');
+    dragItem = g ? { kind: 'image', src: g.dataset.src, label: (S.gallery.find((x) => x.src === g.dataset.src) || {}).title || 'picture' }
+      : t ? { kind: 'task', label: ($('.tt', t) || {}).textContent || 'task' } : d ? { kind: 'doc', label: d.dataset.doc } : null;
+    if (dragItem) { e.dataTransfer.setData('mc-item', JSON.stringify(dragItem)); e.dataTransfer.effectAllowed = 'copyMove'; }
+  });
+  document.addEventListener('dragend', () => { dragItem = null; clearHover(); });
+  const toBox = (item) => {
+    if (item.kind === 'image') S.picked.add(item.src); else S.draft = (S.draft ? S.draft.trimEnd() + ' ' : '') + '@' + item.label + ' ';
+    MC.emit('open', 'convo'); MC.emit('picked');
+    MC.toast(`"${item.label}" is in ${S.project}'s message box`, 'chat');
+  };
+  $('#tabs').addEventListener('dragover', (e) => {
+    if (!dragItem) return; e.preventDefault();
+    const tb = e.target.closest('.ptab'); if (tb === hoverTab) return; clearHover(); if (!tb) return;
+    hoverTab = tb; tb.classList.add('drop');
+    hoverTimer = setTimeout(() => { const t = tabs.find((x) => x.id === tb.dataset.tab); if (t && (t !== cur || page !== 'projects')) { showTab(t); const again = $(`.ptab[data-tab="${t.id}"]`); if (again) { again.classList.add('drop'); hoverTab = again; } } }, 650);
+  });
+  $('#tabs').addEventListener('drop', (e) => { const tb = e.target.closest('.ptab'); if (!tb || !dragItem) return; e.preventDefault(); const item = dragItem; clearHover(); const t = tabs.find((x) => x.id === tb.dataset.tab); if (t !== cur || page !== 'projects') showTab(t); toBox(item); });
+  document.addEventListener('dragover', (e) => { if (!dragItem) return; const box = e.target.closest('.cbox'); $$('.cbox.drop').forEach((x) => x !== box && x.classList.remove('drop')); if (box) { e.preventDefault(); box.classList.add('drop'); } else if (e.target.closest('.tcard, .gal')) e.preventDefault(); });
+  document.addEventListener('drop', (e) => {
+    if (!dragItem) return; const item = dragItem;
+    if (e.target.closest('.cbox')) { e.preventDefault(); clearHover(); toBox(item); return; }
+    const tc = e.target.closest('.tcard'); if (tc && item.kind !== 'task') { e.preventDefault(); MC.toast(`Attached "${item.label}" to "${$('.tt', tc).textContent}"`, 'clip'); return; }
+    if (e.target.closest('.gal') && item.kind !== 'image') { e.preventDefault(); MC.toast(`Saved "${item.label}" to ${S.project}'s gallery`, 'image'); }
+  });
+
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('.spage [data-tog]'); if (t) t.classList.toggle('on');
+    const sb = e.target.closest('.spage .seg button'); if (sb) { $$('button', sb.parentNode).forEach((x) => x.classList.toggle('on', x === sb)); const k = sb.parentNode.dataset.set; if (k === 'theme') MC.setTheme(sb.textContent.toLowerCase()); if (k === 'size') MC.setSize(sb.textContent); }
+  });
+
+  /* ---------- start ---------- */
+  try {
+    const l = JSON.parse(MC.store.get(LAY_KEY) || 'null');
+    if (l) { applyLay(l); if (HWS.includes(l.hcur)) homeWs = l.hcur; }
+  } catch (e) { /* a broken saved layout: start from the defaults */ }
+  const homeVps = new MC.Viewports($('#homeVps'), layoutOf('*home*', homeWs), { active: () => page === 'home', onLayout: (v) => { rec('*home*', homeWs).cols = v.serial(); drawBar(); }, ...dragOpts(() => null) });
+  MC.live.ready.then(() => {
+    let saved = null; try { saved = JSON.parse(MC.store.get(TABS_KEY) || 'null'); } catch (e) { saved = null; }
+    const all = saved && Array.isArray(saved.tabs) ? saved.tabs.filter((t) => t && (t.project || (t.page && t.page !== 'projects'))) : [];
+    let list = all.filter((t) => !t.project || known(t.project));
+    const want = all[(saved && saved.cur) || 0];
+    waiting = all.map((t, i) => ({ ...t, at: i, wasCur: t === want })).filter((t) => t.project && !known(t.project));
+    if (MC.live.pcKnown && MC.live.pcKnown.ok) waiting = []; /* every list is in already: those projects are gone */
+    if (!list.length) {
+      const mine = MC.live.projects.find((p) => /missioncontrol/i.test(p.folder)) || MC.live.projects[0];
+      list = mine ? [{ project: mine.name, ws: WSN[0] }] : [];
+    }
+    if (!list.length) { $('#panes').innerHTML = `<div class="lv-empty" style="margin:auto">${MC.live.err ? 'Could not reach the server: ' + esc(MC.live.err) : 'No projects yet. Add one on the Talk page.'}</div>`; return; }
+    const at = list.indexOf(want) >= 0 ? list.indexOf(want) : Math.min(Math.max(0, (saved && saved.cur) || 0), list.length - 1);
+    firstTab = null;
+    list.forEach((t, i) => newTab(t.project, { page: t.page, fly: t.fly, ws: WSN.includes(t.ws) ? t.ws : WSN[0], session: t.session || null, bg: i !== at }));
+    firstTab = cur;
+    drawSbar();
+    layReady = true; loadShared();
+  });
+  /* a waiting tab opens at its place once its project is known; it is shown when it was the open tab and no other tab was
+     picked since. When every list was read and its project is still missing, the project is gone and so is the tab. */
+  let firstTab = null;
+  const known = (n) => !!MC.live.byName[n];
+  /* a tab of a project of the other PC, while that PC is locked with its PIN: blurred under a lock, with its Unlock button */
+  const lockCover = () => {
+    const L = MC.live.link, nm = L && L.paired && L.locked ? L.paired.name : null;
+    tabs.forEach((t) => {
+      if (!t.pane) return;
+      const on = !!nm && !!t.project && !known(t.project);
+      let c = t.pane.querySelector(':scope > .pclockov');
+      t.pane.classList.toggle('pclocked', on);
+      if (!on) { if (c) c.remove(); return; }
+      if (!c) { c = document.createElement('div'); c.className = 'pclockov'; t.pane.appendChild(c); }
+      c.innerHTML = `${I('lock')}<b>${esc(nm)} is locked</b><button class="btn sm primary" data-unlockpc="${esc(nm)}">${I('lock', 'sm')}Unlock</button>`;
+      c.querySelector('button').onclick = () => MC.unlockPc(nm);
+    });
+  };
+  MC.on('projects-known', lockCover);
+  MC.on('projects-known', (d) => {
+    if (!waiting.length || !tabs.length) return;
+    const now = waiting.filter((w) => known(w.project));
+    waiting = d && d.ok ? [] : waiting.filter((w) => !now.includes(w));
+    now.sort((a, b) => a.at - b.at).forEach((w) => newTab(w.project, { page: w.page, fly: w.fly, ws: WSN.includes(w.ws) ? w.ws : WSN[0], session: w.session || null, at: w.at, bg: !(w.wasCur && cur === firstTab) }));
+    saveTabs();
+  });
+  addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === ' ') { e.preventDefault(); const v = page === 'home' ? homeVps : cur.vps; v.maxed = v.maxed ? null : v.focused; v.render(); }
+    if (e.ctrlKey && e.key === '.') { e.preventDefault(); MC.setWork(!S.work); }
+    if (e.altKey && /^[1-9]$/.test(e.key) && tabs[+e.key - 1]) showTab(tabs[+e.key - 1]);
+  });
+  MC.D = { tabs: () => tabs, cur: () => cur, showTab, newTab: (n, o) => newTab(n, o), drawTabs: () => tabs.length && drawTabs(), drawSbar, drawRail: () => tabs.length && drawRail(), allVps: () => tabs.flatMap((t) => (t.vps ? t.vps.all() : [])).concat(homeVps ? homeVps.all() : []), drawBar: () => tabs.length && drawBar(), drawTree: () => { if (fly.classList.contains('on')) MC.renderProjectTree($('#ptree'), treeOpts); }, saveTabs, setPage: (p) => { if (p === 'projects') showTab(cur); else { page = p; showPage(); } }, L };
+})();
+</script>
+</body>
+</html>

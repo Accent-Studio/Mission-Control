@@ -127,6 +127,8 @@
 .md-copy-fly{position:fixed;z-index:9999;padding:.3em .55em}
 .md-copy-fly[hidden]{display:none}
 .md .md-lang{display:block;padding:.25em .9em;font-family:var(--md-code-font);font-size:var(--md-lang-size);letter-spacing:var(--md-lang-spacing);text-transform:var(--md-lang-case);color:var(--md-muted);border-bottom:1px solid var(--md-frame)}
+/* "Paste in the console" on a command block: only Mission Control 2 on the PC shows it (html[data-console], base.css) */
+.md-paste{display:none}
 
 /* tables scroll sideways inside their own box, never the page */
 .md .md-tablewrap{overflow-x:auto;max-width:100%;border:1px solid var(--md-frame);-webkit-overflow-scrolling:touch}

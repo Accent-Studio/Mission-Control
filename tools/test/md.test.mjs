@@ -1,5 +1,5 @@
 // Tests for the shared markdown renderer app/md.js (MC.md). It is loaded into a minimal fake window, no browser needed.
-// Run: node --test "tools/test/*.test.mjs"
+// Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -281,3 +281,21 @@ function assertFast(name, src, limit = 100) {
   }
   assert.ok(best < limit, `${name} took ${best.toFixed(0)} ms`);
 }
+
+describe('md: task ids', () => {
+  test('a task id the page knows becomes a link, in text and in a code span; others, UTF-8 and links stay as they are', () => {
+    const known = new Set(['MC-40', 'TG-2']);
+    md.isTask = (id) => known.has(id);
+    try {
+      const h = md('Done: MC-40 and `TG-2`, not MC-99 or UTF-8. See [MC-40](https://a.example/MC-40) and https://a.example/x/MC-40.');
+      assert.equal((h.match(/class="md-task"/g) || []).length, 2, h);
+      assert.ok(h.includes('<a class="md-task" href="#" data-task="MC-40" title="Open MC-40">MC-40</a>'), h);
+      assert.ok(h.includes('data-task="TG-2" title="Open TG-2"><code class="md-ic">TG-2</code></a>'), h);
+      assert.ok(!h.includes('data-task="MC-99"') && !h.includes('data-task="UTF-8"'), h);
+      assert.ok(h.includes('href="https://a.example/MC-40"') && h.includes('href="https://a.example/x/MC-40"'), h);
+    } finally {
+      md.isTask = null;
+    }
+    assert.ok(!md('MC-40').includes('md-task'), 'without a task list nothing is linked');
+  });
+});

@@ -1,6 +1,6 @@
 // Tests for the shared unsent message box (GET/PUT /api/drafts): one draft per conversation or "new", kept by the server for
 // every device, a number per write, an event so other pages take it, and an emptied draft kept empty (so others clear too).
-// Run: node --test "tools/test/*.test.mjs"        (no npm packages; the server uses a free port and its own data folder)
+// Run: npm test (2 test files at a time)        (no npm packages; the server uses a free port and its own data folder)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';

@@ -8,13 +8,14 @@ import { publish } from '../lib/events.js';
 import { readJson, writeJson, busyError } from '../lib/jsonStore.js';
 
 const FILE = path.join(DATA_DIR, 'drafts.json');
-const KEEP_MS = 7 * 864e5;
+const KEEP_MS = 30 * 864e5;
 const MAX_TEXT = 200000; // a longer text is refused, not cut, so the page and the server never disagree
 const MAX_ATTS = 10;
 const MAX_DRAFTS = 300;
-// a conversation id, or a new conversation not sent yet: "n-<random id>" (one per new conversation), or the older single "new"
-const KEY_RE = /^(new|(n-)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-const isNewKey = (k) => k === 'new' || /^n-/i.test(k);
+// a conversation id, or a new conversation not sent yet: "n-<random id>" (one per new conversation; "c-<random id>" for a
+// new plain chat), or the older single "new"
+const KEY_RE = /^(new|([nc]-)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const isNewKey = (k) => k === 'new' || /^[nc]-/i.test(k);
 const PROJECT_RE = /^[A-Za-z0-9_.-]{1,80}$/;
 const UPLOAD_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -54,12 +55,12 @@ function save() {
   }
 }
 
-// Uploads are kept 7 days from when they were sent (uploads.js), so a file stays in a draft a little less than that.
-const FILE_KEEP_MS = 6.5 * 864e5;
+// A file stays in a draft as long as the draft itself (uploads.js keeps the file a year).
+const FILE_KEEP_MS = KEEP_MS;
 const liveAtts = (atts) => (atts || []).filter((a) => a && Date.now() - (a.added || 0) < FILE_KEEP_MS);
 
 export function getDraft(key) {
-  if (!KEY_RE.test(String(key || ''))) throw fail(400, 'key must be a conversation id or a new conversation draft (n-<id>)');
+  if (!KEY_RE.test(String(key || ''))) throw fail(400, 'key must be a conversation id or a new conversation draft (n-<id>, or c-<id> for a chat)');
   const d = load()[key];
   if (!d || !(Date.now() - d.at < KEEP_MS)) return { key, text: '', atts: [], at: 0, rev: d ? d.rev : 0 };
   return { key, text: d.text, atts: liveAtts(d.atts).map(({ added, ...a }) => a), at: d.at, rev: d.rev, ...(d.project !== undefined ? { project: d.project } : {}) };
@@ -75,11 +76,12 @@ export function listNewDrafts() {
     .slice(0, 30);
 }
 
-// body: { key, text, atts, tab } (tab: the page that wrote it, so it can skip its own echo)
-export function putDraft(body) {
+// body: { key, text, atts, tab } (tab: the page that wrote it, so it can skip its own echo). opts.at: the time it was typed,
+// for a draft typed elsewhere (hubSync.js)
+export function putDraft(body, opts = {}) {
   const b = body && typeof body === 'object' ? body : {};
   const key = String(b.key || '');
-  if (!KEY_RE.test(key)) throw fail(400, 'key must be a conversation id or a new conversation draft (n-<id>)');
+  if (!KEY_RE.test(key)) throw fail(400, 'key must be a conversation id or a new conversation draft (n-<id>, or c-<id> for a chat)');
   if (b.text !== undefined && typeof b.text !== 'string') throw fail(400, 'text must be a string');
   const text = String(b.text || '');
   if (text.length > MAX_TEXT) throw fail(413, 'The message is too long to keep as a draft');
@@ -102,11 +104,12 @@ export function putDraft(body) {
     project = b.project;
   }
   // an emptied draft (sent, or cleared) is kept empty with its number, so a device still showing the old words clears too
-  all[key] = { text: text.trim() || atts.length ? text : '', atts, at: Date.now(), rev, ...(project !== undefined ? { project } : {}) };
+  const at = Number(opts.at) > 0 ? Number(opts.at) : Date.now();
+  all[key] = { text: text.trim() || atts.length ? text : '', atts, at, rev, ...(project !== undefined ? { project } : {}) };
   const keys = Object.keys(all);
   if (keys.length > MAX_DRAFTS) keys.sort((x, y) => all[x].at - all[y].at).slice(0, keys.length - MAX_DRAFTS).forEach((k) => delete all[k]);
   save();
   const tab = typeof b.tab === 'string' ? b.tab.slice(0, 60) : '';
   publish('draft', { key, rev, tab });
-  return { key, rev };
+  return { key, rev, at, text: all[key].text };
 }

@@ -703,15 +703,30 @@ MC.ship = function(host, stageEl){
   }
   if(PID && window.MC && MC.events) MC.events.on('chat', onChat);
 
-  /* ---------- camera: left drag pans, right drag turns, wheel zooms ---------- */
+  /* ---------- camera: left drag pans, right drag turns, wheel zooms; on touch, pinch zooms and two fingers turn ---------- */
   const Y0 = .95, C0 = [-3.5, 1.5], ELEV = Math.atan2(33, 40);
   /* fit: pixels per world unit at zoom 1, so the whole ship (about 47 by 34 units on screen) fills the free area. upp is its inverse. */
   const view = {yaw:Y0, zoom:1, cx:C0[0], cz:C0[1], tYaw:Y0, tZoom:1, tcx:C0[0], tcz:C0[1], fit:0, upp:.05};
   let drag = null;
+  /* touch: one finger is the left drag; a second finger cancels it and starts a pinch, where the distance between the fingers
+     zooms and moving both together turns the ship side to side (there is no tilt here). After a pinch a lone finger does
+     nothing until it lifts, so the view never jumps. */
+  const touches = new Map(); let pinch = null;
+  const twoTouch = () => { const [a, b] = [...touches.values()]; return {d:Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), x:(a.x + b.x)/2}; };
   el.style.cursor = 'grab';
   el.addEventListener('contextmenu', e => e.preventDefault());
-  el.addEventListener('pointerdown', e => { if(e.button !== 0 && e.button !== 2) return; drag = {x:e.clientX, y:e.clientY, b:e.button, yaw:view.tYaw, cx:view.tcx, cz:view.tcz}; el.setPointerCapture(e.pointerId); el.style.cursor = e.button === 2 ? 'ew-resize' : 'grabbing'; document.body.classList.add('dragging'); card.classList.remove('show'); });
+  el.addEventListener('pointerdown', e => {
+    if(e.pointerType === 'touch'){
+      if(e.isPrimary){ touches.clear(); pinch = null; }
+      touches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+      if(touches.size === 2){ drag = null; el.setPointerCapture(e.pointerId); card.classList.remove('show'); document.body.classList.add('dragging');
+        pinch = {...twoTouch(), zoom:view.tZoom, yaw:view.tYaw}; return; }
+      if(pinch || touches.size > 2) return;
+    }
+    if(e.button !== 0 && e.button !== 2) return; drag = {x:e.clientX, y:e.clientY, b:e.button, yaw:view.tYaw, cx:view.tcx, cz:view.tcz}; el.setPointerCapture(e.pointerId); el.style.cursor = e.button === 2 ? 'ew-resize' : 'grabbing'; document.body.classList.add('dragging'); card.classList.remove('show'); });
   el.addEventListener('pointermove', e => {
+    if(e.pointerType === 'touch' && touches.has(e.pointerId)){ touches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+      if(pinch){ if(touches.size >= 2){ const g = twoTouch(); view.tZoom = Math.max(.6, Math.min(3.5, pinch.zoom * g.d / pinch.d)); view.tYaw = pinch.yaw + (g.x - pinch.x)*.006; } return; } }
     const r = el.getBoundingClientRect(); mouse = {x:(e.clientX - r.left)/r.width*2 - 1, y:-(e.clientY - r.top)/r.height*2 + 1, cx:e.clientX, cy:e.clientY};
     if(!drag) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
@@ -720,7 +735,8 @@ MC.ship = function(host, stageEl){
       view.tcx = Math.max(-28, Math.min(24, drag.cx - s*dx*wpp - c*dy*k));
       view.tcz = Math.max(-18, Math.min(18, drag.cz + c*dx*wpp - s*dy*k)); }
   });
-  const endDrag = () => { drag = null; el.style.cursor = 'grab'; document.body.classList.remove('dragging'); };
+  const endDrag = e => { if(e.pointerType === 'touch'){ touches.delete(e.pointerId); if(pinch){ if(!touches.size){ pinch = null; document.body.classList.remove('dragging'); } return; } }
+    drag = null; el.style.cursor = 'grab'; document.body.classList.remove('dragging'); };
   el.addEventListener('pointerup', endDrag); el.addEventListener('pointercancel', endDrag);
   el.addEventListener('pointerleave', () => mouse = null);
   el.addEventListener('wheel', e => { e.preventDefault(); view.tZoom = Math.max(.6, Math.min(3.5, view.tZoom*(e.deltaY < 0 ? 1.12 : 1/1.12))); }, {passive:false});

@@ -19,6 +19,8 @@ import { PROTO, codeStamp } from '../runner/shared.js';
 const MAX_LINE = 48 * 1024 * 1024; // one JSON line from the CLI (a replayed message with attachments is long); longer lines are dropped, not buffered
 const CONNECT_MS = 1500;
 const BOOT_WINDOW_MS = Number(process.env.MC_RUNNER_BOOT_MS) || 3000; // the runner may be starting at the same moment as the server
+const LATE_TRIES = 2; // after the boot window, a port that takes connections but answered too late is tried this many more times
+const NO_ANSWER = 'no answer from the runner';
 const GIVE_UP_MS = Number(process.env.MC_RUNNER_GIVE_UP_MS) || 30000; // a connection that was lost and does not come back
 const RETRY_AFTER_MS = 5000; // between attempts to find a runner that was not there
 const SPAWN_ACK_MS = 8000;
@@ -52,7 +54,13 @@ const lostHandlers = [];
 const log = (msg) => console.log(`[runner] ${msg}`);
 
 export function runnerStatus() {
-  return { state, port: RUNNER_PORT, pid: info ? info.pid : null, startedAt: info ? info.startedAt : null, reason: state === 'connected' ? null : lastFailure || secretReason };
+  return { state, port: RUNNER_PORT, pid: info ? info.pid : null, startedAt: info ? info.startedAt : null, old: !!info && codeStamp() > (info.stamp || 0), reason: state === 'connected' ? null : lastFailure || secretReason };
+}
+
+// Asks the runner to end, and the Claude processes it owns with it (the "restart everything" of the status window).
+// false when no runner is connected.
+export function shutdownRunner() {
+  return rawSend({ op: 'shutdown', kill: true });
 }
 
 export function onAttach(fn) {
@@ -119,6 +127,8 @@ function attemptConnectOnce(timeoutMs = CONNECT_MS) {
     let phase = 'challenge'; // challenge: waiting for the runner's nonce; proof: answered, waiting for the runner's proof
     let ownNonce = null;
     let runnerNonce = null;
+    let progress = 0; // each step of the handshake (connected, challenge read) starts the timeout again
+    let timer = null;
     const s = net.connect({ host: RUNNER_HOST, port: RUNNER_PORT });
     s.setNoDelay(true);
     s.setEncoding('utf8');
@@ -130,7 +140,23 @@ function attemptConnectOnce(timeoutMs = CONNECT_MS) {
       resolve(r);
     };
     const refuse = (error) => finish({ ok: false, error });
-    const timer = setTimeout(() => refuse('no answer from the runner'), timeoutMs);
+    // When the event loop was busy (modules still loading, many processes starting), timers run before the socket is read,
+    // so a runner that did answer would look silent. The check runs after the next read of the sockets instead.
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const seen = progress;
+        setImmediate(() => {
+          if (!done && progress === seen) refuse(NO_ANSWER);
+        });
+      }, timeoutMs);
+    };
+    const step = () => {
+      progress++;
+      arm();
+    };
+    arm();
+    s.on('connect', step);
     s.on('error', (err) => refuse(err.code === 'ECONNREFUSED' ? 'nothing is listening on the runner port' : err.message));
     s.on('close', () => {
       if (!done) refuse('the runner closed the connection (wrong secret, or an older runner?)');
@@ -157,6 +183,7 @@ function attemptConnectOnce(timeoutMs = CONNECT_MS) {
             runnerNonce = msg.nonce;
             ownNonce = makeNonce();
             phase = 'proof';
+            step();
             s.write(JSON.stringify({ op: 'hello', proto: PROTO, nonce: ownNonce, proof: handshakeProof(secret, 'client', runnerNonce, ownNonce) }) + '\n');
             continue;
           }
@@ -281,13 +308,19 @@ function onMessage(msg) {
 }
 
 // Starts the first connection attempt; keeps trying for a few seconds because the runner may be starting at this moment.
+// The first attempt waits until the server has finished loading (this runs while the other modules still evaluate), and the
+// secret (icacls, which blocks) is read before the boot window starts, so neither eats into the window.
 export function startRunnerClient() {
   if (started) return;
   started = true;
   firstSettled = new Promise((r) => (resolveFirst = r));
   if (state === 'disabled') return resolveFirst();
+  state = 'connecting';
   (async () => {
+    await new Promise((res) => setImmediate(res));
+    readSecret();
     const t0 = Date.now();
+    let late = 0;
     for (;;) {
       state = 'connecting';
       const r = await attemptConnect();
@@ -298,7 +331,8 @@ export function startRunnerClient() {
       lastFailure = r.error;
       state = 'off';
       lastAttempt = Date.now();
-      if (secretReason || Date.now() - t0 > BOOT_WINDOW_MS) break;
+      if (secretReason) break;
+      if (Date.now() - t0 > BOOT_WINDOW_MS && (r.error !== NO_ANSWER || ++late > LATE_TRIES)) break;
       await new Promise((res) => setTimeout(res, 250));
     }
     if (state !== 'connected') log(`not available (${lastFailure}). Claude processes start directly and end when the server ends.`);
@@ -391,11 +425,13 @@ const directChildren = new Set();
 
 function killTreeOf(pid) {
   if (!pid) return;
+  if (process.platform !== 'win32') { try { process.kill(-pid, 'SIGTERM'); } catch { try { process.kill(pid, 'SIGTERM'); } catch { /* gone */ } } return; }
   execFile('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true, timeout: 10000 }, () => {});
 }
 
 function spawnDirect({ cmd, args, cwd }, sink) {
-  const child = spawn(cmd, args, { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false });
+  // on Linux the process leads its own group, so a kill takes its children (tools it started) too
+  const child = spawn(cmd, args, { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false, detached: process.platform !== 'win32' });
   directChildren.add(child);
   child.stdin.on('error', () => {}); // a write after the process died; the close handler reports the end
   let n = 0;
@@ -475,6 +511,7 @@ function spawnDirect({ cmd, args, cwd }, sink) {
 function killDirect() {
   for (const child of directChildren) {
     if (!child.pid) continue;
+    if (process.platform !== 'win32') { try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ } continue; }
     try {
       execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: 5000, stdio: 'ignore' });
     } catch {

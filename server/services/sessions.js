@@ -6,13 +6,16 @@ import path from 'node:path';
 import { CLAUDE_HOME, DATA_DIR } from '../config.js';
 import { cached, invalidate } from '../lib/cache.js';
 import { run } from '../lib/run.js';
+import { recycle } from '../lib/recycle.js';
 import { publish } from '../lib/events.js';
 import { loadCatalog } from './catalog.js';
-import { getAllMeta, getMeta, setMeta, setOrder, removeMeta } from './sessionMeta.js';
+import { getAllMeta, getMeta, setMeta, setOrder, removeMeta, expiryFor } from './sessionMeta.js';
 import { startTagScanner, autoTagsOf, runPass as runTagPass } from './tags.js';
 import { cacheImage, lazyImage, sniff, SERVABLE_EXT } from './uploads.js';
 import { classifyUserEntry, collapse, isQueuedCommand, NOTICE_TEXT_MAX } from './userKinds.js';
 import { desktopInfo, desktopInfoNow, elsewhereOf } from './elsewhere.js';
+import { CHATS_DIR, isChatDir, isChatFolder } from '../lib/chats.js';
+import { isLocalAbs } from '../lib/localPath.js';
 
 // MC_CLAUDE_HOME points the scan at another folder (used by tests, so nothing real is touched).
 const HOME = process.env.MC_CLAUDE_HOME ? path.resolve(process.env.MC_CLAUDE_HOME) : CLAUDE_HOME;
@@ -73,6 +76,16 @@ function scanFiles() {
 
 function files() {
   return cached('sessions:scan', 3000, async () => scanFiles());
+}
+
+// A transcript given by path (another PC's conversation in the hub cache, hubSync.js), shaped like a scan entry.
+function fileEntry(id, file) {
+  try {
+    const st = fs.statSync(file);
+    return { id: String(id).toLowerCase(), dir: '', file, mtimeMs: st.mtimeMs, size: st.size };
+  } catch {
+    return null;
+  }
 }
 
 async function findEntry(id) {
@@ -304,6 +317,8 @@ function readMeta(entry) {
   if (p) return p;
   p = buildMeta(entry, hit ? hit.scan : null)
     .then(({ meta, scan }) => {
+      // A transcript in the chats folder is a chat of this computer, even when its records name another computer's folder
+      if (isChatFolder(entry.dir) && meta.cwd !== CHATS_DIR) meta = { ...meta, cwd: CHATS_DIR };
       metaCache.set(entry.file, { mtimeMs: entry.mtimeMs, size: entry.size, meta, scan });
       return meta;
     })
@@ -498,9 +513,13 @@ function tagsFor(id, mc, ids) {
 }
 
 // archived: 'all' (default) lists every conversation, 'hide' leaves the archived ones out, 'only' lists just those.
-export async function listSessions({ project = null, limit = 50, archived = 'all' } = {}) {
-  const max = Math.max(1, Math.min(200, Number(limit) || 50));
-  const out = (await scanSessions(project)).filter((s) => (archived === 'hide' ? !s.archived : archived === 'only' ? s.archived : true));
+// kind: 'chat' lists only the plain chats, 'code' only the others, null both.
+const ofKind = (kind) => (s) => !kind || s.kind === kind;
+// folder: only the conversations started in exactly that folder (a root folder such as D:\Dev).
+const sameFolder = (a, b) => String(a || '').replace(/[\\/]+$/, '').toLowerCase() === String(b || '').replace(/[\\/]+$/, '').toLowerCase();
+export async function listSessions({ project = null, folder = null, limit = 50, archived = 'all', kind = null } = {}) {
+  const max = Math.max(1, Math.min(5000, Number(limit) || 50)); // the pages ask for more 50 at a time (Show more)
+  const out = (await scanSessions(project)).filter((s) => !folder || sameFolder(s.cwd, folder)).filter(ofKind(kind)).filter((s) => !s.syncHidden).filter((s) => (archived === 'hide' ? !s.archived : archived === 'only' ? s.archived : true));
   out.length = Math.min(out.length, max);
   return out;
 }
@@ -511,8 +530,8 @@ export function allSessionRows() {
 }
 
 // How many archived conversations there are (inside the project, when one is given).
-export async function countArchivedSessions(project = null) {
-  return (await scanSessions(project)).filter((s) => s.archived).length;
+export async function countArchivedSessions(project = null, kind = null) {
+  return (await scanSessions(project)).filter(ofKind(kind)).filter((s) => s.archived && !s.syncHidden).length;
 }
 
 async function scanSessions(project) {
@@ -524,7 +543,8 @@ async function scanSessions(project) {
   const out = [];
   for (const e of all) {
     const m = await readMeta(e);
-    const pid = projectFor(m.cwd, folders);
+    const chat = isChatDir(m.cwd);
+    const pid = chat ? null : projectFor(m.cwd, folders); // the chats folder sits inside Mission Control's own folder
     const mc = meta[e.id.toLowerCase()] || null;
     const tg = tagsFor(e.id, mc, ids);
     // A project filter keeps the sessions tagged with the project and the ones started inside its folder.
@@ -536,12 +556,14 @@ async function scanSessions(project) {
       id: e.id,
       dir: e.dir,
       cwd: m.cwd,
+      kind: chat ? 'chat' : 'code',
       project: pid,
       tags: tg.tags,
       tagsSource: tg.tagsSource,
       tagsPending: tg.tagsPending,
       title: t.title,
       titleSource: t.titleSource,
+      ...(mc && mc.pastTitles ? { pastTitles: mc.pastTitles } : {}), // what Claude called it before the subject moved (mcp.js conversation_title)
       startedAt: m.startedAt,
       lastAt: m.lastAt,
       sizeKB: Math.round(e.size / 1024),
@@ -549,8 +571,10 @@ async function scanSessions(project) {
       model: m.model,
       pinned: !!(mc && mc.pinned),
       archived: !!(mc && mc.archived),
+      ...(mc && mc.syncHidden ? { syncHidden: true } : {}), // a Sync button's own commit conversation (sync.js): kept out of the lists
       locked: !!(mc && mc.locked),
-      expiryAction: (mc && mc.expiryAction) || null,
+      expiryAction: chat ? null : expiryFor(mc, m.lastEp), // what is sent before the cache runs out (null: nothing; a chat can run neither)
+      expiryChoice: (mc && mc.expiryAction) || null, // what was picked for it (null: the default)
       order: mc && Number.isFinite(mc.order) ? mc.order : null,
     });
   }
@@ -571,7 +595,15 @@ export async function elsewhereFor(id, { waitMs } = {}) {
 export async function getSessionInfo(id) {
   const entry = await findEntry(id);
   if (!entry) return null;
-  return { id: entry.id, cwd: (await readMeta(entry)).cwd };
+  const meta = await readMeta(entry);
+  return { id: entry.id, cwd: meta.cwd, model: meta.model || null, lastEp: meta.lastEp || null };
+}
+
+// The name a conversation shows now and where it comes from (pickTitle): { title, titleSource }, or null when unknown.
+export async function sessionTitle(id) {
+  const entry = await findEntry(id);
+  if (!entry) return null;
+  return pickTitle(await readMeta(entry), getMeta(entry.id));
 }
 
 // ---- Messages, turns and paging ----
@@ -837,8 +869,9 @@ function finishTurn(t) {
 // A turn that continues into newer records than this page gets its marker on the newer page, not here.
 // upTo: true lets `before` be the current end of the file (the saved part of a turn in progress ends exactly where the
 // turn began, and the file may not have grown since); the default refuses it, as a page cursor always lies inside the file.
-export async function getSessionMessages(id, limit = 40, before = null, { upTo = false } = {}) {
-  const entry0 = await findEntry(id);
+// file: read this transcript instead of looking the id up (another PC's conversation in the read-only cache, hubSync.js).
+export async function getSessionMessages(id, limit = 40, before = null, { upTo = false, file = null } = {}) {
+  const entry0 = file ? { id: String(id).toLowerCase(), dir: '', file, mtimeMs: 0, size: 0 } : await findEntry(id);
   if (!entry0) return null;
   const max = Math.max(1, Math.min(200, Number(limit) || 40));
   let size;
@@ -994,7 +1027,7 @@ export async function getSessionMessages(id, limit = 40, before = null, { upTo =
   const t = pickTitle(m, getMeta(entry.id));
   // The oldest byte shown, not the first message: a swapped /compact sits before its summary but lies after it in the file.
   const cursor = hasMore ? String(messages.length ? Math.min(...messages.map((x) => x.pos)) : lastOff) : null;
-  return { id: entry.id, title: t.title, titleSource: t.titleSource, cwd: m.cwd, messages, cursor, hasMore };
+  return { id: entry.id, title: t.title, titleSource: t.titleSource, cwd: m.cwd, kind: isChatDir(m.cwd) ? 'chat' : 'code', messages, cursor, hasMore };
 }
 
 // ---- SendUserFile attachments: which paths may be served ----
@@ -1262,7 +1295,7 @@ export function liveSendFileImages(sessionId, toolUseResult) {
 // Only a path that is in a SendUserFile result of this session, exists, and is an image or a PDF qualifies.
 export async function resolveAttachment(sessionId, p) {
   if (!isUuid(sessionId) || typeof p !== 'string' || !p || p.length > 1024 || p.includes('\0')) return null;
-  if (!/^[A-Za-z]:[\\/]/.test(p)) return null;
+  if (!isLocalAbs(p)) return null;
   const type = servableExt(p);
   if (!type) return null;
   let ok = !!(liveAttach.get(sessionId.toLowerCase()) || new Set()).has(p);
@@ -1373,13 +1406,19 @@ export async function deleteSession(id) {
     // no sidecar folder
   }
 
-  const r = await run(
-    'powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-Command', RECYCLE_SCRIPT, `'${b64(entry.file)}'`, `'${sidecar ? b64(sidecar) : ''}'`],
-    { timeoutMs: 60000 },
-  );
-  if (r.code !== 0 || fs.existsSync(entry.file)) {
-    throw fail(500, 'Could not move the session to the Recycle Bin' + (r.stderr ? ': ' + r.stderr.trim().split(/\r?\n/)[0].slice(0, 160) : ''));
+  if (process.platform !== 'win32') {
+    // the hub (Linux): no Recycle Bin, so it goes to .data/trash (lib/recycle.js)
+    const t = await recycle([entry.file, sidecar]);
+    if (fs.existsSync(entry.file)) throw fail(500, 'Could not move the session to the trash' + (t.failed[0] ? ': ' + t.failed[0].error : ''));
+  } else {
+    const r = await run(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', RECYCLE_SCRIPT, `'${b64(entry.file)}'`, `'${sidecar ? b64(sidecar) : ''}'`],
+      { timeoutMs: 60000 },
+    );
+    if (r.code !== 0 || fs.existsSync(entry.file)) {
+      throw fail(500, 'Could not move the session to the Recycle Bin' + (r.stderr ? ': ' + r.stderr.trim().split(/\r?\n/)[0].slice(0, 160) : ''));
+    }
   }
   try {
     removeMeta(entry.id);
@@ -1390,6 +1429,45 @@ export async function deleteSession(id) {
   invalidate('sessions:scan');
   publish('sessions.changed', { id: entry.id, deleted: true });
   return { ok: true, sidecar: !!sidecar };
+}
+
+// Where a conversation is on disk: { file, sidecar (its folder of helper agents and tool results, or null), dir }, or null.
+export function sessionFiles(id) {
+  const entry = scanFiles().find((e) => e.id.toLowerCase() === String(id).toLowerCase());
+  if (!entry || !inside(PROJECTS_DIR, entry.file)) return null;
+  const side = path.join(path.dirname(entry.file), entry.id);
+  let sidecar = null;
+  try {
+    const st = fs.lstatSync(side);
+    if (st.isDirectory() && !st.isSymbolicLink() && inside(PROJECTS_DIR, side)) sidecar = side; // a link could point anywhere
+  } catch {
+    // no sidecar folder
+  }
+  return { id: entry.id, file: entry.file, sidecar };
+}
+
+// Moves many conversations to the Recycle Bin at once (System page, Conversations and attachments). The caller checks
+// that none is in use. Resolves { done: [id], failed: [{ id, error }] }.
+export async function deleteSessions(ids) {
+  invalidate('sessions:scan');
+  const plan = [];
+  const failed = [];
+  for (const id of ids) {
+    const f = isUuid(id) ? sessionFiles(id) : null;
+    if (f) plan.push(f);
+    else failed.push({ id, error: 'Unknown conversation' });
+  }
+  const r = await recycle(plan.flatMap((f) => [f.file, f.sidecar]));
+  const done = [];
+  for (const f of plan) {
+    if (fs.existsSync(f.file)) { failed.push({ id: f.id, error: (r.failed.find((x) => x.path === f.file) || {}).error || 'Could not move it to the Recycle Bin' }); continue; }
+    try { removeMeta(f.id); } catch { /* a harmless leftover name or pin */ }
+    metaCache.delete(f.file);
+    done.push(f.id);
+  }
+  invalidate('sessions:scan');
+  for (const id of done) publish('sessions.changed', { id, deleted: true });
+  return { done, failed };
 }
 
 // ---- Context window, cache and usage numbers ----
@@ -1574,8 +1652,9 @@ export function compactedStats(compact, model) {
 }
 
 // Numbers for the newest main-thread request in the transcript, or null when the session is unknown.
-export async function getSessionStats(id) {
-  const entry = await findEntry(id);
+// file: read this transcript instead of looking the id up (as in getSessionMessages).
+export async function getSessionStats(id, { file = null } = {}) {
+  const entry = file ? fileEntry(id, file) : await findEntry(id);
   if (!entry) return null;
   let last = null;
   let cacheReq = null;
@@ -1606,6 +1685,137 @@ export async function getSessionStats(id) {
   if (compact) return compactedStats(compact, last && last.model);
   if (!last) return { model: null, contextUsed: null, contextWindow: null, contextPct: null, cache: { ttl: null, lastAt: null, expiresAt: null }, lastUsage: null };
   return buildStats(last, cacheReq, ttl);
+}
+
+// What the conversation's first request carried before any message: the system prompt, tools, memory files and skills (plus
+// the first message itself, a small part). It does not change during a conversation, so the rest of the context is the
+// messages. Read from the first 4 MB of the transcript once, then kept. null when it cannot be told.
+const setupCache = new Map(); // session id (lowercase) -> tokens
+export async function getSessionSetup(id, { file = null } = {}) {
+  const key = String(id || '').toLowerCase();
+  if (setupCache.has(key)) return setupCache.get(key);
+  const entry = file ? fileEntry(id, file) : await findEntry(id);
+  if (!entry) return null;
+  let found = null;
+  try {
+    const fd = fs.openSync(entry.file, 'r');
+    try {
+      const buf = Buffer.alloc(Math.min(entry.size, 4 * 1024 * 1024));
+      fs.readSync(fd, buf, 0, buf.length, 0);
+      for (const line of buf.toString('utf8').split('\n')) {
+        if (!line.includes('"type":"assistant"') || line.includes('"isSidechain":true')) continue;
+        const o = parseLine(line);
+        const u = o && o.type === 'assistant' && o.message && o.message.model !== '<synthetic>' ? o.message.usage : null;
+        if (!u || typeof u !== 'object') continue;
+        found = num(u.input_tokens) + num(u.cache_creation_input_tokens) + num(u.cache_read_input_tokens) || null;
+        break;
+      }
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+  if (found) {
+    setupCache.set(key, found);
+    if (setupCache.size > 500) setupCache.delete(setupCache.keys().next().value);
+  }
+  return found;
+}
+
+// The last /context report of a conversation. Claude Code saves what a slash command printed as a "local_command" system
+// record, so the split it works out (system prompt, tools, MCP tools, memory files, skills, messages) can be read back.
+// The file is searched from the end; when it only grew since the last look, only the new part is searched.
+const CTX_MARK = Buffer.from('"subtype":"local_command","content":"<local-command-stdout>## Context Usage');
+const ctxCache = new Map(); // session id (lowercase) -> { size, report }
+export async function getContextReport(id, { file = null } = {}) {
+  const key = String(id || '').toLowerCase();
+  const entry = file ? fileEntry(id, file) : await findEntry(id);
+  if (!entry) return null;
+  let size;
+  try {
+    size = fs.statSync(entry.file).size;
+  } catch {
+    return null;
+  }
+  const had = ctxCache.get(key);
+  if (had && had.size === size) return had.report;
+  const from = had && had.size < size ? had.size : 0;
+  let report = null;
+  try {
+    const line = lastMarkedLine(entry.file, from, size);
+    report = line ? parseContextReport(line) : null;
+  } catch {
+    report = null;
+  }
+  if (!report && from) report = had.report;
+  ctxCache.set(key, { size, report });
+  if (ctxCache.size > 200) ctxCache.delete(ctxCache.keys().next().value);
+  return report;
+}
+
+function lastMarkedLine(file, from, size) {
+  const CH = 4 * 1024 * 1024;
+  const fd = fs.openSync(file, 'r');
+  try {
+    let end = size, at = -1;
+    while (end > from && at < 0) {
+      const start = Math.max(from, end - CH);
+      const buf = Buffer.alloc(Math.min(size, end + CTX_MARK.length) - start);
+      fs.readSync(fd, buf, 0, buf.length, start);
+      const i = buf.lastIndexOf(CTX_MARK);
+      if (i >= 0) at = start + i;
+      end = start;
+    }
+    if (at < 0) return null;
+    // the record line around the mark: its start is a little before, its end is the next newline
+    const s0 = Math.max(0, at - 64 * 1024), win = Buffer.alloc(Math.min(size, at + 4 * 1024 * 1024) - s0);
+    fs.readSync(fd, win, 0, win.length, s0);
+    const rel = at - s0, a = win.lastIndexOf(10, rel) + 1, b = win.indexOf(10, rel);
+    return win.toString('utf8', a, b < 0 ? win.length : b);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+// "43.7k" -> 43700, "1m" -> 1000000, "~170" -> 170
+const tokOf = (s) => {
+  const m = /([\d.]+)\s*([km])?/i.exec(String(s || '').replace(/[,~]/g, ''));
+  if (!m) return null;
+  return Math.round(parseFloat(m[1]) * ({ k: 1e3, m: 1e6 }[(m[2] || '').toLowerCase()] || 1));
+};
+
+function parseContextReport(line) {
+  const o = parseLine(line);
+  if (!o || typeof o.content !== 'string') return null;
+  const md = o.content.replace(/<\/?local-command-stdout>/g, '');
+  const model = (/\*\*Model:\*\*\s*(.+)/.exec(md) || [])[1];
+  const tk = /\*\*Tokens:\*\*\s*([\d.,]+\s*[km]?)\s*\/\s*([\d.,]+\s*[km]?)/i.exec(md);
+  const groups = [];
+  let g = null;
+  for (const raw of md.split('\n')) {
+    const t = raw.trim();
+    const h = /^#{3,4}\s+(.+)/.exec(t);
+    if (h) {
+      g = { title: h[1].trim(), cols: null, rows: [] };
+      groups.push(g);
+      continue;
+    }
+    if (!g || !t.startsWith('|')) continue;
+    const cells = t.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+    if (cells.every((c) => /^:?-+:?$/.test(c))) continue;
+    if (!g.cols) g.cols = cells;
+    else g.rows.push(cells);
+  }
+  const catG = groups.find((x) => /categor/i.test(x.title));
+  const cats = catG ? catG.rows.map((r) => ({ name: r[0], tokens: tokOf(r[1]) })) : [];
+  const lists = groups
+    .filter((x) => x !== catG && x.cols && x.rows.length)
+    .map((x) => {
+      const ti = x.cols.findIndex((c) => /token/i.test(c));
+      return { title: x.title, cols: x.cols, rows: x.rows.map((r) => ({ cells: r.filter((_, i) => i !== ti), tokens: ti >= 0 ? tokOf(r[ti]) : null })) };
+    });
+  return { at: o.timestamp || null, model: model ? model.trim() : null, used: tk ? tokOf(tk[1]) : null, window: tk ? tokOf(tk[2]) : null, cats, lists };
 }
 
 // Live runs: numbers from one assistant stream event. Remembers the cache TTL per session, because a

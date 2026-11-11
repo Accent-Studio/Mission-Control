@@ -16,7 +16,7 @@ const MAX_FILE = 20 * 1024 * 1024;
 const MAX_MESSAGE_B64 = 30 * 1024 * 1024; // images and PDFs of one message together, as base64
 const MAX_ATTACHMENTS = 10;
 const MAX_NAME = 120;
-const MAX_AGE_MS = Number(process.env.MC_UPLOAD_MAX_AGE_MS) || 7 * 24 * 60 * 60 * 1000;
+const MAX_AGE_MS = Number(process.env.MC_UPLOAD_MAX_AGE_MS) || 365 * 24 * 60 * 60 * 1000; // a year: Claude may need a file again
 const CACHE_MAX = Number(process.env.MC_IMGCACHE_MAX) || 500 * 1024 * 1024;
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

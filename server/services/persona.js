@@ -11,7 +11,8 @@ const DEFAULT_PROMPT_FILE = path.join(ROOT, 'server', 'prompts', 'comlink.md');
 export const OWN_PROMPT_FILE = path.join(DATA_DIR, 'comlink-prompt.md');
 const MEMORY_FILE = process.env.MC_PERSONA_MEMORY || path.join(DATA_DIR, 'comlink-memory.md');
 const SYSTEM_FILE = PERSONA_SYSTEM_FILE; // the runner accepts exactly this file as a system prompt (runner/shared.js)
-const MEMORY_MAX = 8000; // characters; past this the oldest lines go first
+const MEMORY_WARN = 100000; // characters (about 25,000 tokens): past this nothing is deleted, but the owner is told
+const MEMORY_EDIT_MAX = 2000000; // what the Settings page may save at once
 const ENTRY_MAX = 300;
 
 export const PERSONAS = ['comlink'];
@@ -32,7 +33,10 @@ export function personaPromptFile(name, displayName = 'Com Link') {
   const file = fs.existsSync(OWN_PROMPT_FILE) ? OWN_PROMPT_FILE : DEFAULT_PROMPT_FILE;
   const prompt = fs.readFileSync(file, 'utf8').replace(/^﻿/, '').trim().replaceAll('{{name}}', displayName);
   const mem = (readMemory() || '').trim();
-  const text = `${prompt}\n\n# Your memory\n\nWhat you wrote down in earlier conversations, oldest first:\n\n${mem || 'Nothing yet.'}\n`;
+  const full = mem.length > MEMORY_WARN
+    ? `\nYour memory is longer than ${MEMORY_WARN.toLocaleString('en-US')} characters, and all of it is sent with every message. Tell the owner once in this conversation, so they can tidy it on the Settings page (Memory).\n`
+    : '';
+  const text = `${prompt}\n\n# Your memory\n\nWhat you wrote down in earlier conversations, oldest first:\n\n${mem || 'Nothing yet.'}\n${full}`;
   writeAtomic(SYSTEM_FILE, text);
   return SYSTEM_FILE;
 }
@@ -61,7 +65,7 @@ export function applyMemoryTags(text) {
     }
   }
   if (!n) return 0;
-  while (lines.length > 1 && lines.join('\n').length > MEMORY_MAX) lines.shift();
+  if (lines.join('\n').length > MEMORY_WARN) console.warn(`[persona] the Com Link memory is over ${MEMORY_WARN} characters; nothing is deleted (Settings, Memory)`);
   try {
     writeAtomic(MEMORY_FILE, lines.join('\n') + '\n');
   } catch (err) {
@@ -95,14 +99,14 @@ export function personaEvent(event, { save = true } = {}) {
 export function getMemory() {
   const text = readMemory();
   if (text === null) throw busyError(MEMORY_FILE);
-  return { text, max: MEMORY_MAX };
+  return { text, warnAt: MEMORY_WARN, over: text.length > MEMORY_WARN };
 }
 
 // Replaces her memory with what the owner typed on the Settings page.
 export function setMemory(body) {
   const text = body && typeof body.text === 'string' ? body.text.replace(/\r\n/g, '\n') : null;
   if (text === null) throw Object.assign(new Error('Send {"text": "..."}'), { status: 400 });
-  if (text.length > MEMORY_MAX * 2) throw Object.assign(new Error(`The memory is longer than ${MEMORY_MAX * 2} characters`), { status: 400 });
+  if (text.length > MEMORY_EDIT_MAX) throw Object.assign(new Error(`The memory is longer than ${MEMORY_EDIT_MAX} characters`), { status: 400 });
   writeAtomic(MEMORY_FILE, text.trim() ? text.trim() + '\n' : '');
   return getMemory();
 }

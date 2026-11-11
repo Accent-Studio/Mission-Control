@@ -462,7 +462,7 @@ select.in{padding:6px 8px}
   </div>
 
   <div class="free" id="free" aria-label="Crew ship">
-    <div class="scap"><span class="info">?<span class="pop">Each little Claude is an agent working on this project. The Captain on the bridge is the one you talk to. The others take tasks from it: research, code, art, 3D, builds and tests.<br><br>Hover one to see its task, tokens and time. Left drag to pan, right drag to turn the ship, scroll to zoom, double click to reset.</span></span><h3>Crew</h3><span class="n" data-crew-count></span></div>
+    <div class="scap"><span class="info">?<span class="pop">Each little Claude is an agent working on this project. The Captain on the bridge is the one you talk to. The others take tasks from it: research, code, art, 3D, builds and tests.<br><br>Hover one to see its task, tokens and time. Left drag to pan, right drag to turn the ship, scroll to zoom, double click to reset. On a phone: one finger pans, pinch to zoom, two fingers together turn the ship.</span></span><h3>Crew</h3><span class="n" data-crew-count></span></div>
     <div class="zoomer"><button data-z="in" aria-label="Zoom in">+</button><button data-z="out" aria-label="Zoom out">&minus;</button><button data-z="r" aria-label="Reset view" style="font-size:11px">R</button></div>
   </div>
 
@@ -1254,28 +1254,26 @@ function outwardWords(j, push){
   }
 }
 function showAsk(j, push, confirmName){
-  const name = confirmName || P.name, out = !!j.outward, el = $('jask');
+  const name = confirmName || P.name, el = $('jask');
   placeFlow();
   el.hidden = false; el.className = 'jask';
-  const what = out ? outwardWords(j, push) : 'Opens in its own window';
   const det = [j.builtin ? 'Runs: git push' : 'Runs: ' + (j.file || '')];
   if(push) det.push(`Branch ${push.branch}, upstream ${push.upstream}, ${pl(num(push.ahead), 'commit', 'commits')} ahead, ${num(push.behind)} behind`);
-  el.innerHTML = `<h4>${esc(j.label)}</h4><p class="what">${esc(what)}.</p>` +
-    (out && j.interactive && !j.builtin ? '<p>It also opens in its own window, so its output does not show here.</p>' : '') +
-    (!out ? '<p>The script waits for you there, so its output does not show here.</p>' : '') +
+  el.innerHTML = `<h4>${esc(j.label)}</h4><p class="what">${esc(outwardWords(j, push))}.</p>` +
+    (j.interactive && !j.builtin ? '<p>It also opens in its own window, so its output does not show here.</p>' : '') +
     `<div class="det">${det.map(esc).join('<br>')}</div>` +
-    (out ? `<div class="typed"><label for="jaIn">Type <b>${esc(name)}</b> to confirm</label><input class="in" id="jaIn" autocomplete="off" spellcheck="false" placeholder="${esc(name)}"></div>` : '') +
-    `<div class="row2"><button class="act red" id="jaRun"${out ? ' disabled' : ''}>${out ? esc(j.builtin ? 'Push now' : 'Run ' + j.label) : 'Open window'}</button><button class="act ghost" id="jaCancel">Cancel</button></div>`;
+    `<div class="typed"><label for="jaIn">Type <b>${esc(name)}</b> to confirm</label><input class="in" id="jaIn" autocomplete="off" spellcheck="false" placeholder="${esc(name)}"></div>` +
+    `<div class="row2"><button class="act red" id="jaRun" disabled>${esc(j.builtin ? 'Push now' : 'Run ' + j.label)}</button><button class="act ghost" id="jaCancel">Cancel</button></div>`;
   const run = $('jaRun'), inp = $('jaIn');
   const go = async () => {
-    if(run.disabled || (out && inp.value !== name)) return;
+    if(run.disabled || inp.value !== name) return;
     run.disabled = true; $('jaCancel').disabled = true;
-    try { await handleRun(j, await postRun(j.id, out ? inp.value : undefined)); }
+    try { await handleRun(j, await postRun(j.id, inp.value)); }
     catch(e){ closeAsk(); note('Could not reach Mission Control: ' + e.message, true); }
   };
   run.onclick = go;
   $('jaCancel').onclick = closeAsk;
-  if(inp){ inp.oninput = () => { run.disabled = inp.value !== name; }; inp.onkeydown = e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); go(); } }; inp.focus({preventScroll: true}); }
+  inp.oninput = () => { run.disabled = inp.value !== name; }; inp.onkeydown = e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); go(); } }; inp.focus({preventScroll: true});
   reveal(); MC.drawFrames();
 }
 function showBlocked(j, d){
@@ -1310,7 +1308,7 @@ async function startFlow(jobId){
   const live = runs.find(r => r.jobId === jobId && r.state === 'running' && r.mode === 'captured');
   if(live){ closeAsk(); attach(live); return; }
   closeAsk(); clearNote();
-  if(!j.builtin && (j.outward || j.interactive)){ showAsk(j, null); return; }
+  if(!j.builtin && j.outward){ showAsk(j, null); return; }
   busy = true;
   try { await handleRun(j, await postRun(j.id)); }
   catch(e){ note('Could not reach Mission Control: ' + e.message, true); }
@@ -1561,28 +1559,33 @@ $('nsSend').onclick = sendNew;
 
 /* archived conversations (the Talk page menu, or the Com Link end phrase) stay out of this list until "Show archived" is clicked */
 let archN = 0, showArch = false;
+let sessLimit = 20, sessMore = false; /* Show more adds 20 older conversations at a time */
 async function loadSessions(){
   let active = 0;
   try {
     const base = '/api/sessions?project=' + encodeURIComponent(id);
-    sessions = await MC.api.get(base + '&limit=20&archived=hide');
+    sessions = await MC.api.get(base + '&limit=' + (sessLimit + 1) + '&archived=hide'); /* one more than shown: is there more? */
     if(!Array.isArray(sessions)) throw new Error('unexpected answer');
+    sessMore = sessions.length > sessLimit;
+    sessions = sessions.slice(0, sessLimit);
     active = sessions.length;
     try {
       const c = await MC.api.get('/api/sessions/archived-count?project=' + encodeURIComponent(id));
       archN = c && Number.isFinite(c.count) ? c.count : 0;
-      if(showArch && archN) sessions = sessions.concat((await MC.api.get(base + '&limit=50&archived=only')) || []);
+      if(showArch && archN) sessions = sessions.concat((await MC.api.get(base + '&limit=5000&archived=only')) || []);
     } catch(e){ archN = 0; } /* an older server has no archive: nothing is hidden */
     if(!archN) showArch = false;
   } catch(e){ sessions = null; $('convs').innerHTML = '<div class="err">Could not load sessions: ' + esc(e.message) + '</div>'; }
   if(sessions === null) return;
   const n = $('tabs').querySelector('[data-t="sessions"]');
-  if(n){ const old = n.querySelector('.n'); if(old) old.remove(); if(active) n.insertAdjacentHTML('beforeend', `<span class="n">${active}</span>`); }
+  if(n){ const old = n.querySelector('.n'); if(old) old.remove(); if(active) n.insertAdjacentHTML('beforeend', `<span class="n">${active}${sessMore ? '+' : ''}</span>`); }
+  const more = sessMore ? '<button type="button" class="archtog" id="sessMore">Show more</button>' : '';
   const tog = archN || showArch ? `<button type="button" class="archtog" id="archTog" aria-expanded="${showArch}">${showArch ? 'Hide archived' : 'Show archived (' + archN + ')'}</button>` : '';
-  $('convs').innerHTML = (sessions.length ? sessions.map((s, i) => `<div class="r pick" data-i="${i}" data-rk="${esc('ses:' + s.id)}"><span class="badge">C</span><span class="x" title="${esc(plain(s.title))}">${esc(plain(s.title) || 'Untitled session')}<small${s.elsewhere ? ' style="white-space:nowrap"' : ''}>${s.elsewhere ? `<span style="color:var(--red);font-weight:700">${esc(s.elsewhere)}</span> // ` : ''}${esc(ago(s.lastAt))}${s.archived ? ' // archived' : ''}</small></span><span class="t">${s.sizeKB ? esc(s.sizeKB) + 'KB' : ''}</span></div>`).join('') : '<div class="mut">' + (archN ? 'No sessions to show.' : 'No Claude sessions in this folder yet.') + '</div>') + tog;
+  $('convs').innerHTML = (sessions.length ? sessions.map((s, i) => `<div class="r pick" data-i="${i}" data-rk="${esc('ses:' + s.id)}"><span class="badge">C</span><span class="x" title="${esc(plain(s.title))}">${esc(plain(s.title) || 'Untitled session')}<small${s.elsewhere ? ' style="white-space:nowrap"' : ''}>${s.elsewhere ? `<span style="color:var(--red);font-weight:700">${esc(s.elsewhere)}</span> // ` : ''}${esc(ago(s.lastAt))}${s.archived ? ' // archived' : ''}</small></span><span class="t">${s.sizeKB ? esc(s.sizeKB) + 'KB' : ''}</span></div>`).join('') : '<div class="mut">' + (archN ? 'No sessions to show.' : 'No Claude sessions in this folder yet.') + '</div>') + more + tog;
   $('convs').querySelectorAll('.pick').forEach(r => r.onclick = () => openSession(sessions[+r.dataset.i].id));
   markRows();
   const at = $('archTog'); if(at) at.onclick = () => { showArch = !showArch; loadSessions(); };
+  const sm = $('sessMore'); if(sm) sm.onclick = () => { sessLimit += 20; sm.disabled = true; sm.textContent = 'Loading'; loadSessions(); };
 }
 
 /* project.html with no id (the nav button): last project opened, else the one with the newest commit or session */
@@ -1617,7 +1620,7 @@ async function load(keepSessions){
   try { localStorage.setItem(LAST_KEY, id); } catch(e){}
   syncSettings();
   render();
-  if(!keepSessions) { loadSessions(); refreshRuns(true); }
+  if(!keepSessions) { sessLimit = 20; loadSessions(); refreshRuns(true); }
   else loadSessions();
   /* a run started from a project card that needs a question first (#run=<job>): ask it here, once */
   const rj = (location.hash.match(/run=([^&]+)/) || [])[1];
@@ -1749,6 +1752,7 @@ if(OFFICE) startRunning();
 
 MC.events.on('projects.changed', () => { if(P) load(true); });
 load();
+MC.pull.page(() => P ? load(true) : load());
 
 /* ---------- layout: the free area, the columns, the BG switch ----------
    ship.js reads the free area every frame, so the ship follows it as it resizes or the right panel slides.

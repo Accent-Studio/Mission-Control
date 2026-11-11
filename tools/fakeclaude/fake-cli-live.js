@@ -126,9 +126,16 @@ process.stdin.on('data', (chunk) => {
 // FAKE_RC: ok (default), error (not signed in with a claude.ai account), policy (organization policy, with an error_code),
 // silent (never answers), foreign (the session_url is not a claude.ai address).
 let rcEpoch = 0;
+let curMode = flag('--permission-mode'); // the permission mode in force: --permission-mode, then what set_permission_mode says
 function answerControl(m) {
   const req = m.request || {};
-  log({ ev: 'stdin-control-request', subtype: req.subtype, enabled: req.enabled, request_id: m.request_id });
+  log({ ev: 'stdin-control-request', subtype: req.subtype, enabled: req.enabled, mode: req.mode, request_id: m.request_id });
+  // set_permission_mode: like the real CLI, the mode changes at once (ECHO says the mode in force)
+  if (req.subtype === 'set_permission_mode' && typeof req.mode === 'string') {
+    curMode = req.mode;
+    out({ type: 'control_response', response: { subtype: 'success', request_id: m.request_id, response: { mode: req.mode } } });
+    return;
+  }
   if (req.subtype !== 'remote_control') {
     out({ type: 'control_response', response: { subtype: 'error', request_id: m.request_id, error: 'Unsupported control request subtype: ' + req.subtype } });
     return;
@@ -242,7 +249,24 @@ async function runTurn() {
   out({ type: 'system', subtype: 'init', cwd: process.cwd(), model: flag('--model') || 'default', permissionMode: flag('--permission-mode') || 'default' });
   const first = consume();
   await sleep(80);
-  assistant([{ type: 'text', text: `ECHO text="${first.map(textOf).join(' | ')}" blocks=[${first.map(typesOf).join('; ')}] cwd=${process.cwd()} model=${flag('--model')} mode=${flag('--permission-mode')} effort=${flag('--effort')} resume=${flag('--resume') ? 'yes' : 'no'}` }]);
+  // /compact, like the real CLI: a compact_boundary record and no answer, so there is no cache until the next message
+  if (first.length === 1 && textOf(first[0]).trim() === '/compact') {
+    // FAKE_COMPACT=refuse, or slash commands turned off (a chat): the real CLI says it cannot, and nothing changes
+    if (process.env.FAKE_COMPACT === 'refuse' || process.argv.includes('--disable-slash-commands')) {
+      out({ type: 'result', subtype: 'success', is_error: false, result: "/compact isn't available in this environment.", duration_ms: 5, num_turns: 0, total_cost_usd: 0, usage: { input_tokens: 0, output_tokens: 0 } });
+      return;
+    }
+    const boundary = { type: 'system', subtype: 'compact_boundary', uuid: crypto.randomUUID(), compactMetadata: { trigger: 'manual', preTokens: 1000, postTokens: 200 } };
+    if (TDIR) {
+      const rec = { ...boundary, parentUuid: null, logicalParentUuid: tLast, isSidechain: false, timestamp: new Date().toISOString(), userType: 'external', entrypoint: 'sdk-cli', cwd: process.cwd(), sessionId: sid, version: '2.1.296' };
+      tLast = rec.uuid;
+      fs.appendFileSync(require('path').join(TDIR, sid + '.jsonl'), JSON.stringify(rec) + '\n');
+    }
+    process.stdout.write(JSON.stringify({ session_id: sid, ...boundary }) + '\n');
+    out({ type: 'result', subtype: 'success', is_error: false, result: '', duration_ms: 500, num_turns: 1, total_cost_usd: 0, usage: { input_tokens: 0, output_tokens: 0 } });
+    return;
+  }
+  assistant([{ type: 'text', text: `ECHO text="${first.map(textOf).join(' | ')}" blocks=[${first.map(typesOf).join('; ')}] cwd=${process.cwd()} model=${flag('--model')} mode=${curMode} effort=${flag('--effort')} resume=${flag('--resume') ? 'yes' : 'no'}` }]);
 
   let denied = false;
   for (let step = 1; step <= 3; step++) {

@@ -1,0 +1,154 @@
+/* Mission Control 2: the System page (pg-system.js) and the Home panel "GPU and RAM". */
+#pgSystem .btn:disabled{opacity:.45;cursor:default}
+[data-remote] #pgSystem .pc-only{display:none}
+#pgSystem .card h3 .btn{text-transform:none;letter-spacing:0;font-family:var(--font);font-weight:500}
+.sys-sum{color:var(--text);text-transform:none;letter-spacing:0;font-size:calc(15px*var(--k))}
+#pgSystem .card h3 .faint.mono{font-family:var(--mono);font-size:calc(13px*var(--k));max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* the four numbers */
+.sys-tiles{grid-column:span 12}
+.sys-tiles .tile{background:var(--panel)}
+.tile.hot .tv{color:var(--warn)}
+.sys-hot{display:inline-flex;align-items:center;gap:calc(4px*var(--k));color:var(--warn);font-weight:600}
+
+/* the result line */
+.card.sys-msg{flex-direction:row;align-items:center;gap:calc(12px*var(--k));padding-top:calc(10px*var(--k));padding-bottom:calc(10px*var(--k))}
+.card.sys-msg[hidden]{display:none}
+
+/* tables: process, VRAM or RAM, share, buttons */
+.sys-proc .tr{grid-template-columns:minmax(0,1fr) calc(64px*var(--k)) calc(78px*var(--k)) calc(110px*var(--k)) calc(165px*var(--k))}
+.sys-srv .tr{grid-template-columns:calc(60px*var(--k)) minmax(0,1.2fr) minmax(0,1fr) calc(64px*var(--k)) calc(170px*var(--k)) calc(70px*var(--k))}
+.sys-temp .tr{grid-template-columns:minmax(0,1fr) calc(90px*var(--k)) calc(80px*var(--k)) calc(150px*var(--k)) calc(90px*var(--k))}
+#pgSystem .tr .linkb{text-align:left;padding:0;font-size:inherit;color:var(--text)}
+#pgSystem .tr{min-height:calc(46px*var(--k));padding-top:calc(6px*var(--k));padding-bottom:calc(6px*var(--k))}
+#pgSystem .tr.hd{min-height:0}
+#pgSystem .tr .nm{display:flex;align-items:center;flex-wrap:wrap;gap:calc(4px*var(--k)) calc(8px*var(--k));min-width:0}
+#pgSystem .tr .nm > .ellip{min-width:0;max-width:100%}
+#pgSystem .tr .nm small{flex:none;font-size:calc(13px*var(--k))}
+#pgSystem .tr .acts{display:inline-flex;align-items:center;gap:calc(6px*var(--k));justify-content:flex-end;flex-wrap:nowrap}
+#pgSystem .tr .mono{font-size:calc(15px*var(--k))}
+#pgSystem .tr.on{background:var(--sel)}
+.sys-g .tr.mdl{border-top:0;min-height:0;padding-top:0;font-size:calc(15px*var(--k));color:var(--text-2)}
+.sys-g .tr.mdl .nm{padding-left:calc(22px*var(--k));flex-wrap:wrap}
+.sys-nosafe{font-size:calc(14px*var(--k));white-space:nowrap}
+/* Stop on a process whose models Unload or Free clears: shown on hover only */
+.sys-quiet{opacity:0}
+.sys-g:hover .sys-quiet,.sys-g:focus-within .sys-quiet,.sys-quiet:focus-visible{opacity:1}
+@media (hover:none){.sys-quiet{opacity:1}}
+.sys-rn{font-size:calc(14px*var(--k));font-weight:600;color:var(--text)}
+.sys-errln{display:inline-flex;align-items:center;gap:calc(5px*var(--k));font-size:calc(14px*var(--k));font-weight:600;color:var(--fail-ink);background:var(--fail);border-radius:var(--r-xs);padding:0 calc(6px*var(--k));white-space:normal;max-width:100%}
+.sys-who{flex:none;font-size:calc(12px*var(--k));font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:1px calc(7px*var(--k));border-radius:var(--r-xs);background:var(--hi);color:var(--hi-ink);white-space:nowrap}
+.sys-who.dev{background:none;color:var(--text-2);border:1px solid var(--line-3)}
+.sys-allp{display:inline-flex;align-items:center;gap:calc(9px*var(--k));text-transform:none;letter-spacing:0;font:400 calc(14px*var(--k)) var(--font);color:var(--text-2)}
+.sys-allp .tog{cursor:pointer}
+.sys-grp{display:flex;align-items:center;gap:calc(10px*var(--k));padding:calc(14px*var(--k)) calc(6px*var(--k)) calc(4px*var(--k));border-top:1px solid var(--line-2);font-size:calc(13px*var(--k));text-transform:uppercase;letter-spacing:.07em;color:var(--text-2)}
+.sys-grp b{color:var(--text);font-weight:600}
+.sys-grp .mono{text-transform:none;letter-spacing:0;color:var(--text);font-size:calc(14px*var(--k))}
+.sys-old{color:var(--text);font-weight:600}
+
+/* VRAM history */
+.sys-seg{text-transform:none;letter-spacing:0;font-family:var(--font)}
+.sys-seg button{height:calc(26px*var(--k));padding:0 calc(11px*var(--k));font-size:calc(14px*var(--k))}
+.sys-chart{position:relative;height:calc(270px*var(--k))}
+.sys-chart canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y}
+.sys-chart .none{position:absolute;inset:0;display:grid;place-items:center;color:var(--text-3);font-size:calc(15px*var(--k))}
+.sys-chart [hidden]{display:none !important}
+.sys-vcard{position:absolute;top:calc(8px*var(--k));z-index:5;min-width:calc(170px*var(--k));max-width:calc(260px*var(--k));background:var(--raised);border:1px solid var(--line-2);border-radius:var(--r-sm);box-shadow:var(--shadow);padding:calc(8px*var(--k)) calc(12px*var(--k));font-size:calc(14px*var(--k));line-height:1.5;pointer-events:none}
+.sys-vcard b{display:block;font-weight:600}
+.sys-vcard .pp{display:flex;justify-content:space-between;gap:calc(12px*var(--k));color:var(--text-2)}
+.sys-vcard .pp .mono{flex:none;font-size:calc(13px*var(--k))}
+
+/* Make room */
+.sys-need{display:flex;align-items:baseline;gap:calc(10px*var(--k))}
+.sys-need span:first-child{font-size:calc(15px*var(--k));color:var(--text-2)}
+.sys-need b{font:var(--head-weight) calc(40px*var(--k))/1 var(--head)}
+.sys-need b small{font-size:calc(20px*var(--k));margin-left:calc(4px*var(--k));color:var(--text-2)}
+.sys-room input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:calc(22px*var(--k));background:transparent;cursor:pointer}
+.sys-room input[type=range]::-webkit-slider-runnable-track{height:calc(6px*var(--k));border-radius:calc(3px*var(--k));background:linear-gradient(to right,var(--hi) var(--p,0%),var(--press) var(--p,0%))}
+.sys-room input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:calc(16px*var(--k));height:calc(16px*var(--k));margin-top:calc(-5px*var(--k));border-radius:50%;background:var(--text);border:2px solid var(--panel)}
+.sys-room input[type=range]::-moz-range-track{height:calc(6px*var(--k));background:var(--press)}
+.sys-room input[type=range]::-moz-range-progress{height:calc(6px*var(--k));background:var(--hi)}
+.sys-room input[type=range]::-moz-range-thumb{width:calc(16px*var(--k));height:calc(16px*var(--k));border-radius:50%;background:var(--text);border:0}
+.sys-room input[type=range]:disabled{opacity:.45;cursor:default}
+.sys-room input[type=range]:focus-visible{outline:1px solid var(--text);outline-offset:3px}
+[data-theme="redline"] .sys-room input[type=range]::-webkit-slider-thumb{border-radius:0;width:calc(12px*var(--k))}
+.sys-rl{display:flex;align-items:center;flex-wrap:wrap;gap:calc(10px*var(--k));font-size:calc(15px*var(--k));font-weight:500;margin-bottom:calc(6px*var(--k))}
+.sys-pl{display:flex;align-items:baseline;gap:calc(10px*var(--k));padding:calc(6px*var(--k)) 0;border-top:1px solid var(--line);font-size:calc(15px*var(--k))}
+.sys-pl .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sys-pl .mono{font-size:calc(14px*var(--k))}
+.sys-rwarn{font-size:calc(14px*var(--k));color:var(--text-2);margin-top:calc(6px*var(--k));line-height:1.5}
+.sys-rwarn b{color:var(--text);font-weight:600}
+.sys-rgo{margin-top:calc(8px*var(--k))}
+
+/* GPU health */
+.sys-gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(6px*var(--k))}
+.sys-gauge{text-align:center;display:flex;flex-direction:column;align-items:center}
+.sys-gauge canvas{width:100%;height:calc(110px*var(--k));display:block}
+.sys-gauge b{font:var(--head-weight) calc(20px*var(--k)) var(--head);margin-top:calc(-6px*var(--k))}
+.sys-gauge span{font-size:calc(13px*var(--k));text-transform:uppercase;letter-spacing:.07em}
+.sys-kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:calc(6px*var(--k)) calc(16px*var(--k));font-size:calc(15px*var(--k));padding-top:calc(10px*var(--k));border-top:1px solid var(--line)}
+.sys-kv span:nth-child(even){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* conversations and attachments: the review list */
+.sys-rev{border-top:1px solid var(--line-2);padding-top:calc(12px*var(--k));display:flex;flex-direction:column;gap:calc(10px*var(--k))}
+.sys-rev[hidden]{display:none}
+.sys-revh{display:flex;align-items:center;flex-wrap:wrap;gap:calc(10px*var(--k))}
+.sys-revh > b{font-size:calc(16px*var(--k));font-weight:600}
+.sys-age.dsel{height:calc(31px*var(--k));width:calc(230px*var(--k))}
+.sys-lst{max-height:calc(420px*var(--k));overflow-y:auto;border:1px solid var(--line-2);border-radius:var(--r-sm)}
+.sys-it{display:grid;grid-template-columns:calc(22px*var(--k)) minmax(0,1fr) calc(80px*var(--k)) calc(120px*var(--k));gap:calc(10px*var(--k));align-items:center;padding:calc(6px*var(--k)) calc(12px*var(--k));border-bottom:1px solid var(--line);font-size:calc(15px*var(--k));cursor:pointer}
+.sys-it:hover{background:var(--hover)}
+.sys-it small{margin-left:calc(8px*var(--k));font-size:calc(13px*var(--k))}
+.sys-it .mono,.sys-it span:last-child{text-align:right;font-size:calc(14px*var(--k))}
+#pgSystem input[type=checkbox]{accent-color:var(--hi);width:calc(16px*var(--k));height:calc(16px*var(--k))}
+.sys-res{font-size:calc(15px*var(--k));color:var(--text-2)}
+.sys-shr{border:1px solid var(--line-2);border-radius:var(--r-sm);padding:calc(10px*var(--k)) calc(14px*var(--k));display:flex;flex-direction:column;gap:calc(8px*var(--k));max-width:calc(780px*var(--k));font-size:calc(15px*var(--k))}
+.sys-opt{display:grid;grid-template-columns:calc(22px*var(--k)) minmax(0,1fr) calc(120px*var(--k));gap:calc(10px*var(--k));align-items:center;cursor:pointer}
+.sys-opt .mono{text-align:right;font-size:calc(14px*var(--k))}
+.sys-tot{color:var(--text-2);padding-top:calc(6px*var(--k));border-top:1px solid var(--line)}
+.sys-tot b{color:var(--text)}
+
+/* the Home panel */
+.sys-ptiles{grid-template-columns:repeat(auto-fit,minmax(calc(135px*var(--k)),1fr))}
+.sys-ptiles .tile{padding:calc(11px*var(--k)) calc(13px*var(--k))}
+.sys-ptiles .tile .tv{font-size:calc(24px*var(--k))}
+.sys-pmeters{display:flex;flex-direction:column;gap:calc(12px*var(--k))}
+.sys-pmeters .meter .row .btn{margin-left:calc(10px*var(--k));height:calc(28px*var(--k))}
+.sys-pm{font-size:calc(15px*var(--k));color:var(--text-2);padding-left:calc(16px*var(--k));margin-top:calc(-4px*var(--k))}
+.sys-pm .btn{height:calc(28px*var(--k))}
+.sys-pmeters .btn:disabled{opacity:.45;cursor:default}
+
+/* narrower windows: the side by side cards stack, and the PID, share, files and started columns go */
+@media (max-width:1400px){
+  #pgSystem .card.c8,#pgSystem .card.c4,#pgSystem .card.c6{grid-column:span 12}
+}
+@media (max-width:1000px){
+  #pgSystem .hs{display:none}
+  .sys-proc .tr{grid-template-columns:minmax(0,1fr) calc(78px*var(--k)) calc(165px*var(--k))}
+  .sys-srv .tr{grid-template-columns:calc(60px*var(--k)) minmax(0,1.2fr) minmax(0,1fr) calc(70px*var(--k))}
+  .sys-temp .tr{grid-template-columns:minmax(0,1fr) calc(90px*var(--k)) calc(90px*var(--k))}
+}
+
+/* local model speed */
+.sys-perf h3 [data-p="pfor"]{text-transform:none;letter-spacing:0;font-family:var(--font);margin-left:calc(10px*var(--k))}
+.sys-ptl .tile{background:var(--panel)}
+.sys-pset{font-size:calc(15px*var(--k));color:var(--text-2)}
+.sys-pwarn{display:flex;align-items:flex-start;gap:calc(8px*var(--k));font-size:calc(15px*var(--k));color:var(--warn);margin-top:calc(6px*var(--k))}
+.sys-pchart{height:calc(230px*var(--k))}
+.sys-pchart .u{color:var(--text-2)}
+.sys-bench .tr{grid-template-columns:calc(130px*var(--k)) minmax(0,1.2fr) repeat(4,minmax(0,1fr))}
+.sys-bench .tr > .ellip small{margin-left:calc(8px*var(--k))}
+.sys-bench .mono small{display:block;color:var(--text-2);font-size:calc(13px*var(--k))}
+.sys-berr{grid-column:3 / -1;display:flex;align-items:center;gap:calc(10px*var(--k));min-width:0}
+.sys-sess .tr{grid-template-columns:calc(130px*var(--k)) minmax(0,1.4fr) calc(80px*var(--k)) repeat(3,calc(100px*var(--k))) calc(90px*var(--k))}
+.sys-perf .sect-h{margin-top:calc(6px*var(--k))}
+@media (max-width:1000px){
+  .sys-bench .tr{grid-template-columns:calc(100px*var(--k)) minmax(0,1.2fr) repeat(4,minmax(0,1fr))}
+  .sys-sess .tr{grid-template-columns:calc(110px*var(--k)) repeat(3,minmax(0,1fr))}
+  .sys-berr{grid-column:3 / -1}
+}
+.sys-perf h3{flex-wrap:wrap;row-gap:calc(8px*var(--k))}
+.sys-real .tr{grid-template-columns:calc(130px*var(--k)) minmax(0,1.2fr) calc(110px*var(--k)) repeat(2,minmax(0,1.1fr)) minmax(0,.8fr)}
+.sys-real .tr > .ellip small{margin-left:calc(8px*var(--k))}
+.sys-real .mono small{display:block;color:var(--text-2);font-size:calc(13px*var(--k))}
+@media (max-width:1000px){.sys-real .tr{grid-template-columns:calc(100px*var(--k)) minmax(0,1fr) calc(90px*var(--k)) repeat(2,minmax(0,1fr))}.sys-real .tr > :last-child{display:none}}

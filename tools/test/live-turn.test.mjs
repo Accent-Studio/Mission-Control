@@ -1,7 +1,7 @@
 // Tests for a conversation that is read while a process is still answering it, and for the one-off flag that keeps
 // a task off claude.ai. Both run against the FAKE Claude CLI in tools/fakeclaude (it writes its conversation to the
 // transcript as it goes, like the real CLI, and answers the remote_control request). Nothing here starts a real
-// Claude conversation. Run: node --test "tools/test/*.test.mjs"
+// Claude conversation. Run: npm test (2 test files at a time)
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -88,6 +88,27 @@ function listen(s) {
 }
 
 describe('a conversation read while a process answers it', () => {
+  test('a tool call that is running is named with the time it began, and one that has its answer is not', async () => {
+    const s = await boot();
+    const id = savedConversation(s);
+    const r = await pc(s, 'POST', '/api/chat', { prompt: 'run the tests', sessionId: id });
+    assert.equal(r.status, 200, r.text);
+    const open = await waitFor(async () => {
+      const j = await session(s, id);
+      return j.live && j.live.tools && j.live.tools.length && j.live.events.some((e) => e.event && e.event.type === 'user' && e.event.message) && j;
+    }, 'a running tool call after one that has its answer');
+    const t = open.live.tools[0];
+    assert.equal(open.live.tools.length, 1);
+    assert.equal(t.name, 'Bash');
+    assert.ok(Date.parse(t.since) > 0);
+    const uses = open.live.events.flatMap((e) => (e.event && e.event.type === 'assistant' ? e.event.message.content.filter((b) => b.type === 'tool_use') : []));
+    const answered = open.live.events.flatMap((e) => (e.event && e.event.type === 'user' && e.event.message ? e.event.message.content.map((b) => b.tool_use_id) : []));
+    assert.ok(uses.some((u) => u.id === t.id), 'the page knows the running one by its id');
+    assert.ok(answered.length >= 1 && !answered.includes(t.id), 'the answered ones come as tool results');
+    const end = await waitFor(async () => { const j = await session(s, id); return !j.live && j; }, 'the turn to end');
+    assert.ok(end);
+  });
+
   test('the saved part stops where the turn began and the turn comes as events, so nothing is in both', async () => {
     const s = await boot();
     const id = savedConversation(s);
@@ -347,8 +368,14 @@ describe('what the server keeps of a turn in progress', () => {
   test('events are kept while the turn works and let go when it ends', async () => {
     const s = await boot({ FAKE_STEP_MS: '200' });
     const r = await pc(s, 'POST', '/api/chat', { prompt: 'plain turn' });
-    await waitFor(async () => (await runOf(s, r.json.runId)).liveEvents > 3, 'events kept');
-    await waitFor(async () => (await runOf(s, r.json.runId)).state === 'idle', 'the turn to end');
+    // the highest count seen while the turn works: on a busy PC a single look can fall after the end of the turn
+    let most = 0;
+    await waitFor(async () => {
+      const run = await runOf(s, r.json.runId);
+      most = Math.max(most, run.liveEvents || 0);
+      return run.state === 'idle';
+    }, 'the turn to end');
+    assert.ok(most > 3, `events kept while the turn worked: at most ${most} seen`);
     assert.equal((await runOf(s, r.json.runId)).liveEvents, undefined, 'nothing is kept for a turn that is over');
   });
 
@@ -400,5 +427,68 @@ describe('MC.liveTurn (the Sessions tab and the Running panel)', () => {
     assert.deepEqual(L.messages({ messages: saved }), saved);
     assert.deepEqual(L.messages({ messages: saved, live: { cut: false, events: [{ sent: { text: 'x' } }] } }), saved);
     assert.equal(L.startedAt({ messages: saved }), null);
+  });
+});
+
+// The permission mode a conversation ran with is kept on disk, so a message that names none (sent from the linked PC or the
+// phone) runs with it, also after a restart of the server, instead of falling back to Ask first.
+describe('a conversation keeps its permission mode', () => {
+  test('a message with no mode, after a restart, runs with the mode the conversation last had', async () => {
+    const s = await boot({ FAKE_STEP_MS: '30' });
+    const r = await pc(s, 'POST', '/api/chat', { prompt: 'hello', mode: 'bypassPermissions' });
+    assert.equal(r.status, 200, r.text);
+    const run = await waitFor(async () => { const x = await runOf(s, r.json.runId); return x && x.sessionId && x.state === 'idle' && x; }, 'the first turn');
+    assert.equal((await session(s, run.sessionId)).mode, 'bypassPermissions', 'the conversation says which mode it runs with');
+    await pc(s, 'POST', `/api/runs/${run.runId}/stop`, {});
+    await waitFor(async () => { const x = await runOf(s, run.runId); return x && !x.running && x.state !== 'idle'; }, 'the stop');
+    await s.stop();
+
+    const s2 = await startServer({ dataDir: s.dataDir, bridge: false, env: { PATH: FAKE_PATH, FAKE_LOG: s.log, FAKE_STEP_MS: '30', FAKE_TRANSCRIPT: s.projDir } });
+    toStop.push(s2);
+    assert.equal((await session(s2, run.sessionId)).mode, 'bypassPermissions', 'kept through the restart');
+    const r2 = await pc(s2, 'POST', '/api/chat', { sessionId: run.sessionId, prompt: 'from the other PC' });
+    assert.equal(r2.status, 200, r2.text);
+    const spawns = await waitFor(() => { const l = s.lines().filter((x) => x.ev === 'spawn'); return l.length >= 2 && l; }, 'the second process');
+    const args = spawns.at(-1).args;
+    assert.equal(args[args.indexOf('--permission-mode') + 1], 'bypassPermissions');
+  });
+});
+
+// A mode picked in the message box: kept with the conversation, and a Claude that is running it switches at once (the CLI's
+// set_permission_mode), with no new process. Auto is the default and is not written down.
+describe('picking a permission mode for a conversation', () => {
+  test('the running Claude switches at once, the next message keeps it, and Auto leaves nothing on disk', async () => {
+    const s = await boot({ FAKE_STEP_MS: '30' });
+    const r = await pc(s, 'POST', '/api/chat', { prompt: 'hello' });
+    assert.equal(r.status, 200, r.text);
+    const run = await waitFor(async () => { const x = await runOf(s, r.json.runId); return x && x.sessionId && x.state === 'idle' && x; }, 'the first turn');
+    assert.equal((await session(s, run.sessionId)).mode, 'auto', 'nothing picked: Auto');
+
+    assert.equal((await pc(s, 'POST', `/api/sessions/${run.sessionId}/mode`, { mode: 'nope' })).status, 400);
+    const m = await pc(s, 'POST', `/api/sessions/${run.sessionId}/mode`, { mode: 'bypassPermissions' });
+    assert.equal(m.status, 200, m.text);
+    assert.equal(m.json.live, true);
+    await waitFor(() => s.controls().some((c) => c.subtype === 'set_permission_mode' && c.mode === 'bypassPermissions'), 'the switch reaching the CLI');
+    assert.equal((await session(s, run.sessionId)).mode, 'bypassPermissions');
+
+    // a message that names no mode (another PC, the phone) runs with it, in the same process
+    const r2 = await pc(s, 'POST', '/api/chat', { sessionId: run.sessionId, prompt: 'second' });
+    assert.equal(r2.status, 200, r2.text);
+    assert.equal(r2.json.runId, run.runId);
+    const said = await waitFor(async () => { const x = await session(s, run.sessionId); const all = [...(x.messages || []), ...((x.live && x.live.messages) || [])].map((y) => y.text || '').join('\n'); return /text="second"[^\n]*mode=bypassPermissions/.test(all) && all; }, 'the second answer');
+    assert.ok(said);
+    // a message that changes only the mode switches the same process too
+    await waitFor(async () => (await runOf(s, run.runId)).state === 'idle', 'the second turn to end');
+    const r3 = await pc(s, 'POST', '/api/chat', { sessionId: run.sessionId, prompt: 'third', mode: 'acceptEdits' });
+    assert.equal(r3.json.runId, run.runId);
+    await waitFor(() => s.controls().some((c) => c.subtype === 'set_permission_mode' && c.mode === 'acceptEdits'), 'the second switch');
+    assert.equal(s.lines().filter((l) => l.ev === 'spawn').length, 1, 'one process the whole time');
+
+    const metaFile = path.join(s.dataDir, 'sessions-meta.json');
+    assert.equal(JSON.parse(fs.readFileSync(metaFile, 'utf8'))[run.sessionId].mode, 'acceptEdits');
+    await waitFor(async () => (await runOf(s, run.runId)).state === 'idle', 'the third turn to end');
+    assert.equal((await pc(s, 'POST', `/api/sessions/${run.sessionId}/mode`, { mode: 'auto' })).status, 200);
+    const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'))[run.sessionId];
+    assert.ok(!meta || meta.mode === undefined, 'Auto, the default, is not written down');
   });
 });

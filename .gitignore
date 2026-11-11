@@ -8,3 +8,9 @@ node_modules/
 # Phone bridge program: working copy of the built exe (run-bridge.bat), and a build in the default folder
 bridge/run/
 bridge/target/
+
+# Scratch folder of the runner test when there is no Temp folder next to the checkout
+tools/test/.tmp/
+
+# macOS Finder files
+.DS_Store

@@ -78,6 +78,24 @@ tbody.g:hover .act.quiet,tbody.g:focus-within .act.quiet,.act.quiet:focus-visibl
 .vcard .pp{display:flex;justify-content:space-between;gap:12px;color:var(--w2)}
 .vcard .pp span:last-child{font-family:var(--mono);font-size:11.5px}
 @media (prefers-reduced-motion:reduce){.vcard{transition:none}}
+/* Conversations and attachments: the review list */
+.krev{border-top:1px solid var(--line-3);padding:12px 16px 14px;display:flex;flex-direction:column;gap:10px}
+.krev[hidden]{display:none}
+.krev .hd{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.krev .hd b{font-size:15px;font-weight:700;letter-spacing:.04em}
+.krev .hd select{background:#0e1622;border:1px solid var(--line);color:var(--white);font:500 13px var(--sans);height:30px;padding:0 8px}
+.krev .hd .push{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.krev .lst{max-height:420px;overflow-y:auto;border:1px solid var(--line-2)}
+.krev label.it{display:grid;grid-template-columns:22px minmax(0,1fr) 70px 110px;gap:8px;align-items:center;padding:5px 10px;border-bottom:1px solid var(--line-3);font-size:13px;cursor:pointer}
+.krev label.it small{display:block;font-size:11px;color:var(--w3)}
+.krev label.it .m{font-family:var(--mono);font-size:11.5px;color:var(--w2);text-align:right}
+.krev .q{font-size:13px;color:var(--white)}
+.krev .res{font-size:13px;color:var(--w2)}
+.krev .kshr{border:1px solid var(--line-2);padding:10px 12px;display:flex;flex-direction:column;gap:6px;max-width:760px}
+.krev .kshr label.opt{display:grid;grid-template-columns:22px minmax(0,1fr) 110px;gap:8px;align-items:center;font-size:13px;cursor:pointer}
+.krev .kshr label.opt .m{font-family:var(--mono);font-size:11.5px;color:var(--w2);text-align:right}
+.krev .kshr .tot{font-size:13px;color:var(--w2);padding-top:4px;border-top:1px solid var(--line-3)}
+.krev .kshr .tot b{color:var(--white);font-family:var(--mono)}
 /* Temp folder */
 .tbl.temp tr.grp td{padding-top:14px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--w2);border-top:1px solid var(--line-2)}
 .tbl.temp tr.grp td b{color:var(--white);font-weight:700;margin-right:8px}
@@ -153,10 +171,17 @@ tbody.g:hover .act.quiet,tbody.g:focus-within .act.quiet,.act.quiet:focus-visibl
       <div class="body" style="padding-top:4px"><dl class="kv"><dt>GPU</dt><dd id="kG">--</dd><dt>DRIVER</dt><dd id="kD">--</dd><dt>CUDA</dt><dd id="kC">--</dd></dl></div>
     </section>
 
-    <section class="fr span-12" aria-label="Temp folder">
-      <div class="ttl"><h3>Temp folder</h3><span class="id" id="tSub">BUILD CACHES AND SCRATCH, SAFE TO DELETE</span><span class="cnt" id="tc"></span>
+    <section class="fr span-12" aria-label="Builds and scratch files">
+      <div class="ttl"><h3>Builds and scratch files</h3><span class="id" id="tSub">TEMP FOLDER, SAFE TO DELETE</span><span class="cnt" id="tc"></span>
         <span class="acts" style="margin-left:auto"><button class="act ghost pc-only" id="tOpen" type="button">Show in Explorer</button><button class="act" id="tRe" type="button">Measure again</button></span></div>
       <table class="tbl temp"><thead><tr><th>ITEM</th><th>SIZE</th><th class="hide-s">FILES</th><th class="hide-s">LAST CHANGE</th><th></th></tr></thead><tbody id="ttab"></tbody></table>
+    </section>
+
+    <section class="fr span-12" aria-label="Conversations and attachments">
+      <div class="ttl"><h3>Conversations and attachments</h3><span class="id">KEPT UNTIL YOU DELETE THEM // DELETE MOVES TO THE RECYCLE BIN</span><span class="cnt" id="kc"></span>
+        <span class="acts" style="margin-left:auto"><button class="act" id="kRe" type="button">Measure again</button></span></div>
+      <table class="tbl temp"><thead><tr><th>WHAT</th><th>SIZE</th><th class="hide-s">COUNT</th><th class="hide-s">OLDEST USE</th><th></th></tr></thead><tbody id="ktab"></tbody></table>
+      <div class="krev" id="kRev" hidden></div>
     </section>
   </main>
 </div>
@@ -418,6 +443,122 @@ async function loadTemp(fresh){
   if(T.data && T.data.refreshing) T.again = setTimeout(() => loadTemp(false), 4000);
 }
 $('tRe').onclick = () => loadTemp(true);
+
+/* ---------- Conversations and attachments (services/storage.js): by type, code conversations by project; Review lists one
+   group, filtered by age, and moves the ticked items to the Recycle Bin. Pinned conversations start unticked. ---------- */
+const K = { data:null, err:null, busy:false, rev:null, age:0, picked:new Set(), ask:false, result:'', est:null, parts:{ toolPictures:true } };
+const K_AGES = [[0, 'Any age'], [30, 'Not used for 1 month'], [91, 'Not used for 3 months'], [182, 'Not used for 6 months'], [365, 'Not used for 1 year']];
+const kWhen = iso => { const t = Date.parse(iso); return Number.isFinite(t) ? new Date(t).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : 'n/a'; };
+const kKey = (type, project) => type + '|' + (project || '');
+function kGroups(){
+  const d = K.data, out = [];
+  for(const type of Object.keys(d.types)){
+    const its = d.items.filter(x => x.type === type);
+    if(!its.length) continue;
+    const parts = [...new Set(its.map(x => x.project || ''))].sort((a, b) => a === 'No project' ? 1 : b === 'No project' ? -1 : a.localeCompare(b));
+    out.push({ type, label:d.types[type], items:its, parts:parts.map(pr => ({ project:pr, items:its.filter(x => (x.project || '') === pr) })) });
+  }
+  return out;
+}
+const kSum = its => its.reduce((n, x) => n + num(x.bytes), 0);
+const kOldest = its => its.reduce((m, x) => (!m || (x.lastAt && x.lastAt < m)) ? x.lastAt : m, null);
+function renderStore(){
+  const tb = $('ktab'), d = K.data;
+  if(!d){ tb.innerHTML = `<tr><td colspan="5" class="dim">${K.err ? 'Could not measure them' : 'Measuring'}</td></tr>`; $('kc').textContent = ''; return; }
+  $('kc').textContent = fmtBytes(kSum(d.items));
+  const rows = [];
+  for(const g of kGroups()){
+    rows.push(`<tr class="grp"><td colspan="5"><b>${esc(g.label)}</b><span class="m">${fmtBytes(kSum(g.items))}</span></td></tr>`);
+    for(const pt of g.parts){
+      const name = pt.project || (g.type === 'previews' ? 'Made again when needed' : g.type === 'hubcopies' ? 'Fetched again from the hub when opened' : 'All');
+      const on = K.rev === kKey(g.type, pt.project);
+      rows.push(`<tr><td class="nm">${esc(name)}</td><td class="m" style="color:#fff">${fmtBytes(kSum(pt.items))}</td><td class="m hide-s">${pt.items.length.toLocaleString('en-US')}</td><td class="m hide-s">${esc(kWhen(kOldest(pt.items)))}</td><td class="act-c"><button class="act${on ? ' red' : ''}" data-krev="${esc(kKey(g.type, pt.project))}" aria-expanded="${on}">${on ? 'Close' : 'Review'}</button></td></tr>`);
+    }
+  }
+  tb.innerHTML = rows.join('') || `<tr><td colspan="5" class="dim">Nothing is kept yet</td></tr>`;
+  renderRev();
+}
+function kRevItems(){
+  if(!K.data || !K.rev) return [];
+  const [type, project] = K.rev.split('|'), cut = K.age ? Date.now() - K.age * 864e5 : Infinity;
+  return K.data.items.filter(x => x.type === type && (x.project || '') === project && (!K.age || !x.lastAt || Date.parse(x.lastAt) < cut))
+    .sort((a, b) => String(a.lastAt).localeCompare(String(b.lastAt)));
+}
+function renderRev(){
+  const el = $('kRev');
+  if(!K.rev || !K.data){ el.hidden = true; el.innerHTML = ''; return; }
+  const [type, project] = K.rev.split('|'), its = kRevItems(), picked = its.filter(x => K.picked.has(x.type + '\n' + x.id)), bytes = kSum(picked);
+  const conv = type === 'code' || type === 'chat';
+  el.hidden = false;
+  el.innerHTML = `<div class="hd"><b>${esc(K.data.types[type] + (project ? ' // ' + project : ''))}</b>` +
+    (conv || type === 'pictures' || type === 'documents' || type === 'files' || type === 'logs' ? `<select id="kAge" aria-label="Age">${K_AGES.map(a => `<option value="${a[0]}"${a[0] === K.age ? ' selected' : ''}>${a[1]}</option>`).join('')}</select>` : '') +
+    `<button class="act ghost" type="button" id="kAll">${picked.length === its.length && its.length ? 'Tick none' : 'Tick all'}</button>` +
+    `<span class="push">${K.ask === 'shrink'
+      ? `<button class="act red" type="button" id="kYes"${K.busy || !Object.values(K.parts).some(Boolean) ? ' disabled' : ''}>${K.busy ? 'Shrinking' : 'Shrink ' + picked.length}</button><button class="act ghost" type="button" id="kNo"${K.busy ? ' disabled' : ''}>Cancel</button>`
+      : K.ask
+      ? `<span class="q">Move ${picked.length} (${fmtBytes(bytes)}) to the Recycle Bin?</span><button class="act red" type="button" id="kYes"${K.busy ? ' disabled' : ''}>${K.busy ? 'Moving' : 'Yes, move them'}</button><button class="act ghost" type="button" id="kNo"${K.busy ? ' disabled' : ''}>Cancel</button>`
+      : (type === 'code' ? `<button class="act pc-only" type="button" id="kShrink"${picked.length ? '' : ' disabled'} title="Keeps every message, answer and step; takes out the heavy parts you pick">Shrink ${picked.length}</button>` : '') +
+        `<button class="act red pc-only" type="button" id="kDel"${picked.length ? '' : ' disabled'}>Move ${picked.length} to the Recycle Bin (${fmtBytes(bytes)})</button>`}</span></div>` +
+    (K.ask === 'shrink' ? kShrinkBox(picked) : '') +
+    (K.result ? `<div class="res" role="status">${esc(K.result)}</div>` : '') +
+    (its.length ? `<div class="lst">${its.map(x => { const k = x.type + '\n' + x.id; return `<label class="it"><input type="checkbox" data-kit="${esc(k)}"${K.picked.has(k) ? ' checked' : ''}><span>${esc(x.name)}${x.pinned || x.archived ? `<small>${[x.pinned ? 'pinned' : '', x.archived ? 'archived' : ''].filter(Boolean).join(', ')}</small>` : ''}</span><span class="m">${fmtBytes(x.bytes)}</span><span class="m">${esc(kWhen(x.lastAt))}</span></label>`; }).join('')}</div>`
+      : '<div class="dim">Nothing matches.</div>');
+}
+/* what to take out of the picked conversations, each with what it saves (measured by the server, POST shrink-estimate) */
+function kShrinkBox(picked){
+  const e = K.est, now = kSum(picked);
+  const parts = (e && e.parts) || { toolPictures:'Pictures tools sent back (screenshots)' };
+  const save = Object.keys(parts).reduce((n, k) => n + (K.parts[k] && e ? num(e.could[k]) : 0), 0);
+  return `<div class="kshr" role="group" aria-label="What to take out">` +
+    `<div class="q">Every message, answer and step stays, in order. What you tick is taken out and replaced by a short note. The old files go to the Recycle Bin.</div>` +
+    Object.entries(parts).map(([k, label]) => `<label class="opt"><input type="checkbox" data-kpart="${esc(k)}"${K.parts[k] ? ' checked' : ''}${K.busy ? ' disabled' : ''}><span>${esc(label)}</span><span class="m">${e ? (num(e.could[k]) ? 'about ' + fmtBytes(e.could[k]) : 'nothing') : 'measuring'}</span></label>`).join('') +
+    `<div class="tot">${e ? `Saves about <b>${fmtBytes(save)}</b> of ${fmtBytes(now)}${now ? ' (' + Math.round(100 * save / now) + '%)' : ''}` : 'Measuring what each one would save'}</div></div>`;
+}
+async function kMeasure(){
+  const items = kRevItems().filter(x => K.picked.has(x.type + '\n' + x.id)).map(x => ({ type:x.type, id:x.id })), tok = K.estTok = (K.estTok || 0) + 1;
+  K.est = null; renderRev();
+  try { const e = await MC.api.post('/api/storage/shrink-estimate', { items }); if(tok === K.estTok){ K.est = e; renderRev(); } }
+  catch(err){ if(tok === K.estTok){ K.est = { parts:null, could:{} }; K.result = 'Could not measure them: ' + ((err && err.message) || err); renderRev(); } }
+}
+function kOpen(key){
+  K.rev = K.rev === key ? null : key; K.age = 0; K.ask = false; K.result = ''; K.picked = new Set();
+  for(const x of kRevItems()) if(!x.pinned) K.picked.add(x.type + '\n' + x.id);
+  renderStore();
+}
+async function loadStore(fresh){
+  if(K.busy) return;
+  $('kRe').disabled = true;
+  if(fresh){ K.data = null; renderStore(); }
+  try { K.data = await MC.api.get('/api/storage' + (fresh ? '?fresh=1' : '')); K.err = null; } catch(e){ K.err = e; }
+  $('kRe').disabled = false;
+  renderStore(); MC.drawFrames();
+}
+$('kRe').onclick = () => loadStore(true);
+$('ktab').addEventListener('click', e => { const b = e.target.closest('[data-krev]'); if(b) kOpen(b.dataset.krev); });
+$('kRev').addEventListener('change', e => {
+  if(e.target.dataset && e.target.dataset.kpart){ K.parts[e.target.dataset.kpart] = e.target.checked; renderRev(); return; }
+  if(e.target.id === 'kAge'){ K.age = +e.target.value; K.ask = false; K.picked = new Set(kRevItems().filter(x => !x.pinned).map(x => x.type + '\n' + x.id)); renderRev(); return; }
+  const k = e.target.dataset && e.target.dataset.kit; if(!k) return;
+  if(e.target.checked) K.picked.add(k); else K.picked.delete(k);
+  if(K.ask === 'shrink') kMeasure(); else { K.ask = false; renderRev(); }
+});
+$('kRev').addEventListener('click', async e => {
+  const id = e.target.id;
+  if(id === 'kAll'){ const its = kRevItems(), all = its.every(x => K.picked.has(x.type + '\n' + x.id)); K.picked = all ? new Set() : new Set(its.map(x => x.type + '\n' + x.id)); K.ask = false; renderRev(); }
+  else if(id === 'kDel'){ K.ask = true; K.result = ''; renderRev(); }
+  else if(id === 'kShrink'){ K.ask = 'shrink'; K.result = ''; kMeasure(); }
+  else if(id === 'kNo'){ K.ask = false; renderRev(); }
+  else if(id === 'kYes'){
+    const items = kRevItems().filter(x => K.picked.has(x.type + '\n' + x.id)).map(x => ({ type:x.type, id:x.id })), shrink = K.ask === 'shrink';
+    K.busy = true; renderRev();
+    try {
+      const r = await MC.api.post(shrink ? '/api/storage/shrink' : '/api/storage/delete', shrink ? { items, parts:K.parts, confirm:true } : { items, confirm:true });
+      K.result = (shrink ? `Shrunk ${r.done}: ${fmtBytes(r.bytes)} saved. Empty the Recycle Bin to free the space.` : `Moved ${r.done} to the Recycle Bin (${fmtBytes(r.bytes)}).`) + (r.failed && r.failed.length ? ` Not moved: ${r.failed.length} (${r.failed.slice(0, 3).map(f => (f.name || f.id) + ': ' + f.error).join('; ')}${r.failed.length > 3 ? '; ...' : ''}).` : '');
+    } catch(err){ K.result = 'Could not move them: ' + ((err && err.message) || err); }
+    K.busy = false; K.ask = false; K.picked = new Set();
+    const keep = K.result; await loadStore(true); K.result = keep; renderRev();
+  }
+});
 $('tOpen').onclick = async () => {
   if(!T.data || !T.data.root) return;
   try { await MC.api.post('/api/path/reveal', {path: T.data.root}); } catch(e){ showMsg(false, e.message || 'Could not open Explorer'); }
@@ -579,6 +720,8 @@ loadNames().then(() => renderServers());
 loadAll();
 loadHist();
 loadTemp(false);
+loadStore(false);
+MC.pull.page(() => Promise.all([loadAll(), loadHist(), loadTemp(false), loadStore(false)]));
 </script>
 </body>
 </html>

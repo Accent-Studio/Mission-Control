@@ -1,0 +1,25 @@
+/* Mission Control 2: styles for the automation port. */
+/* Today: labels above and below the line, runs already done fainter */
+.au-ruler{height:calc(112px*var(--k))}
+.au-ruler .dl.hi{top:calc(14px*var(--k))} .au-ruler .dl.lo{top:calc(82px*var(--k))}
+.au-ruler .dl.l{transform:translateX(calc(-12px*var(--k)))} .au-ruler .dl.r{transform:translateX(calc(-100% + 12px*var(--k)))}
+.au-ruler .dl.past{color:var(--text-2);font-weight:500}
+.au-ruler .dm.past:not(.fail){background:var(--text-3)}
+/* schedules */
+.au-sched .tr{grid-template-columns:calc(36px*var(--k)) minmax(0,1.5fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) calc(130px*var(--k))}
+.au-sched .tr>:last-child{justify-self:end}
+.au-sched .tr.hot{background:color-mix(in srgb,var(--fail,#8e1b1b) 12%,transparent)}
+.au-m{font-size:calc(14px*var(--k))}
+.au-st{display:inline-flex;align-items:center;gap:calc(8px*var(--k))}
+.au-res{min-width:0;display:flex} .au-res .st{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.au-other .tr{grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr)}
+/* the skill library */
+.au-sk{display:flex;align-items:flex-start;gap:calc(10px*var(--k));text-align:left;padding:calc(10px*var(--k)) calc(12px*var(--k));border-radius:var(--r-sm);background:var(--raised);border:1px solid var(--line-2);color:var(--text);min-width:0}
+.au-sk:hover{background:var(--hover);border-color:var(--line-3)}
+.au-sk>.i{margin-top:calc(3px*var(--k));flex:none}
+.au-sk .grow{min-width:0;display:flex;flex-direction:column;gap:calc(3px*var(--k))}
+.au-sk b{font-weight:600;font-size:calc(15px*var(--k))}
+.au-sk small{font-size:calc(13px*var(--k));color:var(--text-3);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* the Skills panel */
+.au-gh{margin:calc(8px*var(--k)) calc(12px*var(--k)) 0}
+.au-lm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

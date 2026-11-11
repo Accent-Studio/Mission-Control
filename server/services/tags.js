@@ -15,6 +15,7 @@ import path from 'node:path';
 import { DATA_DIR } from '../config.js';
 import { loadCatalog } from './catalog.js';
 import { publish } from '../lib/events.js';
+import { IS_WIN, isLocalAbs } from '../lib/localPath.js';
 
 const FILE = path.join(DATA_DIR, 'session-tags.json');
 const CACHE_VERSION = 2; // v2: counts per normalized folder prefix, not per project (v1 caches are scanned again once)
@@ -109,10 +110,14 @@ function projectMap() {
   return map;
 }
 
-// Lower case, one backslash as separator, no trailing separator, /v/x turned into v:\x. Empty when not absolute.
+// Lower case, one backslash as separator, no trailing separator, /v/x turned into v:\x (Windows). Empty when not absolute.
+// On macOS and Linux a path from the root (/Users/x) is absolute, and gets the same backslashes, so every comparison here
+// works the same way.
 function normPath(p) {
   let s = String(p || '');
-  if (/^\/[A-Za-z]\//.test(s)) s = s[1] + ':' + s.slice(2);
+  if (!IS_WIN) {
+    if (!isLocalAbs(s)) return '';
+  } else if (/^\/[A-Za-z]\//.test(s)) s = s[1] + ':' + s.slice(2);
   else if (!/^[A-Za-z]:[\\/]/.test(s)) return '';
   return s.replace(/[\\/]+/g, '\\').replace(/\\+$/, '').toLowerCase();
 }

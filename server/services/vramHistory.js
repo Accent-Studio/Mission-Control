@@ -77,8 +77,9 @@ async function tick() {
   }
 }
 
+// MC_GPU_MONITOR=off (the test servers) starts neither the PowerShell counters child nor the 10 s nvidia-smi sample.
 export function startVramHistory() {
-  if (started) return;
+  if (started || process.env.MC_GPU_MONITOR === 'off') return;
   started = true;
   load();
   startGpuCounters(applyCounters);

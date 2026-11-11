@@ -1,0 +1,4 @@
+# Shell scripts run on Linux (the hub): always LF, whatever the checkout does
+*.sh text eol=lf
+# Mac start scripts (double-click in Finder): always LF
+*.command text eol=lf

@@ -205,7 +205,7 @@ html[data-view="office"] #solar,html[data-view="office"] .scenefade,html[data-vi
   </div>
 
   <div class="free" id="free" aria-label="Projects">
-    <div class="scap"><span class="info">?<span class="pop">Each planet is a project and circles the sun, Mission Control itself, on its ring, the inner rings faster (the innermost takes 45 seconds). Point at a planet or the sun for its card, with its run buttons and a link to its page; the card stays put so you can reach them. Point at any planet and every planet pauses, then they stay still for 3 seconds after you leave and ease back to speed. Red means it needs you. A ring means uncommitted changes, a moon means a server is running.<br><br>Arrange: drag a planet to move it, it snaps to the nearest orbit, and a new outer orbit appears when you drag past the last one. Escape cancels a drag.<br><br>Left drag on empty space to pan, right drag to turn and tilt, scroll to zoom, double click to reset, click a planet to open it.</span></span><h3>Projects</h3><span class="n" id="projCnt"></span></div>
+    <div class="scap"><span class="info">?<span class="pop">Each planet is a project and circles the sun, Mission Control itself, on its ring, the inner rings faster (the innermost takes 45 seconds). Point at a planet or the sun for its card, with its run buttons and a link to its page; the card stays put so you can reach them. Point at any planet and every planet pauses, then they stay still for 3 seconds after you leave and ease back to speed. Red means it needs you. A ring means uncommitted changes, a moon means a server is running.<br><br>Arrange: drag a planet to move it, it snaps to the nearest orbit, and a new outer orbit appears when you drag past the last one. Escape cancels a drag.<br><br>Left drag on empty space to pan, right drag to turn and tilt, scroll to zoom, double click to reset, click a planet to open it. On a phone: one finger pans, pinch to zoom, two fingers together turn and tilt.</span></span><h3>Projects</h3><span class="n" id="projCnt"></span></div>
     <div class="zoomer"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">&minus;</button><button id="zreset" aria-label="Reset view" style="font-size:11px">R</button></div>
   </div>
 
@@ -354,7 +354,7 @@ function paintServers(){
     const toks = (cl.match(/"[^"]*"|\S+/g) || []).slice(1).map(t => t.replace(/^"|"$/g, '')).filter(t => !/^-/.test(t));
     const path = toks.find(t => /^[A-Za-z]:[\\/]/.test(t) || /^\.{0,2}[\\/]/.test(t)) || toks.find(t => /[\\/]/.test(t)) || toks[0] || '';
     const parts = path.split(/[\\/]/).filter(Boolean);
-    const dir = /^[A-Za-z]:/.test(path) && parts.length > 2 ? parts[parts.length - 2] : '';
+    const dir = /^(?:[A-Za-z]:|\/)/.test(path) && parts.length > 2 ? parts[parts.length - 2] : '';
     return dir ? nm + ' in ' + dir : path && /[\\/]/.test(path) ? nm + ' (' + path + ')' : nm; };
   const row = s => `<div class="srow">${MC.chip('ok','On')}<span title="${esc((s.name || '') + (s.commandLine ? ': ' + s.commandLine : ''))}">${esc(label(s))}${s.isSelf ? ' (this dashboard)' : ''}</span><span class="p">:${esc(s.port)}</span></div>`;
   $('srvTop').innerHTML = dev.length ? dev.slice(0,3).map(row).join('') : '<div class="empty">No dev servers running</div>';
@@ -421,6 +421,7 @@ MC.api.get('/api/skills').then(list => {
 
 /* the planets do not wait for the slower server scan: they draw first, and the moons follow when it answers */
 loadProjects(); loadServers().then(() => { if(projectsLoaded) renderProjects(rawProjects); }); loadSystem(); loadLayout();
+MC.pull.page(() => Promise.all([loadProjects(), loadServers().then(() => { if(projectsLoaded) renderProjects(rawProjects); }), loadSystem(), loadLayout()]));
 MC.events.on('projects.changed', loadProjects);
 MC.events.on('layout.changed', d => { if(drag && drag.mode === 'planet') return; if(d && d.updatedAt && d.updatedAt === layoutAt) return; loadLayout(); });
 MC.events.on('system.tick', renderSystem);
@@ -543,15 +544,33 @@ function planDrop(p, wx, wz, t){
 }
 const W = a => `rgba(220,231,243,${a})`;
 const reset = () => { view.tYaw = .6; view.tPitch = .7; view.tZoom = 1; view.tpx = 0; view.tpy = 0; };
-/* Same scheme as the crew ship: left drag pans, right drag turns (spin and tilt), wheel zooms, double click resets. */
+/* Same scheme as the crew ship: left drag pans, right drag turns (spin and tilt), wheel zooms, double click resets.
+   Touch: one finger is the left drag; a second finger cancels it and starts a pinch, where the distance between the fingers
+   zooms and moving both together turns (side to side) and tilts (up and down). After a pinch a lone finger does nothing
+   until it lifts, so the view never jumps; a second finger back down starts a new pinch from where the view is. */
+const touches = new Map(); let pinch = null;
+const twoTouch = () => { const [a, b] = [...touches.values()]; return {d:Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), x:(a.x + b.x)/2, y:(a.y + b.y)/2}; };
 cv.addEventListener('contextmenu', e => e.preventDefault());
-cv.addEventListener('pointerdown', e => { if(e.button !== 0 && e.button !== 2) return; clearTimeout(openTimer);
+cv.addEventListener('pointerdown', e => {
+  if(e.pointerType === 'touch'){
+    if(e.isPrimary){ touches.clear(); pinch = null; } /* the first finger of a new touch: nothing stale from a lost lift */
+    touches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(touches.size === 2){ clearTimeout(openTimer); drag = null; cv.classList.remove('drag', 'rot', 'pdrag'); MC.pcard.hide(); cv.setPointerCapture(e.pointerId);
+      pinch = {...twoTouch(), zoom:view.tZoom, yaw:view.tYaw, pitch:view.tPitch}; document.body.classList.add('dragging'); return; }
+    if(pinch || touches.size > 2) return;
+  }
+  if(e.button !== 0 && e.button !== 2) return; clearTimeout(openTimer);
   const r = cv.getBoundingClientRect(), hit = e.button === 0 && layoutLoaded ? hitAt(e.clientX - r.left, e.clientY - r.top) : null;
   drag = {x:e.clientX, y:e.clientY, b:e.button, yaw:view.tYaw, pitch:view.tPitch, px:view.tpx, py:view.tpy, moved:0, p:hit && !hit.sun ? hit.p : null, mode:null, /* the sun opens on a click but never moves */
     off:hit ? [e.clientX - r.left - hit.c[0], e.clientY - r.top - hit.c[1]] : null};
   if(hit) hover = hit.p; /* a touch has no hover, so the press itself picks the planet */
   cv.setPointerCapture(e.pointerId); if(!hit) cv.classList.add(e.button === 2 ? 'rot' : 'drag'); document.body.classList.add('dragging'); });
-cv.addEventListener('pointermove', e => { const r = cv.getBoundingClientRect(); mouse = [e.clientX-r.left, e.clientY-r.top, e.clientX, e.clientY];
+cv.addEventListener('pointermove', e => {
+  if(e.pointerType === 'touch' && touches.has(e.pointerId)){ touches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(pinch){ if(touches.size >= 2){ const g = twoTouch(); lastMove = performance.now();
+      view.tZoom = Math.max(.6, Math.min(3.5, pinch.zoom * g.d / pinch.d));
+      view.tYaw = pinch.yaw + (g.x - pinch.x)*.006; view.tPitch = Math.max(.12, Math.min(1.45, pinch.pitch + (g.y - pinch.y)*.005)); } return; } }
+  const r = cv.getBoundingClientRect(); mouse = [e.clientX-r.left, e.clientY-r.top, e.clientX, e.clientY];
   if(drag){ const dx = e.clientX-drag.x, dy = e.clientY-drag.y; drag.moved = Math.max(drag.moved, Math.abs(dx)+Math.abs(dy)); lastMove = performance.now(); if(drag.moved >= 5) MC.pcard.hide();
     if(drag.p){ /* pressed on a planet: nothing moves until the 5 px threshold, then the planet follows the cursor */
       if(drag.mode !== 'planet' && drag.moved >= 5){ drag.mode = 'planet'; cv.classList.add('pdrag'); }
@@ -559,7 +578,8 @@ cv.addEventListener('pointermove', e => { const r = cv.getBoundingClientRect(); 
     else if(drag.b === 2){ view.tYaw = drag.yaw + dx*.006; view.tPitch = Math.max(.12, Math.min(1.45, drag.pitch + dy*.005)); }
     else { const mx = r.width*.5 - 24, my = r.height*.5 - 24; view.tpx = Math.max(-mx, Math.min(mx, drag.px + dx)); view.tpy = Math.max(-my, Math.min(my, drag.py + dy)); } } });
 /* A click opens a planet after a short wait, so a double click (reset) can win. */
-const endDrag = e => { cv.classList.remove('drag', 'rot', 'pdrag'); document.body.classList.remove('dragging');
+const endDrag = e => { if(e.pointerType === 'touch'){ touches.delete(e.pointerId); if(pinch){ if(!touches.size){ pinch = null; document.body.classList.remove('dragging'); } return; } }
+  cv.classList.remove('drag', 'rot', 'pdrag'); document.body.classList.remove('dragging');
   if(drag && e.type === 'pointerup' && drag.mode === 'planet'){ if(drag.plan){ const id = drag.p.id; L.set(id, {ring:drag.plan.ring, angle:normA(drag.plan.angle - omegaOf(drag.plan.ring)*drag.plan.t)}); saveLayout([id]); /* phase that puts it exactly where it was dropped */ } }
   else if(drag && e.type === 'pointerup' && drag.b === 0 && drag.moved < 5 && (drag.p || hover)){ const id = (drag.p || hover).id; clearTimeout(openTimer); openTimer = setTimeout(() => { location.href = 'project.html?id=' + encodeURIComponent(id); }, 300); }
   drag = null; };
@@ -624,13 +644,13 @@ function frame(now){
       p.ca = tru - p.lag; p.cr += (tr - p.cr)*(1 - Math.exp(-dt*15)); if(Math.abs(tr - p.cr) < .1) p.cr = tr; } });
   let maxUsed = 5; L.forEach((v, k) => { if(k !== MC.SUN && v.ring > maxUsed) maxUsed = v.ring; });
   const occ = new Set(shown.map(p => L.get(p.id).ring)), hring = hover && hover.id !== MC.SUN && L.has(hover.id) ? L.get(hover.id).ring : -1;
-  const circle = (r, st, lw) => { let prev = null; for(let k=0;k<=120;k++){ const a=k/120*TAU, q=Pj(Math.cos(a)*r,0,Math.sin(a)*r); if(prev){ const front=(q[2]+prev[2])/2<0; x.strokeStyle = st(front); x.lineWidth = lw; x.beginPath(); x.moveTo(prev[0],prev[1]); x.lineTo(q[0],q[1]); x.stroke(); } prev = q; } };
+  const circle = (r, st, lw) => { x.strokeStyle = st; x.lineWidth = lw; const run = []; for(let k=0;k<=120;k++){ const a=k/120*TAU; run.push(Pj(Math.cos(a)*r,0,Math.sin(a)*r)); } MC.strokeRuns(x, [run], 64); };
   const slots = pd && pd.plan ? pd.plan.top + 1 : -1; /* while arranging, every ring a planet may land on shows faintly and the target ring brighter */
   for(let n = 0; n <= Math.max(maxUsed, slots); n++){
     /* an orbit line is as bright behind the sun as in front of it */
-    if(pd && pd.plan && n <= slots){ const tgt = n === pd.plan.ring; circle(ringR(n), () => W(tgt ? .5 : .15), tgt ? 2 : 1); }
-    else if(occ.has(n)) circle(ringR(n), () => n === hring && !pd ? '#d6473c' : W(.13), n === hring && !pd ? 1.5 : 1);
-    else circle(ringR(n), () => W(.035), 1);
+    if(pd && pd.plan && n <= slots){ const tgt = n === pd.plan.ring; circle(ringR(n), W(tgt ? .5 : .15), tgt ? 2 : 1); }
+    else if(occ.has(n)) circle(ringR(n), n === hring && !pd ? '#d6473c' : W(.13), n === hring && !pd ? 1.5 : 1);
+    else circle(ringR(n), W(.035), 1);
   }
   const bodies = shown.map(p => { p.spin += .3*dt; return {p, wx:Math.cos(p.ca)*p.cr, wz:Math.sin(p.ca)*p.cr}; });
   bodies.push({sun:true, wx:0, wz:0}); bodies.forEach(b => b.z = Pj(b.wx,0,b.wz)[2]); bodies.sort((a,b) => b.z - a.z);
@@ -639,10 +659,11 @@ function frame(now){
   bodies.forEach(b => {
     if(b.sun){ const c = Pj(0,0,0), rr = 54*c[3];
       const g = x.createRadialGradient(c[0],c[1],0,c[0],c[1],rr*2.4); g.addColorStop(0,'rgba(239,106,92,.45)'); g.addColorStop(.4,'rgba(214,71,60,.15)'); g.addColorStop(1,'rgba(214,71,60,0)'); x.fillStyle=g; x.beginPath(); x.arc(c[0],c[1],rr*2.4,0,7); x.fill();
-      const g2 = x.createRadialGradient(c[0],c[1],0,c[0],c[1],rr*.8); g2.addColorStop(0,'#ffd2b8'); g2.addColorStop(.3,'#e5503f'); g2.addColorStop(1,'#4a1512'); x.fillStyle=g2; x.beginPath(); x.arc(c[0],c[1],rr*.8,0,7); x.fill();
+      /* the sun's glowing body is the shade between its far and near lines, so it hides the far ones */
+      const g2 = x.createRadialGradient(c[0],c[1],0,c[0],c[1],rr); g2.addColorStop(0,'rgba(255,210,184,.95)'); g2.addColorStop(.24,'rgba(229,80,63,.9)'); g2.addColorStop(.8,'rgba(74,21,18,.85)'); g2.addColorStop(1,'rgba(40,12,10,.8)');
       /* the sun is Mission Control: it opens like a planet, shows its card, and has the ring of uncommitted changes too */
       const son = !!sunP && ((hover && hover.id === MC.SUN) || (held && held.id === MC.SUN));
-      MC.wireSphere(x, Pj, 0,0,0, 54, now*.00008, son ? 'rgba(255,170,150,.9)' : 'rgba(239,106,92,.6)', {lat:8, lon:12, seg:28, lw: son ? 1.4 : 1});
+      MC.wireSphere(x, Pj, 0,0,0, 54, now*.00008, son ? 'rgba(255,170,150,.9)' : 'rgba(239,106,92,.6)', {lat:8, lon:12, seg:28, lw: son ? 1.4 : 1, shade: g2});
       if(sunP){
         if(sunP.changes){ x.setLineDash([4,4]); x.strokeStyle = W(.55); x.lineWidth = 1; x.beginPath(); for(let k=0;k<=96;k++){ const a=k/96*6.283, q=Pj(Math.cos(a)*78, Math.sin(a)*78*.28, Math.sin(a)*78*.95); k?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]); } x.stroke(); x.setLineDash([]); }
         const sr = rr*.8; labs.unshift({p:sunP, c, sr, needs:sunP.needsYou, on:son}); hits.push({p:sunP, c, sr, sun:true});
@@ -653,7 +674,7 @@ function frame(now){
     const col = on ? W(.95) : needs ? 'rgba(229,85,72,.88)' : W(.55);
     x.fillStyle = 'rgba(12,19,29,.88)'; x.beginPath(); x.arc(c[0],c[1],sr,0,7); x.fill();
     if(p.changes){ x.setLineDash([4,4]); x.strokeStyle = W(.55); x.beginPath(); for(let k=0;k<=64;k++){ const a=k/64*6.283, rr=pr*1.75, q=Pj(b.wx+Math.cos(a)*rr, Math.sin(a)*rr*.28, b.wz+Math.sin(a)*rr*.95); k?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]); } x.stroke(); x.setLineDash([]); }
-    MC.wireSphere(x, Pj, b.wx,0,b.wz, pr, p.spin, col, {lat:6, lon:8, seg:20, lw: on?1.4:1});
+    MC.wireSphere(x, Pj, b.wx,0,b.wz, pr, p.spin, col, {lat:6, lon:8, seg:20, lw: on?1.4:1, shade: 'rgba(12,19,29,.78)'});
     if(p.server){ p.moon += 1.2*dt; const mr = pr*1.5, q = Pj(b.wx+Math.cos(p.moon)*mr, Math.sin(p.moon*.7)*pr*.3, b.wz+Math.sin(p.moon)*mr); x.fillStyle = W(.9); x.beginPath(); x.arc(q[0],q[1],Math.max(2,3*q[3]),0,7); x.fill(); }
     labs.push({p, c, sr, needs, on}); hits.push({p, c, sr});
     if(forceHover === p.id){ const r = cv.getBoundingClientRect(); mouse = [c[0], c[1], r.left + c[0], r.top + c[1]]; }

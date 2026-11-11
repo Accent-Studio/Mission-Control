@@ -3,15 +3,22 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { APP_DIR, BRIDGE_HOST, BRIDGE_PORT, HOST, PORT, ROOT } from './config.js';
+import { APP_DIR, BRIDGE_HOST, BRIDGE_PORT, HOST, MACHINE_NAME, PORT, ROLE, ROOT } from './config.js';
 import { sendJson, notFound, wrap } from './lib/http.js';
 import { handleStream } from './lib/events.js';
 import { loadCatalog } from './services/catalog.js';
+import './services/keepTranscripts.js'; // Claude Code keeps every conversation (no 30-day deletion)
 import { registerServer } from './lib/restart.js';
 import { getDevice, loadBridgeSecret, touchDevice, verifyBridgeSecret } from './lib/bridgeAuth.js';
 import { remoteAllowed, unclassifiedRoutes } from './lib/remote-policy.js';
+import { fullFor, LOCK_OPEN, lockedFor } from './services/pcLock.js';
 import { startProjectsBackground } from './services/projects.js';
 import { onRevoke } from './services/devices.js';
+import { postsHere } from './services/hub.js';
+import { localFile } from './services/paths.js';
+
+// On a hub, a device that posts its conversations there is one of the user's PCs (a phone never posts).
+const hubPostsHere = (id) => { try { return postsHere({ id }); } catch { return false; } };
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -28,6 +35,19 @@ const MIME = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.txt': 'text/plain; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.md': 'text/plain; charset=utf-8',
+  '.csv': 'text/plain; charset=utf-8',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.avif': 'image/avif',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.wasm': 'application/wasm',
+  '.pdf': 'application/pdf',
 };
 
 // ---- Routes ----
@@ -64,7 +84,9 @@ addRoute({
   method: 'GET',
   path: '/api/whoami',
   handler: async (req, res) =>
-    sendJson(res, 200, { remote: !!req.mcDevice, device: req.mcDevice ? { id: req.mcDevice.id, name: req.mcDevice.name } : null }),
+    // role: "hub" on the hub, where only the Talk page is shown; name: this place's name (machineName)
+    // a computer unlocked with this PC's PIN is not remote: it may do what this PC's own pages do (services/pcLock.js)
+    sendJson(res, 200, { remote: !!req.mcDevice && !fullFor(req.mcDevice), device: req.mcDevice ? { id: req.mcDevice.id, name: req.mcDevice.name } : null, role: ROLE, name: MACHINE_NAME, locked: !!req.mcDevice && lockedFor(req.mcDevice) }),
 });
 
 const routesDir = path.join(ROOT, 'server', 'routes');
@@ -145,7 +167,13 @@ function serveStatic(req, res, pathname) {
   }
   // No NUL bytes, and no colons (drive letters and NTFS alternate streams like index.html::$DATA).
   if (rel.includes('\0') || rel.includes(':')) return notFound(res);
+  // A phone (or a linked computer) opens Mission Control 2 straight away: the old home page would show for a moment first
+  if ((rel === '/' || rel === '' || rel === '/index.html') && req.mcDevice) {
+    res.writeHead(302, { Location: '/v2/', 'Cache-Control': 'no-cache' });
+    return res.end();
+  }
   if (rel === '/' || rel === '') rel = '/index.html';
+  else if (rel.endsWith('/')) rel += 'index.html'; // a folder (/v2/) opens its index.html
   if (rel === '/favicon.ico') rel = '/favicon.svg';
   const full = path.resolve(APP_DIR, '.' + rel);
   if (full !== APP_DIR && !full.startsWith(APP_DIR + path.sep)) {
@@ -161,6 +189,31 @@ function serveStatic(req, res, pathname) {
     });
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(full).on('error', () => res.destroy()).pipe(res);
+  });
+}
+
+// ---- Local web pages (a .html path in a conversation, opened in a new tab) ----
+
+// GET /local/<drive>/<path> (/local/<path from the root> outside Windows): the page and the files it links to, from the places the viewer may read (services/paths.js).
+// The page runs sandboxed with no origin of its own, so its scripts cannot call Mission Control's API as if they were it.
+function serveLocal(req, res, pathname) {
+  let file;
+  try {
+    file = localFile(pathname);
+  } catch (err) {
+    return sendJson(res, err.status || 404, { error: err.message || 'Not found' });
+  }
+  fs.stat(file, (err, st) => {
+    if (err || !st.isFile()) return notFound(res);
+    res.writeHead(200, {
+      'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
+      'Content-Length': st.size,
+      'Cache-Control': 'no-cache',
+      'Content-Security-Policy': "sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads; frame-ancestors 'none'",
+      'X-Content-Type-Options': 'nosniff',
+    });
+    if (req.method === 'HEAD') return res.end();
+    fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
   });
 }
 
@@ -202,7 +255,7 @@ async function handleRequest(kind, req, res) {
     if (devId !== undefined) {
       const dev = getDevice(devId);
       if (!dev) return sendJson(res, 403, { error: 'device_revoked' });
-      req.mcDevice = { id: dev.id, name: dev.name };
+      req.mcDevice = { id: dev.id, name: dev.name, computer: !!dev.computer || (ROLE === 'hub' && hubPostsHere(dev.id)) };
       trackResponse(dev.id, res);
       touchDevice(dev.id);
     }
@@ -243,13 +296,22 @@ async function handleRequest(kind, req, res) {
     const hit = matchRoute(method === 'HEAD' ? 'GET' : method, pathname);
     if (!hit) return notFound(res);
     // A phone gets the default-deny policy for everything that changes state.
-    if (req.mcDevice && !remoteAllowed(method, hit.route)) return sendJson(res, 403, { error: 'pc_only' });
+    if (req.mcDevice && lockedFor(req.mcDevice) && !LOCK_OPEN.has(`${method === 'HEAD' ? 'GET' : method} ${hit.route.path}`)) return sendJson(res, 423, { error: 'pc_locked' });
+    // the PIN itself is set at this PC only, even by a computer that typed it
+    if (req.mcDevice && (hit.route.path === '/api/pc-lock/pin' || hit.route.path === '/api/pc-lock/time')) return sendJson(res, 403, { error: 'pc_only' });
+    // a computer that typed this PC's PIN is served as this PC's own pages are; the device stays known as mcFull
+    if (req.mcDevice && fullFor(req.mcDevice)) {
+      req.mcFull = req.mcDevice;
+      delete req.mcDevice;
+    }
+    if (req.mcDevice && !remoteAllowed(method, hit.route, req.mcDevice)) return sendJson(res, 403, { error: 'pc_only' });
     return hit.route.handler(req, res, hit.params, url);
   }
 
   if (method !== 'GET' && method !== 'HEAD') {
     return sendJson(res, 405, { error: 'Method not allowed' });
   }
+  if (pathname.startsWith('/local/')) return serveLocal(req, res, pathname);
   serveStatic(req, res, pathname);
 }
 

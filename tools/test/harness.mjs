@@ -9,6 +9,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+// A test never starts the real Claude Code. The tests that run conversations put the fake (tools/fakeclaude) first in
+// PATH; on macOS and Linux a real `claude` further down PATH (~/.local/bin) would still be found by any test that does
+// not, and would run for real. So every folder that holds a claude other than the fake leaves this process's PATH here,
+// before any test reads it, and the servers and runners the tests start inherit that. Windows is left as it was.
+if (process.platform !== 'win32') {
+  const fake = path.join(ROOT, 'tools', 'fakeclaude');
+  process.env.PATH = String(process.env.PATH || '')
+    .split(path.delimiter)
+    .filter((d) => d && (path.resolve(d) === fake || !fs.existsSync(path.join(d, 'claude'))))
+    .join(path.delimiter);
+}
+
 export const KNOWN_DEVICE = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90';
 
 // A free loopback port. With MC_TEST_PORTS=48850-48899 (first-last) the port comes from that range instead of the system's
@@ -46,7 +59,10 @@ const recentPorts = [];
 
 const madeDirs = [];
 export function makeDataDir(label = 'mc-test') {
-  const dir = fs.mkdtempSync(path.join(process.env.MC_TEST_TMP || os.tmpdir(), `${label}-`));
+  // On macOS the temp folder (/var/folders/...) is a link to /private/var/folders/...; a process reports the real one, so
+  // the tests use the real path from the start (Windows is left as it was).
+  const base = process.env.MC_TEST_TMP || os.tmpdir();
+  const dir = fs.mkdtempSync(path.join(process.platform === "win32" ? base : fs.realpathSync(base), `${label}-`));
   madeDirs.push(dir);
   return dir;
 }
@@ -123,6 +139,7 @@ export async function startServer({ dataDir, bridge = true, env = {}, wantBridge
       MC_SUPERVISED: '',
       MC_RUNNER_PORT: 'off', // a test server starts claude directly unless the test brings its own runner (runner.test.mjs)
       MC_AUTO_TITLE: 'off', // no naming call per new conversation, unless the test is about it (autotitle.test.mjs)
+      MC_GPU_MONITOR: 'off', // no GPU counters child and no nvidia-smi sample per test server (15 of them load the PC)
       ...env,
     },
   });
