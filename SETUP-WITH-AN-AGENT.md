@@ -4,7 +4,7 @@ Copy everything below the line into Claude Code (or another coding agent that ca
 
 ---
 
-You are setting up Mission Control, a local dev dashboard, for me on my Windows PC, together with BlitzVoice (dictation and read aloud, which gives Mission Control its voice) and the Mission Control phone app. Work through the steps below in order. Read each repository's README before you work in it.
+You are setting up Mission Control, a local dev dashboard, for me on my computer, together with BlitzVoice (dictation and read aloud, which gives Mission Control its voice) and the Mission Control phone app. Work through the steps below in order. Read each repository's README before you work in it.
 
 ## How to work with me
 
@@ -19,7 +19,7 @@ You are setting up Mission Control, a local dev dashboard, for me on my Windows 
 
 First find out which operating system I am on, and tell me.
 
-Mission Control, BlitzVoice and the phone app are built and tested on Windows 10 and 11 only. On Linux or macOS, expect to adapt things as you go: the `.bat` and `.ps1` scripts need shell equivalents, Windows paths and drive letters in the settings become normal paths, and some features call Windows tools (GPU and process lists, opening Explorer, the BlitzVoice build scripts). BlitzVoice is based on Handy, which also runs on Linux and macOS: follow its BUILD.md for those systems instead of the Windows scripts. Tell me before each change you make to the code, keep the changes small, and list them in the summary at the end. If something cannot work on my system, say so and skip it.
+Mission Control runs on Windows 10 and 11 and on macOS (start it with `start-mac.command`; the bridge is built with `cargo build --release` in `bridge`, then `mc-bridge` and `mc-link` are copied into `bridge/run`). BlitzVoice and the phone app's build scripts are written for Windows. On Linux, or for those scripts elsewhere, expect to adapt things as you go: the `.bat` and `.ps1` scripts need shell equivalents, Windows paths and drive letters in the settings become normal paths, and some features call Windows tools. BlitzVoice is based on Handy, which also runs on Linux and macOS: follow its BUILD.md for those systems instead of the Windows scripts. Tell me before each change you make to the code, keep the changes small, and list them in the summary at the end. If something cannot work on my system, say so and skip it.
 
 ## Step 2: Check the basics
 
